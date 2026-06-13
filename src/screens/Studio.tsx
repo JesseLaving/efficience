@@ -320,7 +320,7 @@ function EmailPreviewCard({ subject, pre, body }: { subject: string; pre: string
         <div className="ep-from"><div className="ava">BM</div><div><div className="ef-t">Boulangerie Martin</div><div className="ef-s">bonjour@boulangerie-martin.fr</div></div><div className="ef-time">09:00</div></div>
         <div className="ep-subj-line">{subject ? subject : <span style={{ color: '#bbb' }}>Objet de l’e-mail</span>}</div>
         <div style={{ fontSize: 12, color: '#999', padding: '4px 20px 0' }}>{pre || 'Pré-en-tête…'}</div>
-        <div className="ep-head-band"><img src="/assets/logo-white.png" alt="Efficience" /></div>
+        <div className="ep-head-band"><img src={`${import.meta.env.BASE_URL}assets/logo-white.png`} alt="Efficience" /></div>
         <div className="ep-body-c">{paras}</div>
         <div className="ep-foot"><div className="ef-social">{(['instagram', 'facebook', 'tiktok'] as BrandName[]).map((s) => <span key={s}><Brand name={s} /></span>)}</div>
           Boulangerie Martin · 14 rue de la République, Lyon 3e<br /><a href="#">Se désinscrire</a></div>

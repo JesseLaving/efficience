@@ -45,7 +45,7 @@ export function App() {
       {/* ===================== SIDEBAR ===================== */}
       <aside className="side">
         <div className="brand">
-          <img src="/assets/logo-green.png" alt="Efficience" />
+          <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" />
           <span className="name">Efficience</span>
         </div>
 

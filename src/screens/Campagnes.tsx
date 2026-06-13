@@ -6,7 +6,7 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { segmentInfos, type SegmentInfo } from '../lib/population';
 
-const BUSINESS = { name: 'Boulangerie Martin', email: 'bonjour@boulangerie-martin.fr', logo: '/assets/logo-white.png' };
+const BUSINESS = { name: 'Boulangerie Martin', email: 'bonjour@boulangerie-martin.fr', logo: `${import.meta.env.BASE_URL}assets/logo-white.png` };
 const SOCIAL: BrandName[] = ['instagram', 'facebook', 'tiktok'];
 const TONES = ['Chaleureux', 'Gourmand', 'Promotionnel', 'Élégant'];
 

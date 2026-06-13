@@ -79,7 +79,7 @@ export function Onboarding() {
     <div className="onb">
       <div className="onb-card">
         <div className="onb-top">
-          <img src="/assets/logo-green.png" alt="Efficience" />
+          <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" />
           <span className="ot-step">{stepLabel}</span>
           <button className="onb-x" onClick={close}><Icon name="close" /></button>
         </div>
