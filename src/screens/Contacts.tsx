@@ -98,7 +98,8 @@ export function Contacts() {
 
   const segName = custom ? 'Segment personnalisé' : activeSeg.name;
   const optin = POP.filter((c) => c.consent).length;
-  const avg = POP.reduce((s, c) => s + c.basket, 0) / POP.length;
+  const avg = POP.length ? POP.reduce((s, c) => s + c.basket, 0) / POP.length : 0;
+  const pctOfBase = (n: number) => (TOTAL ? Math.round((n / TOTAL) * 100) : 0);
 
   return (
     <section className="screen show anim">
@@ -143,7 +144,7 @@ export function Contacts() {
             <div className="if-file"><Icon name="sheet" /></div>
             <div>
               <div className="if-name">base_clients_boulangerie.csv</div>
-              <div className="if-sub" ref={subRef}>{flow === 'analyzing' ? '312 Ko · lecture du fichier…' : '1 248 lignes · 7 colonnes détectées'}</div>
+              <div className="if-sub" ref={subRef}>{flow === 'analyzing' ? 'Lecture du fichier…' : '7 colonnes détectées'}</div>
             </div>
             <div className="if-state">
               {flow === 'analyzing'
@@ -166,10 +167,10 @@ export function Contacts() {
                 ))}
               </div>
               <div className="imp-foot">
-                <div className="grow"><b>1 248</b> contacts prêts · <b>14</b> doublons fusionnés · <b>1 124</b> opt-in marketing</div>
+                <div className="grow">Détection des colonnes — importez un fichier réel pour remplir votre base.</div>
                 <button className="btn outline" onClick={() => setFlow('idle')}>Annuler</button>
                 <button className="btn acc" disabled={flow === 'confirming'} style={flow === 'confirming' ? { opacity: 0.8 } : undefined} onClick={confirmImport}>
-                  {flow === 'confirming' ? <><span className="spin" />Import en cours…</> : <><Icon name="check" />Importer 1 248 contacts</>}
+                  {flow === 'confirming' ? <><span className="spin" />Import en cours…</> : <><Icon name="check" />Importer le fichier</>}
                 </button>
               </div>
             </div>
@@ -182,7 +183,7 @@ export function Contacts() {
         <div className="fade-in">
           <div className="crm-stats">
             <div className="crm-stat"><div className="cs-l"><Icon name="users" />Contacts</div><div className="cs-v" ref={totalRef}>0</div><div className="cs-f">base importée · synchronisée</div></div>
-            <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Opt-in marketing</div><div className="cs-v">{fr(optin)}</div><div className="cs-f"><span className="acc">{Math.round((optin / TOTAL) * 100)} %</span> · conforme RGPD</div></div>
+            <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Opt-in marketing</div><div className="cs-v">{fr(optin)}</div><div className="cs-f"><span className="acc">{pctOfBase(optin)} %</span> · conforme RGPD</div></div>
             <div className="crm-stat"><div className="cs-l"><Icon name="euro" />Panier moyen</div><div className="cs-v">{avg.toFixed(1).replace('.', ',')} €</div><div className="cs-f">tous clients confondus</div></div>
             <div className="crm-stat"><div className="cs-l"><Icon name="filter" />Segments actifs</div><div className="cs-v">{SEGMENTS.length}</div><div className="cs-f">prêts pour le ciblage</div></div>
           </div>
@@ -246,7 +247,7 @@ export function Contacts() {
                     <>
                       <div className="bld-result">
                         <div className="br-v">{fr(builderCount)}</div>
-                        <div className="br-t">contacts correspondent.<br /><b>{Math.round((builderCount / TOTAL) * 100)} %</b> de votre base ciblée.</div>
+                        <div className="br-t">contacts correspondent.<br /><b>{pctOfBase(builderCount)} %</b> de votre base ciblée.</div>
                       </div>
                       <SaveSegmentButton onSave={() => setCustom(true)} />
                     </>

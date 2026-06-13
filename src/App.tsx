@@ -1,6 +1,7 @@
 import { useEff, type ScreenId } from './state/EffContext';
 import { Icon } from './lib/Icon';
 import { fr } from './lib/format';
+import { TOTAL } from './lib/population';
 import { Dashboard } from './screens/Dashboard';
 import { Connexion } from './screens/Connexion';
 import { Contacts } from './screens/Contacts';
@@ -61,7 +62,7 @@ export function App() {
                 <Icon name={it.icon} />
                 {it.label}
                 {it.screen === 'connexion' && <span className="count">{connectedCount}</span>}
-                {it.screen === 'contacts' && <span className="count">{crmImported ? fr(1248) : '0'}</span>}
+                {it.screen === 'contacts' && <span className="count">{crmImported ? fr(TOTAL) : '0'}</span>}
                 {it.screen === 'campagnes' && <span className="badge" style={{ background: 'var(--acc-soft)', color: 'var(--acc)' }}>IA</span>}
                 {it.screen === 'inbox' && <span className="badge">9</span>}
               </div>

@@ -28,27 +28,30 @@ export const SRC: Record<string, { label: string; glyph: string }> = {
   manual: { label: 'Saisie manuelle', glyph: UI.edit },
 };
 
-/* ---------- KPI catalogue (linked to the business activity) ---------- */
+/* ---------- KPI catalogue ----------
+   Values start at 0 and trends are neutral: no figure is invented.
+   Real numbers appear once accounts are connected and data flows in. */
+const NT: Trend = { dir: 'neutral', val: '—' };
 export const CATALOG: Record<string, KpiDef> = {
-  subs: { label: 'Abonnés · tous réseaux', icon: 'users', src: 'global', val: 0, live: 'reach', fmt: 'int', trend: { dir: 'up', val: '+128', since: 'sur 30 jours' } },
-  engagement: { label: 'Taux d’engagement', icon: 'heart', src: 'global', val: 6.1, fmt: 'pct', trend: { dir: 'up', val: '+0,4 pt', since: 'vs. mois préc.' } },
-  posts: { label: 'Posts à venir', icon: 'calendar', src: 'global', val: 8, fmt: 'int', trend: { dir: 'neutral', val: 'cette semaine' } },
-  review: { label: 'À valider', icon: 'clock', src: 'global', val: 3, fmt: 'int', trend: { dir: 'down', val: 'action requise' } },
+  subs: { label: 'Abonnés · tous réseaux', icon: 'users', src: 'global', val: 0, live: 'reach', fmt: 'int', trend: NT },
+  engagement: { label: 'Taux d’engagement', icon: 'heart', src: 'global', val: 0, fmt: 'pct', trend: NT },
+  posts: { label: 'Posts à venir', icon: 'calendar', src: 'global', val: 0, fmt: 'int', trend: { dir: 'neutral', val: 'cette semaine' } },
+  review: { label: 'À valider', icon: 'clock', src: 'global', val: 0, fmt: 'int', trend: NT },
 
-  reach: { label: 'Portée locale · 30j', icon: 'target', src: 'global', val: 18420, fmt: 'int', trend: { dir: 'up', val: '+34 %', since: 'vs. mois préc.' }, suggested: true, why: 'Vos réseaux connectés' },
-  gRating: { label: 'Note Google', icon: 'target', src: 'google', val: 4.8, fmt: 'rating', trend: { dir: 'up', val: '+0,2', since: '92 avis' }, suggested: true, why: 'Fiche Google détectée' },
-  gViews: { label: 'Visites fiche Google', icon: 'eye', src: 'google', val: 3120, fmt: 'int', trend: { dir: 'up', val: '+12 %', since: 'recherche locale' }, suggested: true, why: 'Référencement local' },
-  orders: { label: 'Réservations / commandes', icon: 'clipboard', src: 'site', val: 86, fmt: 'int', trend: { dir: 'up', val: '+15 %', since: 'cette semaine' }, suggested: true, why: 'Activité boulangerie' },
-  basket: { label: 'Panier moyen', icon: 'euro', src: 'crm', val: 21.4, fmt: 'eur', trend: { dir: 'up', val: '+1,2 €', since: 'base clients' }, suggested: true, why: 'Issu de votre CRM' },
-  emailOpen: { label: 'Taux d’ouverture e-mail', icon: 'mailopen', src: 'email', val: 40.5, fmt: 'pct', trend: { dir: 'up', val: '+11 pts', since: 'vs. secteur' }, suggested: true, why: 'Vos campagnes' },
+  reach: { label: 'Portée · 30j', icon: 'target', src: 'global', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Vos réseaux connectés' },
+  gRating: { label: 'Note Google', icon: 'target', src: 'google', val: 0, fmt: 'rating', trend: NT, suggested: true, why: 'Fiche Google' },
+  gViews: { label: 'Visites fiche Google', icon: 'eye', src: 'google', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Référencement local' },
+  orders: { label: 'Demandes / leads', icon: 'clipboard', src: 'site', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Activité conseil & formation' },
+  basket: { label: 'Panier moyen', icon: 'euro', src: 'crm', val: 0, fmt: 'eur', trend: NT, suggested: true, why: 'Issu de votre CRM' },
+  emailOpen: { label: 'Taux d’ouverture e-mail', icon: 'mailopen', src: 'email', val: 0, fmt: 'pct', trend: NT, suggested: true, why: 'Vos campagnes' },
 
-  newSubs: { label: 'Nouveaux abonnés · 30j', icon: 'users', src: 'global', val: 128, fmt: 'int', trend: { dir: 'up', val: '+18 %' } },
-  siteClicks: { label: 'Clics vers le site', icon: 'cursor', src: 'site', val: 642, fmt: 'int', trend: { dir: 'up', val: '+9 %' } },
-  messages: { label: 'Messages reçus', icon: 'inbox', src: 'global', val: 24, fmt: 'int', trend: { dir: 'neutral', val: 'à traiter' } },
-  crmContacts: { label: 'Contacts opt-in (CRM)', icon: 'shield', src: 'crm', val: 1124, fmt: 'int', trend: { dir: 'up', val: '+42' } },
-  emailRevenue: { label: 'CA e-mailing estimé', icon: 'euro', src: 'email', val: 2380, fmt: 'eur', trend: { dir: 'up', val: '+320 €' } },
-  storyViews: { label: 'Vues de stories', icon: 'eye', src: 'instagram', val: 5400, fmt: 'int', trend: { dir: 'up', val: '+22 %' } },
-  postsMonth: { label: 'Posts publiés ce mois', icon: 'image', src: 'global', val: 18, fmt: 'int', trend: { dir: 'neutral', val: 'objectif 20' } },
+  newSubs: { label: 'Nouveaux abonnés · 30j', icon: 'users', src: 'global', val: 0, fmt: 'int', trend: NT },
+  siteClicks: { label: 'Clics vers le site', icon: 'cursor', src: 'site', val: 0, fmt: 'int', trend: NT },
+  messages: { label: 'Messages reçus', icon: 'inbox', src: 'global', val: 0, fmt: 'int', trend: { dir: 'neutral', val: 'à traiter' } },
+  crmContacts: { label: 'Contacts opt-in (CRM)', icon: 'shield', src: 'crm', val: 0, fmt: 'int', trend: NT },
+  emailRevenue: { label: 'CA e-mailing estimé', icon: 'euro', src: 'email', val: 0, fmt: 'eur', trend: NT },
+  storyViews: { label: 'Vues de stories', icon: 'eye', src: 'instagram', val: 0, fmt: 'int', trend: NT },
+  postsMonth: { label: 'Posts publiés ce mois', icon: 'image', src: 'global', val: 0, fmt: 'int', trend: NT },
 };
 
 export interface KpiState { board: string[]; custom: Record<string, KpiDef>; suggestOpen: boolean; }

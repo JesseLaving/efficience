@@ -1,3 +1,5 @@
+import { BUSINESS } from './business';
+
 export interface NetPage {
   name: string;
   handle: string;
@@ -16,32 +18,37 @@ export interface Network {
   def?: boolean;
 }
 
-/* The active client's social pages (Boulangerie Martin). */
+/* The platforms Efficience Marketing can connect.
+   No account is pre-connected and no metric is invented: every page
+   starts at 0 — real figures arrive only once a real account is linked.
+   `desc` is the generic value proposition of each platform (not data). */
+const empty = (metric = 'abonnés'): NetPage => ({ name: BUSINESS.name, handle: '', metricN: 0, metric });
+
 export const NETWORKS: Network[] = [
   { id: 'instagram', name: 'Instagram', kind: 'Compte professionnel',
     desc: 'Reels, stories et carrousels — planifiés et mesurés au même endroit.',
-    page: { name: 'Boulangerie Martin', handle: '@boulangerie.martin', metricN: 4312, metric: 'abonnés', verified: true }, def: true },
+    page: empty() },
   { id: 'facebook', name: 'Facebook', kind: 'Page',
     desc: 'Programmez vos publications et répondez aux avis depuis l’app.',
-    page: { name: 'Boulangerie Martin', handle: 'fb.com/boulangeriemartin', metricN: 2180, metric: 'abonnés', verified: true }, def: true },
+    page: empty() },
   { id: 'google', name: 'Google Business', kind: 'Fiche d’établissement',
     desc: 'Avis, horaires et posts Google pour booster le référencement local.',
-    page: { name: 'Boulangerie Martin — Lyon 3e', handle: '4,8 ★ · 92 avis', metricN: 92, metric: 'avis Google', rating: true }, def: true },
+    page: { name: BUSINESS.name, handle: '', metricN: 0, metric: 'avis Google', rating: true } },
   { id: 'linkedin', name: 'LinkedIn', kind: 'Page entreprise',
-    desc: 'Affirmez l’image de marque employeur et le savoir-faire artisanal.',
-    page: { name: 'Boulangerie Martin', handle: 'linkedin.com/company/...', metricN: 542, metric: 'abonnés' } },
+    desc: 'Affirmez l’image de marque employeur et le savoir-faire de conseil.',
+    page: empty() },
   { id: 'tiktok', name: 'TikTok', kind: 'Compte business',
-    desc: 'Les coulisses du fournil en vidéo courte, là où la portée explose.',
-    page: { name: 'boulangerie.martin', handle: '@boulangerie.martin', metricN: 1920, metric: 'abonnés' } },
+    desc: 'Formats courts et coulisses — là où la portée se construit vite.',
+    page: empty() },
   { id: 'x', name: 'X', kind: 'Compte',
-    desc: 'Actus express et interactions locales en temps réel.',
-    page: { name: 'Boulangerie Martin', handle: '@boul_martin', metricN: 380, metric: 'abonnés' } },
+    desc: 'Actus express et interactions professionnelles en temps réel.',
+    page: empty() },
   { id: 'youtube', name: 'YouTube', kind: 'Chaîne',
-    desc: 'Tutos recettes et formats longs pour asseoir l’expertise.',
-    page: { name: 'Boulangerie Martin', handle: '@boulangeriemartin', metricN: 156, metric: 'abonnés' } },
+    desc: 'Tutos et formats longs pour asseoir l’expertise et la pédagogie.',
+    page: empty() },
   { id: 'pinterest', name: 'Pinterest', kind: 'Compte pro',
-    desc: 'Épingles inspirantes — idéales pour les recettes et la pâtisserie.',
-    page: { name: 'Boulangerie Martin', handle: '@boulangeriemartin', metricN: 240, metric: 'abonnés' } },
+    desc: 'Épingles inspirantes — utiles pour les contenus visuels et fiches.',
+    page: empty() },
 ];
 
 export const netName = (id: string): string => (NETWORKS.find((n) => n.id === id) || { name: id }).name;

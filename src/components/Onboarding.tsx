@@ -6,16 +6,19 @@ import { UI, BRAND, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
+import { BUSINESS as BIZ } from '../lib/business';
 
-const SECTORS = ['Boulangerie-Pâtisserie', 'Restaurant', 'Coiffure / Beauté', 'Commerce de détail', 'Artisanat', 'Fleuriste', 'Caviste', 'Immobilier', 'Santé / Bien-être', 'Autre'];
+const SECTORS = ['Conseil & formation', 'Marketing / Communication', 'Immobilier', 'Commerce de détail', 'Restaurant', 'Artisanat', 'Santé / Bien-être', 'Autre'];
 
+// The scan animation only checks which public sources EXIST — it does not
+// invent figures. "found" labels stay neutral until a real account is linked.
 const SOURCES = [
-  { id: 'insee', label: 'INSEE · base SIRENE', glyph: UI.shield, found: 'Entité vérifiée' },
-  { id: 'web', label: 'Site web de l’entreprise', glyph: UI.link, found: 'Logo + couleurs' },
-  { id: 'google', label: 'Google Business Profile', glyph: BRAND.google, found: '4,8 ★ · 92 avis' },
-  { id: 'instagram', label: 'Instagram', glyph: BRAND.instagram, found: '4 312 abonnés' },
-  { id: 'facebook', label: 'Facebook', glyph: BRAND.facebook, found: '2 180 abonnés' },
-  { id: 'tiktok', label: 'TikTok', glyph: BRAND.tiktok, found: '1 920 abonnés' },
+  { id: 'insee', label: 'INSEE · base SIRENE', glyph: UI.shield, found: 'À vérifier' },
+  { id: 'web', label: 'Site web de l’entreprise', glyph: UI.link, found: 'À renseigner' },
+  { id: 'google', label: 'Google Business Profile', glyph: BRAND.google, found: 'À connecter' },
+  { id: 'instagram', label: 'Instagram', glyph: BRAND.instagram, found: 'À connecter' },
+  { id: 'facebook', label: 'Facebook', glyph: BRAND.facebook, found: 'À connecter' },
+  { id: 'tiktok', label: 'TikTok', glyph: BRAND.tiktok, found: 'À connecter' },
 ];
 
 interface Profile {
@@ -34,7 +37,7 @@ export function Onboarding() {
   const [siret, setSiret] = useState('');
   const [domain, setDomain] = useState('');
   const [sector, setSector] = useState(SECTORS[0]);
-  const [city, setCity] = useState('Lyon');
+  const [city, setCity] = useState(BIZ.city);
 
   const close = () => show('dashboard');
 
@@ -46,23 +49,24 @@ export function Onboarding() {
   }, []);
 
   const profile = (): Profile => {
-    let name = 'Boulangerie Martin';
+    let name = BIZ.name;
     if (domain) { const base = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('.')[0]; if (base) name = titlecase(base); }
-    const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'BM';
+    const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || BIZ.initials;
+    // Identity figures left as "—" (not invented). Social counts start at 0.
     return {
       name, initials,
-      siret: siret && siret.replace(/\s/g, '').length >= 9 ? siret : '824 315 097 00021',
-      naf: '10.71C', sector,
-      address: `14 rue de la République, ${city} 3e`,
-      effectif: '6 à 9 salariés', creation: '2017',
+      siret: siret && siret.replace(/\s/g, '').length >= 9 ? siret : '—',
+      naf: '—', sector,
+      address: `${city} · ${BIZ.region}`,
+      effectif: '—', creation: '—',
       socials: [
-        { id: 'instagram', handle: '@' + name.toLowerCase().replace(/\s+/g, '.'), n: 4312 },
-        { id: 'facebook', handle: name, n: 2180 },
-        { id: 'google', handle: 'Fiche établissement', n: 92, rating: true },
-        { id: 'tiktok', handle: '@' + name.toLowerCase().replace(/\s+/g, '.'), n: 1920 },
+        { id: 'instagram', handle: '@' + name.toLowerCase().replace(/\s+/g, '.'), n: 0 },
+        { id: 'facebook', handle: name, n: 0 },
+        { id: 'google', handle: 'Fiche établissement', n: 0, rating: true },
+        { id: 'tiktok', handle: '@' + name.toLowerCase().replace(/\s+/g, '.'), n: 0 },
       ],
-      colors: ['#0e4a39', '#d8b15a', '#f4f1e9', '#1c1a17'],
-      posts: ['linear-gradient(135deg,#caa24a,#7a5a1e)', 'linear-gradient(135deg,#5a7d52,#27331f)', 'linear-gradient(135deg,#d8c9a8,#9c8456)'],
+      colors: ['#00d992', '#10b981', '#0e4a39', '#101010'],
+      posts: ['linear-gradient(135deg,#10463a,#2fd6a1)', 'linear-gradient(135deg,#0e4a39,#10b981)', 'linear-gradient(135deg,#0c3f43,#14b8a6)'],
     };
   };
 
@@ -225,7 +229,7 @@ function ResultStep({ profile, onRedo, onApply }: { profile: Profile; onRedo: ()
             <div className="dc-l"><Icon name="link" />Réseaux détectés</div>
             {p.socials.map((s) => (
               <div className="disc-soc" key={s.id}><Brand name={s.id as BrandName} /><div className="ds-n">{netName(s.id)}<div className="ds-h">{s.handle}</div></div>
-                <div className="ds-f">{s.rating ? '4,8 ★' : fr(s.n)}<small>{s.rating ? ' · ' + s.n + ' avis' : ' abonnés'}</small></div></div>
+                <div className="ds-f">{s.rating ? '—' : fr(s.n)}<small>{s.rating ? ' · à connecter' : ' abonnés'}</small></div></div>
             ))}
           </div>
 
@@ -239,7 +243,7 @@ function ResultStep({ profile, onRedo, onApply }: { profile: Profile; onRedo: ()
             <div className="dc-l"><Icon name="sparkles2" />Pré-configuration</div>
             <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>{p.socials.length} réseaux prêts à connecter</span></div>
             <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Nom &amp; logo appliqués à l’espace</span></div>
-            <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Ton de marque suggéré : <b>gourmand &amp; chaleureux</b></span></div>
+            <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Ton de marque suggéré : <b>direct &amp; pédagogique</b></span></div>
             <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Modèles d’e-mails adaptés au secteur</span></div>
           </div>
         </div>

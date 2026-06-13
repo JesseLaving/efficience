@@ -5,22 +5,19 @@ import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { segmentInfos, type SegmentInfo } from '../lib/population';
+import { BUSINESS as BIZ } from '../lib/business';
 
-const BUSINESS = { name: 'Boulangerie Martin', email: 'bonjour@boulangerie-martin.fr', logo: `${import.meta.env.BASE_URL}assets/logo-white.png` };
-const SOCIAL: BrandName[] = ['instagram', 'facebook', 'tiktok'];
-const TONES = ['Chaleureux', 'Gourmand', 'Promotionnel', 'Élégant'];
+const BUSINESS = { name: BIZ.name, email: BIZ.email, logo: `${import.meta.env.BASE_URL}assets/logo-white.png` };
+const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
+const TONES = ['Direct', 'Pédagogique', 'Expert', 'Chaleureux'];
 
 interface Campaign {
   name: string; seg: string; status: 'sent' | 'sched' | 'draft';
   recipients: number; open: number | null; click: number | null; when: string;
 }
 
-const INITIAL: Campaign[] = [
-  { name: 'Offre week-end : -20% sur les viennoiseries', seg: 'Lyonnais', status: 'sent', recipients: 1040, open: 42.6, click: 8.1, when: 'Envoyée il y a 3 j' },
-  { name: 'Notre nouveau pain au levain bio est arrivé', seg: 'Tous les clients', status: 'sent', recipients: 1124, open: 38.4, click: 6.7, when: 'Envoyée il y a 9 j' },
-  { name: 'On vous a manqué ? -15% pour revenir', seg: 'À réactiver', status: 'sched', recipients: 286, open: null, click: null, when: 'Programmée sam. 09:00' },
-  { name: 'Votre carte de fidélité passe au digital', seg: 'Clients fidèles', status: 'draft', recipients: 412, open: null, click: null, when: 'Brouillon · modifié hier' },
-];
+// No invented campaigns — the list starts empty.
+const INITIAL: Campaign[] = [];
 
 interface Generated { subjects: string[]; pre: string; headline: string; body: string[]; cta: string; segName: string; pct: number; }
 
@@ -29,38 +26,38 @@ function family(p: string) {
   p = (p || '').toLowerCase();
   if (/(promo|réduc|reduc|-\d|%|offre|solde|remise|code|deal)/.test(p)) return 'promo';
   if (/(nouveau|nouveauté|nouveaute|lancement|découvr|decouvr|arriv)/.test(p)) return 'nouveaute';
-  if (/(revenir|manqué|manque|inactif|réactiv|reactiv|absent)/.test(p)) return 'reactivation';
-  if (/(fidél|fidel|carte|points|récompense|recompense|merci)/.test(p)) return 'fidelite';
+  if (/(revenir|manqué|manque|inactif|réactiv|reactiv|absent|relanc|prospect|sans réponse|recontact)/.test(p)) return 'reactivation';
+  if (/(fidél|fidel|carte|points|récompense|recompense|merci|recommand|confiance)/.test(p)) return 'fidelite';
   if (/(événement|evenement|ouverture|atelier|dégustation|degustation|fête|fete|noël|noel|pâques|paques|portes)/.test(p)) return 'evenement';
   return 'generic';
 }
 function generate(prompt: string, tone: string, segName: string): Generated {
   const pct = num(prompt);
-  const flavor = ({ Gourmand: 'gourmand', Promotionnel: 'malin', 'Élégant': 'raffiné', Chaleureux: 'chaleureux' } as Record<string, string>)[tone] || 'chaleureux';
+  const flavor = ({ Direct: 'direct', 'Pédagogique': 'pédagogique', Expert: 'rigoureux', Chaleureux: 'chaleureux' } as Record<string, string>)[tone] || 'direct';
   const T: Record<string, Omit<Generated, 'segName' | 'pct'>> = {
-    promo: { subjects: [`Rien que pour vous : −${pct}% ce week-end 🥐`, `Votre code gourmand de −${pct}% vous attend`, `−${pct}% sur vos viennoiseries préférées`], pre: 'Une attention sucrée à savourer avant dimanche soir.', headline: `−${pct}% pour se faire plaisir`, body: ['Bonjour {prenom},', `Parce que vous faites partie de nos client·e·s ${flavor}s, on vous réserve <b>−${pct}%</b> sur toute la gamme viennoiserie, ce week-end uniquement.`, 'Croissants tout juste sortis du four, pains au chocolat dorés, chouquettes à partager… Passez en boutique et présentez ce mail en caisse.'], cta: `Je profite de −${pct}%` },
-    nouveaute: { subjects: ['C’est tout chaud : notre nouveauté est là ✨', 'Vous allez adorer ce qui sort du fournil', 'Première fournée : à découvrir cette semaine'], pre: 'Une création maison à goûter en avant-première.', headline: 'Une nouveauté tout droit du fournil', body: ['Bonjour {prenom},', `On a une grande nouvelle : une création <b>${flavor}e</b> rejoint la vitrine cette semaine, pétrie et cuite sur place comme on les aime.`, 'Vous êtes parmi les premiers prévenus — venez la goûter pendant qu’elle est encore en édition limitée.'], cta: 'Découvrir la nouveauté' },
-    reactivation: { subjects: ['Vous nous avez manqué 🥖', 'Et si on se retrouvait autour d’un bon pain ?', '−15% pour fêter votre retour'], pre: 'Ça fait un moment… on vous a gardé une petite attention.', headline: 'Ça fait un moment, {prenom} !', body: ['Bonjour {prenom},', 'On ne vous a pas vu·e depuis quelques semaines, et honnêtement, ça nous manque. Pour vous donner une bonne raison de repasser, voici <b>−15%</b> sur votre prochaine commande.', `Le fournil n’a pas changé : toujours du fait-maison, toujours ${flavor}. On vous attend.`], cta: 'Je repasse vous voir' },
-    fidelite: { subjects: ['Votre fidélité, ça se récompense 💚', 'Merci d’être client·e — voici un cadeau', 'Vos points fidélité vous ouvrent une surprise'], pre: 'Un grand merci, et une douceur offerte rien que pour vous.', headline: 'Merci de votre fidélité', body: ['Bonjour {prenom},', `Client·e ${flavor} et fidèle, vous comptez beaucoup pour nous. Pour vous remercier, votre prochaine viennoiserie est <b>offerte</b> dès 10€ d’achat.`, 'Et bonne nouvelle : votre carte de fidélité est désormais digitale — plus rien à perdre, tout se cumule automatiquement.'], cta: 'Activer ma récompense' },
-    evenement: { subjects: ['Vous êtes convié·e 🎉', 'Save the date : ça se passe à la boulangerie', 'Un moment gourmand à ne pas manquer'], pre: 'Bloquez la date, on vous prépare quelque chose de spécial.', headline: 'Un rendez-vous gourmand vous attend', body: ['Bonjour {prenom},', `On organise un moment <b>${flavor}</b> rien que pour notre quartier, et votre place est réservée. Dégustation, coulisses du fournil et petites surprises au programme.`, 'Les places sont limitées — confirmez votre venue en un clic.'], cta: 'Je réserve ma place' },
-    generic: { subjects: [`Une attention ${flavor}e pour vous`, 'Des nouvelles de votre boulangerie', 'On a pensé à vous aujourd’hui'], pre: 'Quelques mots, et beaucoup de gourmandise.', headline: 'Un mot de votre boulangerie', body: ['Bonjour {prenom},', `Voici des nouvelles fraîches de la maison, écrites avec le même soin ${flavor} que l’on met dans chaque fournée.`, 'Passez nous voir cette semaine, on a toujours quelque chose de bon qui vous attend.'], cta: 'Voir la boutique' },
+    promo: { subjects: [`−${pct}% sur votre prochaine formation`, `Votre tarif préférentiel : −${pct}%`, `Formation à −${pct}% — places limitées`], pre: 'Une offre claire, sans engagement, pour passer à l’action.', headline: `−${pct}% sur votre montée en compétence`, body: ['Bonjour {prenom},', `Vous suivez le travail d’Efficience Marketing : je vous réserve <b>−${pct}%</b> sur la prochaine session de formation, ce mois-ci uniquement.`, `Au programme : méthode, exemples concrets et outils que vous appliquez dès le lendemain. Une approche ${flavor}, sans théorie hors-sol.`], cta: 'Réserver ma place' },
+    nouveaute: { subjects: ['Nouveau programme : prospection multicanale', 'Une nouvelle formation rejoint le catalogue', 'Disponible : le module IA appliquée au travail'], pre: 'Un nouveau contenu, pensé pour le terrain.', headline: 'Un nouveau programme disponible', body: ['Bonjour {prenom},', 'Un nouveau programme rejoint le catalogue cette semaine, construit sur la même logique : théorie utile, exemples concrets, méthode applicable.', 'Vous faites partie des premiers informés. Je vous laisse regarder le déroulé et me dire s’il correspond à votre besoin.'], cta: 'Voir le programme' },
+    reactivation: { subjects: ['On reprend contact ?', 'Un point sur vos objectifs commerciaux ?', 'Toujours d’actualité, votre projet de formation ?'], pre: 'Quelques semaines sans échange — faisons le point.', headline: 'On refait le point, {prenom} ?', body: ['Bonjour {prenom},', 'Nous n’avons pas échangé depuis un moment. Si votre projet de formation ou d’accompagnement est toujours d’actualité, je peux vous proposer un créneau cette semaine.', 'Quinze minutes suffisent pour cadrer le besoin et voir si je peux vous être utile.'], cta: 'Prendre un créneau' },
+    fidelite: { subjects: ['Merci pour votre confiance', 'Un mot, et une proposition', 'Votre avis compte pour la suite'], pre: 'Un remerciement simple, et une porte ouverte.', headline: 'Merci pour votre confiance', body: ['Bonjour {prenom},', 'Votre confiance compte beaucoup pour le développement d’Efficience Marketing. Si la formation vous a été utile, une recommandation auprès d’un collègue aide énormément.', 'Et si un nouveau besoin se présente, vous savez où me trouver.'], cta: 'Recommander un contact' },
+    evenement: { subjects: ['Invitation : atelier en ligne', 'Save the date — webinaire pratique', 'Une heure pour repartir avec une méthode'], pre: 'Bloquez la date : un format court et concret.', headline: 'Vous êtes invité·e à l’atelier', body: ['Bonjour {prenom},', 'J’anime un atelier en ligne, format court et pratique, et votre place est réservée. Au programme : une méthode, des exemples et un temps de questions.', 'Les places sont limitées pour garder un cadre utile. Confirmez votre venue en un clic.'], cta: 'Je réserve ma place' },
+    generic: { subjects: ['Des nouvelles d’Efficience Marketing', 'Un point utile pour votre activité', 'Trois idées pour la semaine'], pre: 'Quelques lignes utiles, sans détour.', headline: 'Un mot d’Efficience Marketing', body: ['Bonjour {prenom},', `Voici quelques nouvelles, avec la même logique que d’habitude : du concret, des méthodes, et un ton ${flavor}.`, 'Si un sujet vous parle — stratégie commerciale, communication, formation — répondez à ce mail, on en parle.'], cta: 'Échanger avec moi' },
   };
   const f = T[family(prompt)];
   return { ...f, segName, pct };
 }
 
 const SUGGESTS: [string, string][] = [
-  ['Offre −20% week-end', 'Promouvoir une offre −20% sur les viennoiseries ce week-end'],
-  ['Lancer une nouveauté', 'Annoncer le lancement de notre nouveau pain au levain bio'],
-  ['Relancer les inactifs', 'Relancer les clients inactifs avec une attention pour revenir'],
-  ['Programme de fidélité', 'Présenter notre nouveau programme de fidélité digital'],
+  ['Offre −20% formation', 'Proposer −20% sur la prochaine session de formation'],
+  ['Nouveau programme', 'Annoncer un nouveau programme de formation au catalogue'],
+  ['Relancer un prospect', 'Relancer un prospect resté sans réponse pour refaire le point'],
+  ['Inviter à un atelier', 'Inviter à un atelier en ligne court et pratique'],
 ];
 
 /* ---------- typed email body ---------- */
 function TypedBody({ paras, genId }: { paras: string[]; genId: number }) {
   const [html, setHtml] = useState('');
   useEffect(() => {
-    const replaced = paras.map((t) => t.replace('{prenom}', 'Camille'));
+    const replaced = paras.map((t) => t.replace('{prenom}', 'Prénom'));
     let pi = 0, ci = 0;
     const built: string[] = [];
     const cursor = '<span class="typ-cursor"></span>';
@@ -110,7 +107,7 @@ export function Campagnes() {
   }, [campaignSeed]);
 
   const doGenerate = () => {
-    const p = prompt.trim() || 'Promouvoir une offre gourmande cette semaine';
+    const p = prompt.trim() || 'Partager une actualité utile à mes contacts cette semaine';
     if (!prompt.trim()) setPrompt(p);
     setGenerating(true); setGen(null);
     setTimeout(() => {
@@ -174,7 +171,7 @@ export function Campagnes() {
                   </div>
                   <div className="field">
                     <label className="field-lbl">Votre objectif <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— en une phrase</span></label>
-                    <textarea className="inp" rows={3} placeholder="Ex : promouvoir une offre −20% sur les viennoiseries ce week-end" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+                    <textarea className="inp" rows={3} placeholder="Ex : proposer −20% sur la prochaine session de formation" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 9 }}>
                       {SUGGESTS.map(([label, full]) => <button key={label} className="fmt-chip" style={{ cursor: 'pointer' }} onClick={() => setPrompt(full)}>{label}</button>)}
                     </div>
@@ -231,18 +228,18 @@ export function Campagnes() {
               ) : (
                 <div className="ep-mail">
                   <div className="ep-from">
-                    <div className="ava">BM</div>
+                    <div className="ava">{BIZ.initials}</div>
                     <div><div className="ef-t">{BUSINESS.name}</div><div className="ef-s">{BUSINESS.email}</div></div>
                     <div className="ef-time">09:00</div>
                   </div>
                   <div className="ep-subj-line">{gen.subjects[subject]}</div>
                   <div style={{ fontSize: 12, color: '#999', padding: '4px 20px 0' }}>{gen.pre}</div>
-                  <div className="ep-head-band"><img src={BUSINESS.logo} alt="Efficience" /><div className="ehb-t">{gen.headline.replace('{prenom}', 'Camille')}</div></div>
+                  <div className="ep-head-band"><img src={BUSINESS.logo} alt="Efficience" /><div className="ehb-t">{gen.headline.replace('{prenom}', 'Prénom')}</div></div>
                   <TypedBody paras={gen.body} genId={genId} />
                   <div className="ep-cta-wrap"><a className="ep-cta" href="#">{gen.cta}</a></div>
                   <div className="ep-foot">
                     <div className="ef-social">{SOCIAL.map((s) => <span key={s}><Brand name={s} /></span>)}</div>
-                    {BUSINESS.name} · 14 rue de la République, Lyon 3e<br />
+                    {BUSINESS.name} · {BIZ.addressLine}<br />
                     Vous recevez cet e-mail car vous êtes client·e. <a href="#">Se désinscrire</a> · <a href="#">Préférences</a><br />
                     <span style={{ opacity: 0.7 }}>Envoyé avec Efficience</span>
                   </div>
@@ -275,7 +272,7 @@ export function Campagnes() {
         <div className="crm-stat"><div className="cs-l"><Icon name="send" />Campagnes</div><div className="cs-v">{campaigns.length}</div><div className="cs-f">tous statuts</div></div>
         <div className="crm-stat"><div className="cs-l"><Icon name="mailopen" />Taux d’ouverture moyen</div><div className="cs-v">{avgOpen.toFixed(1).replace('.', ',')} %</div><div className="cs-f"><span className="acc">+11 pts</span> vs. moyenne secteur</div></div>
         <div className="crm-stat"><div className="cs-l"><Icon name="cursor" />Clics générés</div><div className="cs-v">{fr(clicks)}</div><div className="cs-f">sur les 30 derniers jours</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Désinscriptions</div><div className="cs-v">0,3 %</div><div className="cs-f">conforme RGPD</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Désinscriptions</div><div className="cs-v">—</div><div className="cs-f">conforme RGPD</div></div>
       </div>
 
       <div className="camp-list">

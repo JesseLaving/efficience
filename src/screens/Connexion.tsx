@@ -5,6 +5,7 @@ import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { countUp } from '../lib/countup';
+import { BUSINESS as BIZ } from '../lib/business';
 
 function FlashButton({ className, label, flash, onClick }: { className: string; label: string; flash: string; onClick?: () => void }) {
   const [txt, setTxt] = useState(label);
@@ -36,7 +37,7 @@ function ProfileBlock({ net, loading }: { net: Network; loading: boolean }) {
   return (
     <div className="nc-profile">
       <div className="ava-wrap">
-        <div className="ava">BM</div>
+        <div className="ava">{BIZ.initials}</div>
         <span className="pbadge"><Brand name={net.id as BrandName} /></span>
       </div>
       <div className="pi">

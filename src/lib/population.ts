@@ -38,7 +38,9 @@ const cityBag: string[] = [];
 CITIES.forEach(([c, w]) => { for (let i = 0; i < w; i++) cityBag.push(c); });
 const TAG_POOL = ['Pâtisserie', 'Pain', 'Traiteur', 'Sans gluten'];
 
-export const TOTAL = 1248;
+// Empty base by default — no invented contacts. The seeded generator below
+// stays available (it builds nothing while TOTAL is 0) so the CRM renders 0.
+export const TOTAL = 0;
 
 function buildPopulation(): Contact[] {
   const pop: Contact[] = [];
@@ -87,7 +89,7 @@ export const SEGMENTS: Segment[] = [
   { id: 'all', name: 'Tous les clients', desc: 'Base complète', icon: 'users', pred: () => true },
   { id: 'vip', name: 'Clients fidèles', desc: 'Panier moyen ≥ 30 €', icon: 'euro', pred: (c) => c.basket >= 30 },
   { id: 'new', name: 'Nouveaux clients', desc: '1er achat < 30 jours', icon: 'sparkles2', pred: (c) => c.lastDays <= 30 },
-  { id: 'lyon', name: 'Lyonnais', desc: 'Ville commence par « Lyon »', icon: 'pin', pred: (c) => c.city.startsWith('Lyon') },
+  { id: 'lyon', name: 'Avignonnais', desc: 'Ville commence par « Avignon »', icon: 'pin', pred: (c) => c.city.startsWith('Avignon') },
   { id: 'dormant', name: 'À réactiver', desc: 'Inactifs depuis > 75 j', icon: 'clock', pred: (c) => c.lastDays > 75 },
   { id: 'consent', name: 'Opt-in marketing', desc: 'Consentement email OK', icon: 'shield', pred: (c) => c.consent },
 ];

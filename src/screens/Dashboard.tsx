@@ -10,12 +10,7 @@ import { KpiModal } from '../components/KpiModal';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
-const POSTS = [
-  { net: 'instagram', t: 'Pain au levain — fournée du matin', when: 'Auj. 12:00', tag: 'sched', tagL: 'Programmé' },
-  { net: 'tiktok', t: 'Les coulisses du pétrissage (Reel 15s)', when: 'Auj. 18:30', tag: 'sched', tagL: 'Programmé' },
-  { net: 'facebook', t: 'Offre du week-end : -20% sur les viennoiseries', when: 'Mer. 09:00', tag: 'review', tagL: 'À valider' },
-  { net: 'google', t: 'Nouveaux horaires d’été', when: 'Jeu. 08:00', tag: 'sched', tagL: 'Programmé' },
-];
+const POSTS: { net: string; t: string; when: string; tag: string; tagL: string }[] = [];
 
 /* ---------- KPI card ---------- */
 function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void }) {
@@ -93,7 +88,8 @@ function Chart() {
   const lineRef = useRef<SVGPathElement>(null);
   const areaRef = useRef<SVGPathElement>(null);
   const W = 620, H = 200, pad = 6;
-  const raw = [38, 42, 40, 52, 49, 63, 58, 71, 68, 82, 79, 96];
+  // Empty by default — flat baseline until real data flows in.
+  const raw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   const max = 105, n = raw.length;
   const pts = raw.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
   const line = smooth(pts);
@@ -171,9 +167,9 @@ export function Dashboard() {
     <section className="screen show anim">
       <div className="page-head">
         <div>
-          <div className="eyebrow">Vue d’ensemble · 8–14 juin</div>
-          <h1>Bonjour 👋 — voici la semaine de Martin</h1>
-          <p>Trois réseaux connectés, 8 posts programmés et 3 contenus en attente de validation.</p>
+          <div className="eyebrow">Vue d’ensemble</div>
+          <h1>Bonjour Jesse 👋 — votre tableau de bord</h1>
+          <p>Connectez vos réseaux, importez votre base clients et créez vos campagnes : vos indicateurs se rempliront avec vos vraies données.</p>
         </div>
         <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>
           <button className="btn outline" onClick={() => setModal(true)}><Icon name="plus" />Créer un KPI</button>
@@ -214,7 +210,7 @@ export function Dashboard() {
             <div><h3>Performance</h3><div className="sub">Portée cumulée · 30 derniers jours</div></div>
             <div className="chart-legend">
               <span className="lg"><i style={{ background: 'var(--acc)' }} />Portée</span>
-              <span className="chip on"><RawIcon svg={UI.arrowup} />+34 %</span>
+              <span className="chip"><RawIcon svg={UI.dot} />En attente de données</span>
             </div>
           </div>
           <div className="chart-wrap">
@@ -227,7 +223,11 @@ export function Dashboard() {
           <div className="card">
             <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm">Tout voir</button></div>
             <div>
-              {POSTS.map((p, i) => (
+              {POSTS.length === 0 ? (
+                <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13.5, textAlign: 'center', padding: '28px 24px' }}>
+                  Aucun post programmé. Créez-en un depuis le <b style={{ color: 'var(--tx-2)' }}>Studio</b>.
+                </div>
+              ) : POSTS.map((p, i) => (
                 <div className="post" key={i}>
                   <div className="thumb"><Icon name="image" /></div>
                   <div className="pmeta">
@@ -242,9 +242,9 @@ export function Dashboard() {
           <div className="card">
             <div className="card-h"><div><h3>Plan de com — juin</h3></div></div>
             <div className="pad">
-              <Prog label="Calendrier éditorial" pct={68} />
-              <Prog label="Objectif abonnés" pct={84} />
-              <Prog label="Réponses aux avis Google" pct={92} />
+              <Prog label="Calendrier éditorial" pct={0} />
+              <Prog label="Objectif abonnés" pct={0} />
+              <Prog label="Réponses aux avis Google" pct={0} />
             </div>
           </div>
         </div>

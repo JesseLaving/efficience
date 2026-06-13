@@ -5,6 +5,7 @@ import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
+import { BUSINESS as BIZ } from '../lib/business';
 
 /* ig action glyphs */
 const A = {
@@ -35,8 +36,8 @@ const SPECS: Record<'post' | 'story', Record<string, Spec>> = {
   },
 };
 
-const handleFor = (id: string): string =>
-  (({ instagram: '@boulangerie.martin', facebook: 'Boulangerie Martin', linkedin: 'Boulangerie Martin', x: '@boul_martin', tiktok: '@boulangerie.martin', youtube: '@boulangeriemartin', pinterest: '@boulangeriemartin', google: 'Boulangerie Martin' } as Record<string, string>)[id]) || '@boulangerie.martin';
+// No real social handle is known — display the brand name for every preview.
+const handleFor = (_id: string): string => BIZ.name;
 
 const escapeHtml = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
 const escapeTags = (s: string) => escapeHtml(s).replace(/#([\wàâäéèêëîïôöùûüç-]+)/gi, '<span class="tags">#$1</span>');
@@ -117,7 +118,7 @@ export function Studio() {
   };
 
   const insert = (k: 'emoji' | 'hash' | 'ai') => {
-    const map = { emoji: ' 🥐', hash: ' #boulangerie #faitmaison', ai: ' Découvrez nos fournées du matin, encore tièdes ✨' };
+    const map = { emoji: ' ✦', hash: ' #formation #stratégiecommerciale', ai: ' Une méthode concrète, applicable dès le lendemain. On en parle ?' };
     setText((t) => t + map[k]);
   };
 
@@ -288,7 +289,7 @@ function FeedPreview({ text, active, ratio, media }: { text: string; active: str
   const bg = media && media.kind === 'image' ? { backgroundImage: `url('${media.url}')` } : {};
   return (
     <div className="ig-card">
-      <div className="ig-head"><div className="ava">BM</div><div><div className="ih-n">{handleFor(active || '')}</div><div className="ih-s">Lyon 3e · Sponsorisé</div></div><div className="ih-net">{active && <Brand name={active as BrandName} />}</div></div>
+      <div className="ig-head"><div className="ava">{BIZ.initials}</div><div><div className="ih-n">{handleFor(active || '')}</div><div className="ih-s">{BIZ.city} · Sponsorisé</div></div><div className="ih-net">{active && <Brand name={active as BrandName} />}</div></div>
       <div className="ig-media" style={{ aspectRatio: ratio.replace(':', '/'), ...bg }}>{mediaInner(media, ratio)}</div>
       <div className="ig-actions"><RawIcon svg={A.heart} /><RawIcon svg={A.comment} /><RawIcon svg={A.share} /><span className="grow" /><RawIcon svg={A.bookmark} /></div>
       <div className="ig-cap">{txt ? <span dangerouslySetInnerHTML={{ __html: `<b>${handleFor(active || '')}</b> ${escapeTags(txt)}` }} /> : <span className="empty">Votre légende apparaîtra ici…</span>}</div>
@@ -304,7 +305,7 @@ function StoryPreview({ text, active, media }: { text: string; active: string | 
       <div className="st-grad-top" /><div className="st-grad-bot" />
       <div className="st-net">{active && <Brand name={active as BrandName} />}</div>
       <div className="st-prog"><i /><i /><i /></div>
-      <div className="st-head"><div className="ava">BM</div><div><div className="sh-n">{handleFor(active || '')}</div><div className="sh-t">il y a 2 min</div></div></div>
+      <div className="st-head"><div className="ava">{BIZ.initials}</div><div><div className="sh-n">{handleFor(active || '')}</div><div className="sh-t">il y a 2 min</div></div></div>
       {!media && <div className="st-empty"><Icon name="image" /><small>Visuel 9:16</small></div>}
       <div className="st-cap">{txt ? <span dangerouslySetInnerHTML={{ __html: escapeTags(txt) }} /> : null}</div>
     </div>
@@ -317,13 +318,13 @@ function EmailPreviewCard({ subject, pre, body }: { subject: string; pre: string
   return (
     <div style={{ width: '100%', maxWidth: 380 }}>
       <div className="ep-mail">
-        <div className="ep-from"><div className="ava">BM</div><div><div className="ef-t">Boulangerie Martin</div><div className="ef-s">bonjour@boulangerie-martin.fr</div></div><div className="ef-time">09:00</div></div>
+        <div className="ep-from"><div className="ava">{BIZ.initials}</div><div><div className="ef-t">{BIZ.name}</div><div className="ef-s">{BIZ.email}</div></div><div className="ef-time">09:00</div></div>
         <div className="ep-subj-line">{subject ? subject : <span style={{ color: '#bbb' }}>Objet de l’e-mail</span>}</div>
         <div style={{ fontSize: 12, color: '#999', padding: '4px 20px 0' }}>{pre || 'Pré-en-tête…'}</div>
         <div className="ep-head-band"><img src={`${import.meta.env.BASE_URL}assets/logo-white.png`} alt="Efficience" /></div>
         <div className="ep-body-c">{paras}</div>
         <div className="ep-foot"><div className="ef-social">{(['instagram', 'facebook', 'tiktok'] as BrandName[]).map((s) => <span key={s}><Brand name={s} /></span>)}</div>
-          Boulangerie Martin · 14 rue de la République, Lyon 3e<br /><a href="#">Se désinscrire</a></div>
+          {BIZ.name} · {BIZ.addressLine}<br /><a href="#">Se désinscrire</a></div>
       </div>
     </div>
   );
@@ -344,7 +345,7 @@ function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish }
     <>
       <div className="ce-sec">
         <label className="field-lbl">Objet de l’e-mail</label>
-        <input className="inp" maxLength={120} placeholder="Ex : Vos viennoiseries préférées en édition limitée" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <input className="inp" maxLength={120} placeholder="Ex : votre prochaine session de formation — places limitées" value={subject} onChange={(e) => setSubject(e.target.value)} />
         <div style={{ marginTop: 8 }}>{counter(subject.length, subjLim)}</div>
       </div>
       <div className="ce-sec">

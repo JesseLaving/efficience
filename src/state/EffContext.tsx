@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { NETWORKS } from '../lib/networks';
+import { BUSINESS } from '../lib/business';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
@@ -15,6 +16,7 @@ function loadConnected(): Record<string, boolean> {
     const s = JSON.parse(localStorage.getItem(CONN_LS) || 'null');
     if (s) return s;
   } catch { /* ignore */ }
+  // Start vide: no account pre-connected.
   const c: Record<string, boolean> = {};
   NETWORKS.forEach((n) => { if (n.def) c[n.id] = true; });
   return c;
@@ -51,7 +53,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   );
   const [connected, setConnected] = useState<Record<string, boolean>>(loadConnected);
   const [phase, setPhase] = useState<Record<string, Phase>>({});
-  const [client, setClient] = useState<ClientProfile>({ name: 'Boulangerie Martin', initials: 'BM' });
+  const [client, setClient] = useState<ClientProfile>({ name: BUSINESS.name, initials: BUSINESS.initials });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
   const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
   const timers = useRef<Record<string, number[]>>({});
