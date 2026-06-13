@@ -1,0 +1,256 @@
+import { useEffect, useRef, useState } from 'react';
+import { useEff } from '../state/EffContext';
+import { Icon, Brand, RawIcon } from '../lib/Icon';
+import { UI, type BrandName } from '../lib/icons';
+import { FMT, UNIT } from '../lib/format';
+import { countUp } from '../lib/countup';
+import { netName } from '../lib/networks';
+import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from '../lib/kpi';
+import { KpiModal } from '../components/KpiModal';
+
+const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
+
+const POSTS = [
+  { net: 'instagram', t: 'Pain au levain — fournée du matin', when: 'Auj. 12:00', tag: 'sched', tagL: 'Programmé' },
+  { net: 'tiktok', t: 'Les coulisses du pétrissage (Reel 15s)', when: 'Auj. 18:30', tag: 'sched', tagL: 'Programmé' },
+  { net: 'facebook', t: 'Offre du week-end : -20% sur les viennoiseries', when: 'Mer. 09:00', tag: 'review', tagL: 'À valider' },
+  { net: 'google', t: 'Nouveaux horaires d’été', when: 'Jeu. 08:00', tag: 'sched', tagL: 'Programmé' },
+];
+
+/* ---------- KPI card ---------- */
+function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void }) {
+  const valRef = useRef<HTMLSpanElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+  const s = SRC[def.src] || SRC.manual;
+  const tr = def.trend || { dir: 'neutral', val: '' };
+  const unit = UNIT[def.fmt] ? <span className="ku">{UNIT[def.fmt]}</span> : null;
+  const pct = def.target ? Math.min(100, (raw / def.target) * 100) : 0;
+
+  useEffect(() => {
+    countUp(valRef.current, raw, { fmt: (v) => fmtVal(def.fmt, v), dur: 850 });
+    if (barRef.current) requestAnimationFrame(() => { if (barRef.current) barRef.current.style.width = pct + '%'; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pill = tr.dir === 'up'
+    ? <span className="pill up"><RawIcon svg={UI.arrowup} />{tr.val}</span>
+    : tr.dir === 'down'
+      ? <span className="pill down"><RawIcon svg={UI.arrowdown} />{tr.val}</span>
+      : <span className="pill neutral">{tr.val}</span>;
+
+  return (
+    <div className={'kpi kpi-in' + (removing ? ' kpi-out' : '')} data-kpi={id}>
+      <button className="kpi-rm" title="Retirer" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
+      <div className="kl"><RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />{def.label}</div>
+      <div className="kv"><span className="kv-n" ref={valRef}>0</span>{unit}</div>
+      <div className="kf">{pill}{tr.since && <span className="since">{tr.since}</span>}<span className="ksrc"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{s.label}</span></div>
+      {def.target ? (
+        <div className="ktarget">
+          <div className="kt-h"><span>Objectif</span><b>{fmtVal(def.fmt, def.target)}</b></div>
+          <div className="kt-bar"><i ref={barRef as React.RefObject<HTMLElement>} style={{ width: 0 }} /></div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- suggestion card ---------- */
+function SugCard({ id, onAdd }: { id: string; onAdd: (id: string) => void }) {
+  const d = CATALOG[id];
+  const s = SRC[d.src] || SRC.manual;
+  const tr = d.trend || { dir: 'up', val: '' };
+  const val = fmtVal(d.fmt, d.val) + (UNIT[d.fmt] || '');
+  const trCls = tr.dir === 'down' ? 'down' : 'up';
+  return (
+    <div className="sug-card">
+      <div className="sug-top">
+        <div className="sg-ic"><RawIcon svg={UI[d.icon as keyof typeof UI] || UI.target} /></div>
+        <div className="sg-t">
+          <div className="sg-n">{d.label}</div>
+          <div className="sg-src"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{d.why || s.label}</div>
+        </div>
+        {d.suggested && <span className="sug-badge"><RawIcon svg={UI.sparkles2} />Suggéré</span>}
+      </div>
+      <div className="sug-mid"><span className="sg-v">{val}</span>{tr.val && <span className={'sg-tr ' + trCls}>{tr.val}</span>}</div>
+      <button className="btn outline sm sg-add" onClick={() => onAdd(id)}><RawIcon svg={UI.plus} />Ajouter au tableau</button>
+    </div>
+  );
+}
+
+/* ---------- chart ---------- */
+function smooth(pts: number[][]): string {
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`;
+  }
+  return d;
+}
+
+function Chart() {
+  const lineRef = useRef<SVGPathElement>(null);
+  const areaRef = useRef<SVGPathElement>(null);
+  const W = 620, H = 200, pad = 6;
+  const raw = [38, 42, 40, 52, 49, 63, 58, 71, 68, 82, 79, 96];
+  const max = 105, n = raw.length;
+  const pts = raw.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
+  const line = smooth(pts);
+  const area = line + ` L ${pts[n - 1][0]} ${H} L ${pts[0][0]} ${H} Z`;
+
+  useEffect(() => {
+    const path = lineRef.current;
+    if (path) {
+      const L = path.getTotalLength();
+      path.style.strokeDasharray = String(L);
+      path.style.strokeDashoffset = String(L);
+      path.getBoundingClientRect();
+      path.style.transition = 'stroke-dashoffset 1.3s var(--ease,ease)';
+      path.style.strokeDashoffset = '0';
+    }
+    const a = areaRef.current;
+    if (a) { a.style.opacity = '0'; a.getBoundingClientRect(); a.style.transition = 'opacity .9s ease .3s'; a.style.opacity = '1'; }
+  }, []);
+
+  return (
+    <svg className="chart-svg" viewBox="0 0 620 200" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="area-g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(0,217,146,.30)" />
+          <stop offset="100%" stopColor="rgba(0,217,146,0)" />
+        </linearGradient>
+      </defs>
+      <path ref={areaRef} d={area} fill="url(#area-g)" opacity="0" />
+      <path ref={lineRef} d={line} fill="none" stroke="var(--acc)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+/* ---------- progress bar ---------- */
+function Prog({ label, pct }: { label: string; pct: number }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => { requestAnimationFrame(() => { if (ref.current) ref.current.style.width = pct + '%'; }); }, [pct]);
+  return (
+    <div className="prog-item">
+      <div className="pi-h"><span>{label}</span><span className="pct">{pct} %</span></div>
+      <div className="bar"><i ref={ref as React.RefObject<HTMLElement>} style={{ width: 0 }} /></div>
+    </div>
+  );
+}
+
+export function Dashboard() {
+  const { totalReach } = useEff();
+  const [state, setState] = useState<KpiState>(() => loadKpiState());
+  const [removing, setRemoving] = useState<Record<string, boolean>>({});
+  const [modal, setModal] = useState(false);
+
+  const update = (next: KpiState) => { setState(next); saveKpiState(next); };
+  const def = (id: string): KpiDef | undefined => CATALOG[id] || state.custom[id];
+  const rawVal = (d: KpiDef): number => (d.live === 'reach' ? totalReach : d.val);
+
+  const addKpi = (id: string, customDef?: KpiDef) => {
+    const custom = customDef ? { ...state.custom, [id]: customDef } : state.custom;
+    const board = state.board.includes(id) ? state.board : [...state.board, id];
+    update({ ...state, custom, board });
+  };
+  const removeKpi = (id: string) => {
+    setRemoving((r) => ({ ...r, [id]: true }));
+    setTimeout(() => {
+      setRemoving((r) => { const n = { ...r }; delete n[id]; return n; });
+      setState((s) => { const next = { ...s, board: s.board.filter((x) => x !== id) }; saveKpiState(next); return next; });
+    }, 220);
+  };
+  const toggleSuggest = () => update({ ...state, suggestOpen: !state.suggestOpen });
+
+  const sugIds = Object.keys(CATALOG).filter((id) => !state.board.includes(id));
+  sugIds.sort((a, b) => (CATALOG[b].suggested ? 1 : 0) - (CATALOG[a].suggested ? 1 : 0));
+  const sugList = sugIds.slice(0, 6);
+
+  return (
+    <section className="screen show anim">
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Vue d’ensemble · 8–14 juin</div>
+          <h1>Bonjour 👋 — voici la semaine de Martin</h1>
+          <p>Trois réseaux connectés, 8 posts programmés et 3 contenus en attente de validation.</p>
+        </div>
+        <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>
+          <button className="btn outline" onClick={() => setModal(true)}><Icon name="plus" />Créer un KPI</button>
+          <button className="btn acc"><span className="ic">✦</span>Générer le mois avec l’IA</button>
+        </div>
+      </div>
+
+      <div className="kpi-board">
+        {state.board.map((id) => {
+          const d = def(id);
+          if (!d) return null;
+          return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} />;
+        })}
+        <div className="kpi add-tile" onClick={() => setModal(true)}>
+          <div className="at-ic"><Icon name="plus" /></div>
+          <div className="at-t">Ajouter un KPI</div>
+        </div>
+      </div>
+
+      <div>
+        <div className="kpi-suggest">
+          <div className="ks-head">
+            <div className="ks-ic"><Icon name="wand" /></div>
+            <div><h3>Suggestions pour votre activité</h3><p>D’après vos réseaux connectés, votre fiche Google et votre base clients.</p></div>
+            <button className="btn ghost sm ks-toggle" onClick={toggleSuggest}>{state.suggestOpen ? 'Masquer' : 'Afficher'}</button>
+          </div>
+          {state.suggestOpen && (
+            sugList.length
+              ? <div className="ks-row">{sugList.map((id) => <SugCard key={id} id={id} onAdd={addKpi} />)}</div>
+              : <div className="ks-empty">Tous les indicateurs suggérés sont déjà sur votre tableau de bord. 🎉</div>
+          )}
+        </div>
+      </div>
+
+      <div className="dash-grid">
+        <div className="card">
+          <div className="card-h">
+            <div><h3>Performance</h3><div className="sub">Portée cumulée · 30 derniers jours</div></div>
+            <div className="chart-legend">
+              <span className="lg"><i style={{ background: 'var(--acc)' }} />Portée</span>
+              <span className="chip on"><RawIcon svg={UI.arrowup} />+34 %</span>
+            </div>
+          </div>
+          <div className="chart-wrap">
+            <Chart />
+            <div className="chart-x"><span>15 mai</span><span>22 mai</span><span>29 mai</span><span>5 juin</span><span>12 juin</span></div>
+          </div>
+        </div>
+
+        <div className="stack">
+          <div className="card">
+            <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm">Tout voir</button></div>
+            <div>
+              {POSTS.map((p, i) => (
+                <div className="post" key={i}>
+                  <div className="thumb"><Icon name="image" /></div>
+                  <div className="pmeta">
+                    <div className="pt">{p.t}</div>
+                    <div className="pl"><Brand name={p.net as BrandName} /><span>{netName(p.net)}</span><span>·</span><span>{p.when}</span></div>
+                  </div>
+                  <span className={'tag ' + p.tag}>{p.tagL}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><div><h3>Plan de com — juin</h3></div></div>
+            <div className="pad">
+              <Prog label="Calendrier éditorial" pct={68} />
+              <Prog label="Objectif abonnés" pct={84} />
+              <Prog label="Réponses aux avis Google" pct={92} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {modal && <KpiModal onCreate={addKpi} onClose={() => setModal(false)} />}
+    </section>
+  );
+}

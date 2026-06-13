@@ -1,0 +1,99 @@
+/* ============================================================
+   Efficience — Connexion + Dashboard (Voltagent system)
+   ============================================================ */
+
+/* ---------- Connexion ---------- */
+.net-summary {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 22px; padding: 16px 20px;
+  border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas);
+}
+.net-summary .ns-ic { width: 44px; height: 44px; border-radius: var(--r-card); flex: none; display: grid; place-items: center;
+  color: var(--acc); background: var(--acc-soft); border: 1px solid var(--acc-soft2); }
+.net-summary .ns-ic .ic { width: 22px; height: 22px; }
+.net-summary .ns-t { font-size: 16px; font-weight: 600; color: var(--tx-str); }
+.net-summary .ns-t #ns-count { font-family: var(--mono); color: var(--acc); }
+.net-summary .ns-s { font-size: 13px; color: var(--tx-3); margin-top: 3px; }
+.net-summary .ns-stat { margin-left: auto; text-align: right; }
+.net-summary .ns-stat b { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--tx-str); }
+.net-summary .ns-stat span { display: block; font-size: 11.5px; color: var(--tx-3); margin-top: 2px; }
+
+.net-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+.net-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); padding: 18px;
+  transition: border-color .18s, box-shadow .18s; }
+.net-card:hover { border-color: #4a4746; box-shadow: var(--glow); }
+.net-card.connected { border-color: var(--acc-soft2); }
+
+.nc-top { display: flex; align-items: center; gap: 12px; }
+.nc-logo { width: 44px; height: 44px; flex: none; border-radius: var(--r-card); display: grid; place-items: center; background: var(--canvas-soft); border: 1px solid var(--line); }
+.nc-logo svg { width: 26px; height: 26px; }
+.nc-name { font-size: 15.5px; font-weight: 600; line-height: 1.15; color: var(--tx-str); }
+.nc-kind { font-size: 12px; color: var(--tx-3); margin-top: 2px; }
+.nc-state { margin-left: auto; }
+.nc-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--tx-3); }
+.nc-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--tx-3); }
+.nc-dot.on { color: var(--acc); }
+.nc-dot.on i { background: var(--acc); box-shadow: 0 0 8px 1px var(--acc); }
+
+.nc-body { margin-top: 15px; min-height: 62px; display: flex; align-items: center; }
+.nc-avail { width: 100%; }
+.nc-avail .nc-desc { font-size: 13px; color: var(--tx-2); line-height: 1.5; }
+.nc-connecting { display: flex; align-items: center; gap: 11px; width: 100%; color: var(--tx-2); font-size: 13px; }
+
+.nc-profile { display: flex; align-items: center; gap: 13px; width: 100%; }
+.nc-profile .ava, .nc-profile .skel.av { width: 48px; height: 48px; font-size: 17px; border-radius: 50%; }
+.nc-profile .pi { min-width: 0; flex: 1; }
+.nc-profile .pi .pn { font-weight: 600; font-size: 14.5px; color: var(--tx-str); display: flex; align-items: center; gap: 6px; }
+.nc-profile .pi .pn .vrf { width: 15px; height: 15px; color: var(--acc); }
+.nc-profile .pi .ph { font-size: 12.5px; color: var(--tx-3); margin-top: 2px; }
+.nc-profile .pi .pf { font-family: var(--mono); font-size: 12px; color: var(--tx-2); margin-top: 6px; }
+.nc-profile .pi .pf b { color: var(--tx-str); font-weight: 600; }
+.skel.txt { height: 10px; border-radius: 5px; }
+
+.nc-foot { margin-top: 16px; display: flex; align-items: center; gap: 9px; }
+.nc-foot .grow { flex: 1; }
+.unlink-btn { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: var(--r-btn);
+  border: 1px solid var(--line); background: transparent; color: var(--tx-3); cursor: pointer; transition: color .15s, border-color .15s; }
+.unlink-btn .ic { width: 15px; height: 15px; }
+.unlink-btn:hover { color: var(--danger); border-color: rgba(255,107,107,.35); }
+
+/* ---------- Dashboard ---------- */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+.kpi { border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); padding: 18px 20px; }
+.kpi .kl { display: flex; align-items: center; gap: 8px; color: var(--tx-2); font-size: 13px; font-weight: 500; }
+.kpi .kl .ic { width: 15px; height: 15px; color: var(--tx-3); }
+.kpi .kv { font-family: var(--mono); font-weight: 600; font-size: 30px; letter-spacing: -.02em; margin: 14px 0 9px; line-height: 1; color: var(--tx-str); }
+.kpi .kf { display: flex; align-items: center; gap: 8px; }
+.kpi .kf .since { font-size: 11.5px; color: var(--tx-3); }
+
+.dash-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; align-items: start; }
+
+.chart-wrap { position: relative; padding: 18px 22px 8px; }
+.chart-legend { display: flex; gap: 12px; align-items: center; }
+.chart-legend .lg { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--tx-2); }
+.chart-legend .lg i { width: 9px; height: 9px; border-radius: 2px; }
+.chart-svg { width: 100%; height: 200px; display: block; overflow: visible; }
+.chart-x { display: flex; justify-content: space-between; padding: 4px 4px 12px; font-family: var(--mono); font-size: 11px; color: var(--tx-3); }
+
+.post { display: flex; align-items: center; gap: 13px; padding: 14px 24px; border-top: 1px solid var(--line-2); transition: background .15s; }
+.post:hover { background: var(--s1); }
+.post .thumb { width: 44px; height: 44px; border-radius: var(--r-card); flex: none; background: var(--canvas-soft); display: grid; place-items: center; color: var(--tx-3); border: 1px solid var(--line); }
+.post .thumb .ic { width: 18px; height: 18px; }
+.post .pmeta { flex: 1; min-width: 0; }
+.post .pmeta .pt { font-size: 13.5px; font-weight: 500; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.post .pmeta .pl { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 12px; color: var(--tx-3); }
+.post .pmeta .pl svg { width: 13px; height: 13px; }
+.post .tag { font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: var(--pill); border: 1px solid var(--line); white-space: nowrap; }
+.post .tag.sched { color: var(--acc); border-color: var(--acc-soft2); }
+.post .tag.review { color: var(--warn); border-color: rgba(232,163,61,.35); }
+
+.prog-item + .prog-item { margin-top: 16px; }
+.prog-item .pi-h { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; color: var(--tx-2); }
+.prog-item .pi-h .pct { font-family: var(--mono); color: var(--tx); }
+.bar { height: 6px; border-radius: var(--pill); background: var(--canvas-soft); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: var(--pill); background: var(--acc); width: 0; transition: width 1s var(--ease); }
+
+.stack { display: flex; flex-direction: column; gap: 16px; }
+
+@media (max-width: 1080px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } .dash-grid { grid-template-columns: 1fr; } }
