@@ -7,6 +7,7 @@ import { Connexion } from './screens/Connexion';
 import { Contacts } from './screens/Contacts';
 import { Campagnes } from './screens/Campagnes';
 import { Studio } from './screens/Studio';
+import { Analyse } from './screens/Analyse';
 import { Placeholder } from './screens/Placeholder';
 import { Onboarding } from './components/Onboarding';
 import type { UIName } from './lib/icons';
@@ -25,14 +26,13 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     { screen: 'campagnes', icon: 'mail', label: 'Campagnes' },
   ] },
   { label: 'Analyse', items: [
-    { screen: 'stats', icon: 'chart', label: 'Statistiques' },
+    { screen: 'stats', icon: 'chart', label: 'Analyse entreprise & site' },
     { screen: 'inbox', icon: 'inbox', label: 'Boîte de réception' },
   ] },
 ];
 
 const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }> = {
   planning: { icon: 'calendar', title: 'Planning éditorial', sub: 'Le calendrier glisser-déposer est en cours de design.' },
-  stats: { icon: 'chart', title: 'Statistiques', sub: 'Les tableaux de bord analytiques détaillés arrivent bientôt.' },
   inbox: { icon: 'inbox', title: 'Boîte de réception', sub: 'Messages et avis unifiés — bientôt disponible.' },
   settings: { icon: 'settings', title: 'Réglages', sub: '' },
   help: { icon: 'help', title: 'Aide & support', sub: '' },
@@ -118,6 +118,7 @@ export function App() {
           {screen === 'contacts' && <Contacts />}
           {screen === 'campagnes' && <Campagnes />}
           {screen === 'studio' && <Studio />}
+          {screen === 'stats' && <Analyse />}
           {screen === 'config' && <section className="screen show" id="screen-config" />}
           {PLACEHOLDERS[screen] && (
             <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />
