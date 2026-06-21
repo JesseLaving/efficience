@@ -121,7 +121,9 @@ export default async function handler(req, res) {
   const key = process.env.GOOGLE_PSI_KEY || '';
   try {
     const basic = await basicFetch(url).catch((e) => ({ error: String(e && e.message || e) }));
-    const psi = withPsi ? await pageSpeed(url, key) : { available: false, error: 'désactivé' };
+    // Use the URL Lighthouse can actually load (after redirects / www fallback).
+    const psiUrl = (basic && basic.finalUrl) || url;
+    const psi = withPsi ? await pageSpeed(psiUrl, key) : { available: false, error: 'désactivé' };
     return json(res, 200, { url, basic, pagespeed: psi, psiKeyConfigured: !!key });
   } catch (e) {
     return json(res, 500, { error: 'Échec analyse du site', detail: String(e && e.message || e) });
