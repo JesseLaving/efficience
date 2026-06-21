@@ -91,14 +91,38 @@ async function pageSpeed(url, key) {
     const cat = lr.categories || {};
     const a = lr.audits || {};
     const score = (c) => (c && c.score != null ? Math.round(c.score * 100) : null);
+    const dv = (id) => (a[id] && a[id].displayValue) || null;
+
+    // Failed / imperfect audits per category → actionable "à corriger" lists.
+    const failedFor = (catKey, max) => {
+      const refs = (cat[catKey] && cat[catKey].auditRefs) || [];
+      const out = [];
+      for (const ref of refs) {
+        const au = a[ref.id];
+        if (!au || au.score == null) continue;
+        if (au.scoreDisplayMode === 'notApplicable' || au.scoreDisplayMode === 'informative') continue;
+        if (au.score < 0.9) out.push({ id: ref.id, title: au.title, score: au.score, displayValue: au.displayValue || null });
+      }
+      return out.sort((x, y) => x.score - y.score).slice(0, max || 8);
+    };
+    // Performance opportunities (estimated time savings).
+    const opportunities = [];
+    for (const id of Object.keys(a)) {
+      const au = a[id];
+      if (au && au.details && au.details.type === 'opportunity' && au.details.overallSavingsMs > 100) {
+        opportunities.push({ id, title: au.title, savingsMs: Math.round(au.details.overallSavingsMs) });
+      }
+    }
+    opportunities.sort((x, y) => y.savingsMs - x.savingsMs);
+
     return {
       available: true,
+      strategy: 'mobile',
       scores: { performance: score(cat.performance), seo: score(cat.seo), accessibilite: score(cat.accessibility), bonnesPratiques: score(cat['best-practices']) },
       metrics: {
-        fcp: a['first-contentful-paint'] && a['first-contentful-paint'].displayValue || null,
-        lcp: a['largest-contentful-paint'] && a['largest-contentful-paint'].displayValue || null,
-        cls: a['cumulative-layout-shift'] && a['cumulative-layout-shift'].displayValue || null,
-        tbt: a['total-blocking-time'] && a['total-blocking-time'].displayValue || null,
+        fcp: dv('first-contentful-paint'), lcp: dv('largest-contentful-paint'),
+        cls: dv('cumulative-layout-shift'), tbt: dv('total-blocking-time'),
+        speedIndex: dv('speed-index'), tti: dv('interactive'), ttfb: dv('server-response-time'),
       },
       seoChecks: {
         title: a['document-title'] && a['document-title'].score === 1,
@@ -106,7 +130,15 @@ async function pageSpeed(url, key) {
         httpStatus: a['http-status-code'] && a['http-status-code'].score === 1,
         crawlable: a['is-crawlable'] && a['is-crawlable'].score === 1,
         viewport: a.viewport && a.viewport.score === 1,
+        hreflang: a.hreflang && a.hreflang.score === 1,
+        structuredData: a['structured-data'] ? a['structured-data'].score === 1 : null,
       },
+      issues: {
+        seo: failedFor('seo', 8),
+        accessibilite: failedFor('accessibility', 8),
+        bonnesPratiques: failedFor('best-practices', 8),
+      },
+      opportunites: opportunities.slice(0, 6),
     };
   } catch (e) {
     return { available: false, error: String(e && e.message || e) };

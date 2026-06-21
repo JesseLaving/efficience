@@ -7,9 +7,17 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api'
 export interface CompanyResult {
   nom: string | null; sigle: string | null; siren: string | null; siret: string | null;
   naf: { code: string | null; libelle: string | null };
-  formeJuridique: string | null; dateCreation: string | null; etatAdministratif: string | null;
-  effectif: string | null; commune: string | null; codePostal: string | null; adresse: string | null;
-  dirigeants: { nom: string | null; qualite: string | null }[];
+  formeJuridique: string | null; formeJuridiqueLabel: string | null; categorie: string | null;
+  dateCreation: string | null; dateMaj: string | null; etatAdministratif: string | null;
+  effectif: string | null; effectifAnnee: number | string | null; employeur: boolean | null;
+  commune: string | null; codePostal: string | null; adresse: string | null; region: string | null; enseigne: string | null;
+  nda: string | null;
+  badges: {
+    organismeFormation: boolean; qualiopi: boolean; ess: boolean; rge: boolean;
+    bio: boolean; association: boolean; entrepreneurIndividuel: boolean; societeMission: boolean;
+  };
+  dirigeants: { nom: string | null; qualite: string | null; anneeNaissance: string | null; type: string | null }[];
+  finances: { annee: string; ca: number | null; resultatNet: number | null }[] | null;
   nombreEtablissements: number | null;
 }
 export interface CompanyResponse { query: string; total: number; results: CompanyResult[]; }
@@ -23,13 +31,16 @@ export interface SiteResponse {
     h1Count?: number; imgCount?: number; linkCount?: number; jsRendered?: boolean; error?: string;
   };
   pagespeed: {
-    available: boolean; error?: string;
+    available: boolean; error?: string; strategy?: string;
     scores?: { performance: number | null; seo: number | null; accessibilite: number | null; bonnesPratiques: number | null };
-    metrics?: { fcp: string | null; lcp: string | null; cls: string | null; tbt: string | null };
-    seoChecks?: Record<string, boolean>;
+    metrics?: { fcp: string | null; lcp: string | null; cls: string | null; tbt: string | null; speedIndex: string | null; tti: string | null; ttfb: string | null };
+    seoChecks?: Record<string, boolean | null>;
+    issues?: { seo: Audit[]; accessibilite: Audit[]; bonnesPratiques: Audit[] };
+    opportunites?: { id: string; title: string; savingsMs: number }[];
   };
   psiKeyConfigured: boolean;
 }
+export interface Audit { id: string; title: string; score: number; displayValue: string | null; }
 
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);

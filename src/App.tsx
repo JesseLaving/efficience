@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useEff, type ScreenId } from './state/EffContext';
 import { Icon } from './lib/Icon';
 import { fr } from './lib/format';
@@ -40,6 +41,12 @@ const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }>
 
 export function App() {
   const { screen, show, connectedCount, crmImported, client } = useEff();
+
+  // First connection: open the Configurateur so the real analysis runs.
+  useEffect(() => {
+    if (!localStorage.getItem('eff_onboarded')) show('config');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="app">
