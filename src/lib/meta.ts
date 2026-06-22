@@ -45,3 +45,22 @@ export async function fetchMetaAccounts(token: string): Promise<MetaAccountsResp
   if (!r.ok) throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
   return data as MetaAccountsResponse;
 }
+
+export interface MetaPost {
+  id: string; network: 'instagram' | 'facebook'; type: string;
+  caption: string; date: string | null; permalink: string | null; image: string | null;
+  likes: number | null; comments: number | null; shares: number | null;
+}
+export interface MetaStatAccount {
+  network: 'instagram' | 'facebook'; name: string | null; followers: number | null; mediaCount: number | null;
+  summary: { posts: number; likes: number; comments: number; shares: number; avgEngagement: number; engagementRate: number | null };
+  posts: MetaPost[];
+}
+export interface MetaStatsResponse { accounts: MetaStatAccount[]; }
+
+export async function fetchMetaStats(token: string): Promise<MetaStatsResponse> {
+  const r = await fetch(`${API_BASE}/meta/stats?token=${encodeURIComponent(token)}`);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
+  return data as MetaStatsResponse;
+}

@@ -4,6 +4,7 @@ import './styles/screens.css';
 import './styles/dashboard.css';
 import './styles/emailing.css';
 import './styles/create.css';
+import './styles/stats.css';
 import { EffProvider } from './state/EffContext';
 import { App } from './App';
 

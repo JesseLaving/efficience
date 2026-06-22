@@ -9,6 +9,7 @@ import { Contacts } from './screens/Contacts';
 import { Campagnes } from './screens/Campagnes';
 import { Studio } from './screens/Studio';
 import { Analyse } from './screens/Analyse';
+import { Stats } from './screens/Stats';
 import { Placeholder } from './screens/Placeholder';
 import { Onboarding } from './components/Onboarding';
 import type { UIName } from './lib/icons';
@@ -28,13 +29,12 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   ] },
   { label: 'Analyse', items: [
     { screen: 'stats', icon: 'chart', label: 'Analyse entreprise & site' },
-    { screen: 'inbox', icon: 'inbox', label: 'Boîte de réception' },
+    { screen: 'inbox', icon: 'chart', label: 'Statistiques réseaux' },
   ] },
 ];
 
 const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }> = {
   planning: { icon: 'calendar', title: 'Planning éditorial', sub: 'Le calendrier glisser-déposer est en cours de design.' },
-  inbox: { icon: 'inbox', title: 'Boîte de réception', sub: 'Messages et avis unifiés — bientôt disponible.' },
   settings: { icon: 'settings', title: 'Réglages', sub: '' },
   help: { icon: 'help', title: 'Aide & support', sub: '' },
 };
@@ -71,7 +71,6 @@ export function App() {
                 {it.screen === 'connexion' && <span className="count">{connectedCount}</span>}
                 {it.screen === 'contacts' && <span className="count">{crmImported ? fr(TOTAL) : '0'}</span>}
                 {it.screen === 'campagnes' && <span className="badge" style={{ background: 'var(--acc-soft)', color: 'var(--acc)' }}>IA</span>}
-                {it.screen === 'inbox' && <span className="badge">9</span>}
               </div>
             ))}
           </div>
@@ -126,6 +125,7 @@ export function App() {
           {screen === 'campagnes' && <Campagnes />}
           {screen === 'studio' && <Studio />}
           {screen === 'stats' && <Analyse />}
+          {screen === 'inbox' && <Stats />}
           {screen === 'config' && <section className="screen show" id="screen-config" />}
           {PLACEHOLDERS[screen] && (
             <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />
