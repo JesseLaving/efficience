@@ -2,14 +2,13 @@
    The App Secret is never used here (public client_id only). The `return`
    param (the app URL to come back to) is carried through `state`. */
 const REDIRECT = 'https://efficience.vercel.app/api/meta/callback';
-const SCOPES = [
+// Scopes are env-driven so Instagram permissions can be switched on (once the
+// app has them enabled) without a code change — set META_SCOPES on Vercel.
+// Default = the permissions valid on a fresh app: read the user's Facebook Pages.
+const SCOPES = process.env.META_SCOPES || [
   'public_profile',
   'pages_show_list',
   'pages_read_engagement',
-  'read_insights',
-  'business_management',
-  'instagram_basic',
-  'instagram_manage_insights',
 ].join(',');
 
 function getParam(req, name) {
