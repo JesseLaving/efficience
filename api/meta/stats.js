@@ -41,8 +41,25 @@ export default async function handler(req, res) {
     if (!m) return null;
     if (m.total_value && m.total_value.value != null) return m.total_value.value;
     const v = m.values;
-    return v && v.length ? v[v.length - 1].value : null;
+    if (!v || !v.length) return null;
+    // sum daily values for a period total, else take the single value
+    if (v.length > 1) return v.reduce((s, x) => s + (typeof x.value === 'number' ? x.value : 0), 0);
+    return v[0].value;
   };
+  // Query each candidate metric individually so a deprecated/invalid name does
+  // not fail the whole request. candidates: [{ key, metric, params }].
+  const collectInsights = async (idPath, tok, candidates) => {
+    const out = { available: false, reason: null };
+    for (const c of candidates) {
+      if (out[c.key] != null) continue;
+      const r = await g(`${idPath}/insights`, null, tok, `&metric=${c.metric}${c.params || ''}`);
+      if (r && r.data && r.data.length) { const val = metricVal(r.data, c.metric); if (val != null) { out[c.key] = val; out.available = true; } }
+      else if (r && r.error && !out.reason) out.reason = r.error.message;
+    }
+    if (out.available) out.reason = null;
+    return out;
+  };
+  const now = Math.floor(Date.now() / 1000), since28 = now - 28 * 86400;
 
   try {
     const pagesRes = await g('me/accounts', 'name,access_token,fan_count,followers_count,instagram_business_account');
@@ -75,11 +92,13 @@ export default async function handler(req, res) {
           shares: post.shares ? post.shares.count : 0,
         });
       }
-      // Facebook Page insights (needs read_insights — degrades gracefully)
-      let fbIns = { available: false, reason: null };
-      const fi = await g(`${p.id}/insights`, null, ptoken, '&metric=page_impressions_unique,page_post_engagements&period=days_28');
-      if (fi && fi.data && fi.data.length) fbIns = { available: true, reason: null, reach: metricVal(fi.data, 'page_impressions_unique'), engagement: metricVal(fi.data, 'page_post_engagements'), impressions: null, profileViews: null };
-      else if (fi && fi.error) fbIns = { available: false, reason: fi.error.message };
+      // Facebook Page insights (needs read_insights) — robust, metric-by-metric
+      const fbIns = await collectInsights(p.id, ptoken, [
+        { key: 'reach', metric: 'page_impressions_unique', params: '&period=days_28' },
+        { key: 'impressions', metric: 'page_impressions', params: '&period=days_28' },
+        { key: 'engagement', metric: 'page_post_engagements', params: '&period=days_28' },
+        { key: 'profileViews', metric: 'page_views_total', params: '&period=days_28' },
+      ]);
       accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts, null, fbIns, fbReason));
 
       // ---- Instagram recent media ----
@@ -100,11 +119,13 @@ export default async function handler(req, res) {
             });
           }
         }
-        // Instagram account insights (needs instagram_manage_insights — degrades gracefully)
-        let igIns = { available: false, reason: null };
-        const ii = await g(`${igId}/insights`, null, token, '&metric=reach&metric_type=total_value&period=days_28');
-        if (ii && ii.data && ii.data.length) igIns = { available: true, reason: null, reach: metricVal(ii.data, 'reach'), impressions: null, engagement: null, profileViews: null };
-        else if (ii && ii.error) igIns = { available: false, reason: ii.error.message };
+        // Instagram account insights (needs instagram_manage_insights) — robust
+        const igIns = await collectInsights(igId, token, [
+          { key: 'reach', metric: 'reach', params: '&period=days_28' },
+          { key: 'reach', metric: 'reach', params: `&metric_type=total_value&period=day&since=${since28}&until=${now}` },
+          { key: 'profileViews', metric: 'profile_views', params: `&period=day&since=${since28}&until=${now}` },
+          { key: 'impressions', metric: 'impressions', params: '&period=days_28' },
+        ]);
         accounts.push(buildAccount('instagram', (ig && (ig.name || ig.username)) || null, ig && ig.followers_count, igPosts, ig && ig.media_count, igIns));
       }
     }
