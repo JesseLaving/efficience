@@ -95,9 +95,11 @@ export default async function handler(req, res) {
       // Facebook Page insights (needs read_insights) — robust, metric-by-metric
       const fbIns = await collectInsights(p.id, ptoken, [
         { key: 'reach', metric: 'page_impressions_unique', params: '&period=days_28' },
-        { key: 'impressions', metric: 'page_impressions', params: '&period=days_28' },
+        { key: 'reach', metric: 'page_impressions_unique', params: `&period=day&since=${since28}&until=${now}` },
         { key: 'engagement', metric: 'page_post_engagements', params: '&period=days_28' },
-        { key: 'profileViews', metric: 'page_views_total', params: '&period=days_28' },
+        { key: 'engagement', metric: 'page_post_engagements', params: `&period=day&since=${since28}&until=${now}` },
+        { key: 'impressions', metric: 'page_impressions', params: '&period=days_28' },
+        { key: 'impressions', metric: 'page_impressions', params: `&period=day&since=${since28}&until=${now}` },
       ]);
       accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts, null, fbIns, fbReason));
 
@@ -121,10 +123,9 @@ export default async function handler(req, res) {
         }
         // Instagram account insights (needs instagram_manage_insights) — robust
         const igIns = await collectInsights(igId, token, [
-          { key: 'reach', metric: 'reach', params: '&period=days_28' },
-          { key: 'reach', metric: 'reach', params: `&metric_type=total_value&period=day&since=${since28}&until=${now}` },
+          { key: 'reach', metric: 'reach', params: `&period=day&since=${since28}&until=${now}` },
+          { key: 'reach', metric: 'reach', params: '&period=day' },
           { key: 'profileViews', metric: 'profile_views', params: `&period=day&since=${since28}&until=${now}` },
-          { key: 'impressions', metric: 'impressions', params: '&period=days_28' },
         ]);
         accounts.push(buildAccount('instagram', (ig && (ig.name || ig.username)) || null, ig && ig.followers_count, igPosts, ig && ig.media_count, igIns));
       }
