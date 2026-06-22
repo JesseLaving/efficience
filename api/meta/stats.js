@@ -34,6 +34,15 @@ export default async function handler(req, res) {
     const r = await fetch(u);
     return r.json();
   };
+  // Pull a metric value out of a Graph insights response (handles both
+  // values[] and total_value shapes used across API versions).
+  const metricVal = (data, name) => {
+    const m = (data || []).find((x) => x.name === name);
+    if (!m) return null;
+    if (m.total_value && m.total_value.value != null) return m.total_value.value;
+    const v = m.values;
+    return v && v.length ? v[v.length - 1].value : null;
+  };
 
   try {
     const pagesRes = await g('me/accounts', 'name,access_token,fan_count,followers_count,instagram_business_account');
@@ -58,7 +67,12 @@ export default async function handler(req, res) {
           });
         }
       }
-      accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts));
+      // Facebook Page insights (needs read_insights — degrades gracefully)
+      let fbIns = { available: false, reason: null };
+      const fi = await g(`${p.id}/insights`, null, ptoken, '&metric=page_impressions_unique,page_post_engagements&period=days_28');
+      if (fi && fi.data && fi.data.length) fbIns = { available: true, reason: null, reach: metricVal(fi.data, 'page_impressions_unique'), engagement: metricVal(fi.data, 'page_post_engagements'), impressions: null, profileViews: null };
+      else if (fi && fi.error) fbIns = { available: false, reason: fi.error.message };
+      accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts, null, fbIns));
 
       // ---- Instagram recent media ----
       if (p.instagram_business_account && p.instagram_business_account.id) {
@@ -78,7 +92,12 @@ export default async function handler(req, res) {
             });
           }
         }
-        accounts.push(buildAccount('instagram', (ig && (ig.name || ig.username)) || null, ig && ig.followers_count, igPosts, ig && ig.media_count));
+        // Instagram account insights (needs instagram_manage_insights — degrades gracefully)
+        let igIns = { available: false, reason: null };
+        const ii = await g(`${igId}/insights`, null, token, '&metric=reach&metric_type=total_value&period=days_28');
+        if (ii && ii.data && ii.data.length) igIns = { available: true, reason: null, reach: metricVal(ii.data, 'reach'), impressions: null, engagement: null, profileViews: null };
+        else if (ii && ii.error) igIns = { available: false, reason: ii.error.message };
+        accounts.push(buildAccount('instagram', (ig && (ig.name || ig.username)) || null, ig && ig.followers_count, igPosts, ig && ig.media_count, igIns));
       }
     }
     return json(res, 200, { accounts });
@@ -87,7 +106,7 @@ export default async function handler(req, res) {
   }
 }
 
-function buildAccount(network, name, followers, posts, mediaCount) {
+function buildAccount(network, name, followers, posts, mediaCount, insights) {
   const n = posts.length;
   const likes = posts.reduce((s, p) => s + (p.likes || 0), 0);
   const comments = posts.reduce((s, p) => s + (p.comments || 0), 0);
@@ -97,6 +116,7 @@ function buildAccount(network, name, followers, posts, mediaCount) {
     network, name: name || null, followers: followers != null ? followers : null,
     mediaCount: mediaCount != null ? mediaCount : null,
     summary: { posts: n, likes, comments, shares, avgEngagement: n ? Math.round((likes + comments) / n) : 0, engagementRate: engRate },
+    insights: insights || { available: false, reason: null },
     posts,
   };
 }

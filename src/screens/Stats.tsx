@@ -55,6 +55,20 @@ function AccountBlock({ a }: { a: MetaStatAccount }) {
           <div className="crm-stat"><div className="cs-l"><RawIcon svg={commentSvg} />Commentaires</div><div className="cs-v">{fr(s.comments)}</div></div>
           <div className="crm-stat"><div className="cs-l"><Icon name="heart" />Engagement moy.</div><div className="cs-v">{fr(s.avgEngagement)}{s.engagementRate != null ? <span style={{ fontSize: 13, color: 'var(--tx-3)', fontFamily: 'var(--ff)', marginLeft: 6 }}>{s.engagementRate.toFixed(2).replace('.', ',')} %</span> : null}</div></div>
         </div>
+        {a.insights.available ? (
+          <div className="disc-info-row" style={{ marginTop: 8 }}>
+            <span className="k"><Icon name="eye" style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Insights · 28 j</span>
+            <span className="v" style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>
+              {a.insights.reach != null ? `Portée ${fr(a.insights.reach)}` : ''}
+              {a.insights.engagement != null ? ` · Engagements ${fr(a.insights.engagement)}` : ''}
+              {a.insights.impressions != null ? ` · Impressions ${fr(a.insights.impressions)}` : ''}
+            </span>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--tx-3)' }}>
+            Portée &amp; impressions : à activer ({a.network === 'instagram' ? 'permission instagram_manage_insights' : 'permission read_insights'}).
+          </div>
+        )}
       </div>
       {s.posts > 0 ? (
         <div className="pad" style={{ paddingTop: 0 }}>

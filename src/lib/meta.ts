@@ -51,9 +51,14 @@ export interface MetaPost {
   caption: string; date: string | null; permalink: string | null; image: string | null;
   likes: number | null; comments: number | null; shares: number | null;
 }
+export interface MetaInsights {
+  available: boolean; reason?: string | null;
+  reach?: number | null; impressions?: number | null; engagement?: number | null; profileViews?: number | null;
+}
 export interface MetaStatAccount {
   network: 'instagram' | 'facebook'; name: string | null; followers: number | null; mediaCount: number | null;
   summary: { posts: number; likes: number; comments: number; shares: number; avgEngagement: number; engagementRate: number | null };
+  insights: MetaInsights;
   posts: MetaPost[];
 }
 export interface MetaStatsResponse { accounts: MetaStatAccount[]; }
