@@ -1,6 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { NETWORKS } from '../lib/networks';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { BUSINESS } from '../lib/business';
+import { showToast } from '../lib/toast';
+import { UI } from '../lib/icons';
+import {
+  captureMetaHash, clearStoredMetaToken, fetchMetaAccounts, getStoredMetaToken, metaLogin,
+  type MetaAccount,
+} from '../lib/meta';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
@@ -8,19 +13,8 @@ export type ScreenId =
   | 'contacts' | 'campagnes' | 'stats' | 'inbox'
   | 'config' | 'settings' | 'help';
 
-const CONN_LS = 'eff_connected_v1';
 const SCR_LS = 'eff_screen_v1';
-
-function loadConnected(): Record<string, boolean> {
-  try {
-    const s = JSON.parse(localStorage.getItem(CONN_LS) || 'null');
-    if (s) return s;
-  } catch { /* ignore */ }
-  // Start vide: no account pre-connected.
-  const c: Record<string, boolean> = {};
-  NETWORKS.forEach((n) => { if (n.def) c[n.id] = true; });
-  return c;
-}
+const META_NETS = ['instagram', 'facebook'];
 
 interface ClientProfile { name: string; initials: string; }
 
@@ -39,10 +33,16 @@ interface EffCtx {
   setClient: (c: ClientProfile) => void;
   crmImported: boolean;
   setCrmImported: (v: boolean) => void;
-  /** preselected segment id handed from CRM → campaigns */
   campaignSeed: { seg: string } | null;
   newCampaign: (seg: string) => void;
   clearCampaignSeed: () => void;
+  /* --- real Meta (Instagram + Facebook) connection --- */
+  metaConnected: boolean;
+  metaUser: string | null;
+  metaAccounts: MetaAccount[];
+  metaStatus: 'idle' | 'loading' | 'error';
+  metaError: string | null;
+  accountFor: (network: string) => MetaAccount | undefined;
 }
 
 const Ctx = createContext<EffCtx | null>(null);
@@ -51,12 +51,33 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [screen, setScreen] = useState<ScreenId>(
     () => (localStorage.getItem(SCR_LS) as ScreenId) || 'connexion'
   );
-  const [connected, setConnected] = useState<Record<string, boolean>>(loadConnected);
-  const [phase, setPhase] = useState<Record<string, Phase>>({});
   const [client, setClient] = useState<ClientProfile>({ name: BUSINESS.name, initials: BUSINESS.initials });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
   const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
-  const timers = useRef<Record<string, number[]>>({});
+
+  const [metaToken, setMetaToken] = useState<string | null>(() => getStoredMetaToken());
+  const [metaUser, setMetaUser] = useState<string | null>(null);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [metaStatus, setMetaStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  // Capture the OAuth bounce (token / error in URL hash) on first load.
+  useEffect(() => {
+    const { token, error } = captureMetaHash();
+    if (token) { setMetaToken(token); showToast(UI.check, 'Comptes Meta connectés'); }
+    else if (error) { setMetaError(error); showToast(UI.close, `Connexion Meta : ${error}`); }
+  }, []);
+
+  // Load real accounts whenever we hold a token.
+  useEffect(() => {
+    if (!metaToken) { setMetaAccounts([]); setMetaUser(null); return; }
+    let alive = true;
+    setMetaStatus('loading'); setMetaError(null);
+    fetchMetaAccounts(metaToken)
+      .then((d) => { if (!alive) return; setMetaAccounts(d.accounts || []); setMetaUser(d.user || null); setMetaStatus('idle'); })
+      .catch((e) => { if (!alive) return; setMetaError(String(e.message || e)); setMetaStatus('error'); });
+    return () => { alive = false; };
+  }, [metaToken]);
 
   const setCrmImported = useCallback((v: boolean) => {
     setCrmImportedState(v);
@@ -64,50 +85,43 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem('eff_crm_v2');
   }, []);
 
-  const persistConn = (next: Record<string, boolean>) =>
-    localStorage.setItem(CONN_LS, JSON.stringify(next));
-
   const show = useCallback((id: ScreenId) => {
     setScreen(id);
     localStorage.setItem(SCR_LS, id);
   }, []);
 
-  const setP = (id: string, p: Phase) =>
-    setPhase((prev) => ({ ...prev, [id]: p }));
+  const accountFor = useCallback((network: string) => metaAccounts.find((a) => a.network === network), [metaAccounts]);
+  const isConnected = useCallback((id: string) => metaAccounts.some((a) => a.network === id), [metaAccounts]);
+
+  const connectMeta = useCallback(() => metaLogin(), []);
+  const disconnectMeta = useCallback(() => {
+    clearStoredMetaToken(); setMetaToken(null); setMetaAccounts([]); setMetaUser(null); setMetaError(null);
+  }, []);
 
   const connect = useCallback((id: string) => {
-    setP(id, 'connecting');
-    const t1 = window.setTimeout(() => {
-      setConnected((prev) => { const next = { ...prev, [id]: true }; persistConn(next); return next; });
-      setP(id, 'loading');
-      const t2 = window.setTimeout(() => setP(id, null), 950);
-      timers.current[id] = [t2];
-    }, 1350);
-    timers.current[id] = [t1];
-  }, []);
+    if (META_NETS.includes(id)) connectMeta();
+    else showToast(UI.link, `Connexion ${id} — bientôt (nécessite l’app développeur de cette plateforme)`);
+  }, [connectMeta]);
 
   const disconnect = useCallback((id: string) => {
-    setConnected((prev) => { const next = { ...prev, [id]: false }; persistConn(next); return next; });
-    setP(id, null);
-  }, []);
+    if (META_NETS.includes(id)) disconnectMeta();
+  }, [disconnectMeta]);
 
-  const connectAll = useCallback(() => {
-    NETWORKS.forEach((n, i) => {
-      if (!connected[n.id] && !phase[n.id]) {
-        window.setTimeout(() => connect(n.id), i * 260);
-      }
-    });
-  }, [connected, phase, connect]);
+  const connectAll = useCallback(() => connectMeta(), [connectMeta]);
 
-  const isConnected = useCallback((id: string) => !!connected[id], [connected]);
+  const connected = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    metaAccounts.forEach((a) => { m[a.network] = true; });
+    return m;
+  }, [metaAccounts]);
 
-  const connectedCount = useMemo(
-    () => NETWORKS.filter((n) => connected[n.id]).length, [connected]
-  );
-  const totalReach = useMemo(
-    () => NETWORKS.reduce((s, n) => (connected[n.id] && !n.page.rating ? s + n.page.metricN : s), 0),
-    [connected]
-  );
+  const phase = useMemo<Record<string, Phase>>(() => {
+    const loading: Record<string, Phase> = { instagram: 'loading', facebook: 'loading' };
+    return metaToken && metaStatus === 'loading' ? loading : {};
+  }, [metaToken, metaStatus]);
+
+  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size, [metaAccounts]);
+  const totalReach = useMemo(() => metaAccounts.reduce((s, a) => s + (a.followers || 0), 0), [metaAccounts]);
 
   const newCampaign = useCallback((seg: string) => { setCampaignSeed({ seg }); show('campagnes'); }, [show]);
   const clearCampaignSeed = useCallback(() => setCampaignSeed(null), []);
@@ -119,6 +133,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     client, setClient,
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
+    metaConnected: !!metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

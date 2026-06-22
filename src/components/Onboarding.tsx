@@ -31,6 +31,12 @@ export function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // First connection: launch the real analysis automatically.
+  useEffect(() => {
+    if (!localStorage.getItem('eff_onboarded')) analyze();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const analyze = () => {
     setStep('scan'); setCompany(null); setSite(null);
     setStInsee('active'); setStSite('active');

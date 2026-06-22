@@ -2,7 +2,7 @@
    In dev and on Vercel the API is same-origin (/api). For the static 42web
    copy, build with VITE_API_BASE=https://<vercel-app>/api so it calls the
    deployed functions (which send CORS *). */
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api';
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api';
 
 export interface CompanyResult {
   nom: string | null; sigle: string | null; siren: string | null; siret: string | null;
