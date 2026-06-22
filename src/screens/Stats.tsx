@@ -76,7 +76,13 @@ function AccountBlock({ a }: { a: MetaStatAccount }) {
           <div className="stat-grid">{a.posts.map((p) => <PostCard key={p.id} p={p} />)}</div>
         </div>
       ) : (
-        <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13 }}>Aucune publication récente récupérée pour ce compte.</div>
+        <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13 }}>
+          {a.postsReason
+            ? <>Publications non récupérées — <span style={{ color: 'var(--warn)' }}>{a.postsReason}</span></>
+            : a.network === 'facebook'
+              ? 'Aucune publication native récente sur cette Page Facebook (l’API ne renvoie pas les contenus publiés uniquement via Instagram).'
+              : 'Aucune publication récente récupérée pour ce compte.'}
+        </div>
       )}
     </div>
   );

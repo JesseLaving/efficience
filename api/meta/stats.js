@@ -53,31 +53,34 @@ export default async function handler(req, res) {
       const ptoken = p.access_token || token;
 
       // ---- Facebook page recent posts ----
+      // Try several edges/field-sets; record the reason if nothing comes back.
+      const FULL = 'message,story,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)';
+      const MIN = 'message,story,created_time,permalink_url,full_picture';
       const fbPosts = [];
-      let fp = await g(`${p.id}/published_posts`, 'message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)', ptoken, '&limit=12');
-      if (fp.error || !(fp.data && fp.data.length)) {
-        // fallback to the broader feed edge
-        const alt = await g(`${p.id}/feed`, 'message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)', ptoken, '&limit=12');
-        if (alt.data && alt.data.length) fp = alt;
+      let fbReason = null;
+      let fp = await g(`${p.id}/feed`, FULL, ptoken, '&limit=12');
+      if (fp.error) { fbReason = fp.error.message; const a2 = await g(`${p.id}/feed`, MIN, ptoken, '&limit=12'); if (!a2.error) { fp = a2; fbReason = null; } }
+      if (!fp.data || !fp.data.length) {
+        const pub = await g(`${p.id}/published_posts`, MIN, ptoken, '&limit=12');
+        if (pub.data && pub.data.length) { fp = pub; fbReason = null; }
+        else if (pub.error) fbReason = fbReason || pub.error.message;
       }
-      if (!fp.error) {
-        for (const post of (fp.data || [])) {
-          fbPosts.push({
-            id: post.id, network: 'facebook', type: 'post',
-            caption: post.message || '', date: post.created_time || null, permalink: post.permalink_url || null,
-            image: post.full_picture || null,
-            likes: post.likes && post.likes.summary ? post.likes.summary.total_count : null,
-            comments: post.comments && post.comments.summary ? post.comments.summary.total_count : null,
-            shares: post.shares ? post.shares.count : 0,
-          });
-        }
+      for (const post of (fp.data || [])) {
+        fbPosts.push({
+          id: post.id, network: 'facebook', type: 'post',
+          caption: post.message || post.story || '', date: post.created_time || null, permalink: post.permalink_url || null,
+          image: post.full_picture || null,
+          likes: post.likes && post.likes.summary ? post.likes.summary.total_count : null,
+          comments: post.comments && post.comments.summary ? post.comments.summary.total_count : null,
+          shares: post.shares ? post.shares.count : 0,
+        });
       }
       // Facebook Page insights (needs read_insights — degrades gracefully)
       let fbIns = { available: false, reason: null };
       const fi = await g(`${p.id}/insights`, null, ptoken, '&metric=page_impressions_unique,page_post_engagements&period=days_28');
       if (fi && fi.data && fi.data.length) fbIns = { available: true, reason: null, reach: metricVal(fi.data, 'page_impressions_unique'), engagement: metricVal(fi.data, 'page_post_engagements'), impressions: null, profileViews: null };
       else if (fi && fi.error) fbIns = { available: false, reason: fi.error.message };
-      accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts, null, fbIns));
+      accounts.push(buildAccount('facebook', p.name, p.followers_count != null ? p.followers_count : p.fan_count, fbPosts, null, fbIns, fbReason));
 
       // ---- Instagram recent media ----
       if (p.instagram_business_account && p.instagram_business_account.id) {
@@ -111,7 +114,7 @@ export default async function handler(req, res) {
   }
 }
 
-function buildAccount(network, name, followers, posts, mediaCount, insights) {
+function buildAccount(network, name, followers, posts, mediaCount, insights, postsReason) {
   const n = posts.length;
   const likes = posts.reduce((s, p) => s + (p.likes || 0), 0);
   const comments = posts.reduce((s, p) => s + (p.comments || 0), 0);
@@ -122,6 +125,7 @@ function buildAccount(network, name, followers, posts, mediaCount, insights) {
     mediaCount: mediaCount != null ? mediaCount : null,
     summary: { posts: n, likes, comments, shares, avgEngagement: n ? Math.round((likes + comments) / n) : 0, engagementRate: engRate },
     insights: insights || { available: false, reason: null },
+    postsReason: postsReason || null,
     posts,
   };
 }
