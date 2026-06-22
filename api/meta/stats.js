@@ -54,7 +54,12 @@ export default async function handler(req, res) {
 
       // ---- Facebook page recent posts ----
       const fbPosts = [];
-      const fp = await g(`${p.id}/posts`, 'message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)', ptoken, '&limit=12');
+      let fp = await g(`${p.id}/published_posts`, 'message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)', ptoken, '&limit=12');
+      if (fp.error || !(fp.data && fp.data.length)) {
+        // fallback to the broader feed edge
+        const alt = await g(`${p.id}/feed`, 'message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)', ptoken, '&limit=12');
+        if (alt.data && alt.data.length) fp = alt;
+      }
       if (!fp.error) {
         for (const post of (fp.data || [])) {
           fbPosts.push({
