@@ -66,7 +66,9 @@ function AccountBlock({ a }: { a: MetaStatAccount }) {
           </div>
         ) : (
           <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--tx-3)' }}>
-            Portée &amp; impressions : à activer ({a.network === 'instagram' ? 'permission instagram_manage_insights' : 'permission read_insights'}).
+            {a.insights.reason
+              ? <>Insights indisponibles — <span style={{ color: 'var(--warn)' }}>{a.insights.reason}</span></>
+              : <>Portée &amp; impressions : à activer ({a.network === 'instagram' ? 'permission instagram_manage_insights' : 'permission read_insights'}).</>}
           </div>
         )}
       </div>
