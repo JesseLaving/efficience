@@ -10,6 +10,7 @@ import { Campagnes } from './screens/Campagnes';
 import { Studio } from './screens/Studio';
 import { Analyse } from './screens/Analyse';
 import { Stats } from './screens/Stats';
+import { GoogleBusiness } from './screens/GoogleBusiness';
 import { Placeholder } from './screens/Placeholder';
 import { Onboarding } from './components/Onboarding';
 import type { UIName } from './lib/icons';
@@ -21,7 +22,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     { screen: 'dashboard', icon: 'grid', label: 'Vue d’ensemble' },
     { screen: 'connexion', icon: 'link', label: 'Connexion des réseaux' },
     { screen: 'studio', icon: 'spark', label: 'Studio de création' },
-    { screen: 'planning', icon: 'calendar', label: 'Planning éditorial' },
+    { screen: 'planning', icon: 'target', label: 'Google Business' },
   ] },
   { label: 'Emailing & CRM', items: [
     { screen: 'contacts', icon: 'users', label: 'Base clients' },
@@ -34,7 +35,6 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }> = {
-  planning: { icon: 'calendar', title: 'Planning éditorial', sub: 'Le calendrier glisser-déposer est en cours de design.' },
   settings: { icon: 'settings', title: 'Réglages', sub: '' },
   help: { icon: 'help', title: 'Aide & support', sub: '' },
 };
@@ -126,6 +126,7 @@ export function App() {
           {screen === 'studio' && <Studio />}
           {screen === 'stats' && <Analyse />}
           {screen === 'inbox' && <Stats />}
+          {screen === 'planning' && <GoogleBusiness />}
           {screen === 'config' && <section className="screen show" id="screen-config" />}
           {PLACEHOLDERS[screen] && (
             <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />

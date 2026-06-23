@@ -3,9 +3,13 @@ import { BUSINESS } from '../lib/business';
 import { showToast } from '../lib/toast';
 import { UI } from '../lib/icons';
 import {
-  captureMetaHash, clearStoredMetaToken, fetchMetaAccounts, getStoredMetaToken, metaLogin,
+  clearStoredMetaToken, fetchMetaAccounts, getStoredMetaToken, setStoredMetaToken, metaLogin,
   type MetaAccount,
 } from '../lib/meta';
+import {
+  clearStoredGoogle, fetchGoogleAccounts, getStoredGoogleToken, getStoredGoogleRefresh,
+  googleLogin, refreshGoogle, setStoredGoogle, type GoogleLocation,
+} from '../lib/google';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
@@ -43,6 +47,15 @@ interface EffCtx {
   metaStatus: 'idle' | 'loading' | 'error';
   metaError: string | null;
   accountFor: (network: string) => MetaAccount | undefined;
+  /* --- real Google Business connection --- */
+  googleConnected: boolean;
+  googleToken: string | null;
+  googleAccounts: GoogleLocation[];
+  googleStatus: 'idle' | 'loading' | 'error';
+  googleReason: string | null;
+  connectGoogle: () => void;
+  disconnectGoogle: () => void;
+  refreshGoogleToken: () => Promise<string | null>;
 }
 
 const Ctx = createContext<EffCtx | null>(null);
@@ -61,12 +74,34 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [metaStatus, setMetaStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [metaError, setMetaError] = useState<string | null>(null);
 
-  // Capture the OAuth bounce (token / error in URL hash) on first load.
+  const [googleToken, setGoogleToken] = useState<string | null>(() => getStoredGoogleToken());
+  const [googleAccounts, setGoogleAccounts] = useState<GoogleLocation[]>([]);
+  const [googleStatus, setGoogleStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [googleReason, setGoogleReason] = useState<string | null>(null);
+
+  // Capture the OAuth bounce (Meta + Google tokens / errors in URL hash) once.
   useEffect(() => {
-    const { token, error } = captureMetaHash();
-    if (token) { setMetaToken(token); showToast(UI.check, 'Comptes Meta connectés'); }
-    else if (error) { setMetaError(error); showToast(UI.close, `Connexion Meta : ${error}`); }
+    if (!location.hash) return;
+    const h = new URLSearchParams(location.hash.slice(1));
+    const mt = h.get('meta_token'), me = h.get('meta_error');
+    const gt = h.get('google_token'), gr = h.get('google_refresh'), ge = h.get('google_error');
+    if (mt || me || gt || ge) history.replaceState(null, '', location.pathname + location.search);
+    if (mt) { setStoredMetaToken(mt); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
+    else if (me) { setMetaError(me); showToast(UI.close, `Connexion Meta : ${me}`); }
+    if (gt) { setStoredGoogle(gt, gr || undefined); setGoogleToken(gt); showToast(UI.check, 'Google Business connecté'); }
+    else if (ge) { setGoogleReason(ge); showToast(UI.close, `Connexion Google : ${ge}`); }
   }, []);
+
+  // Load Google locations whenever we hold a token.
+  useEffect(() => {
+    if (!googleToken) { setGoogleAccounts([]); return; }
+    let alive = true;
+    setGoogleStatus('loading'); setGoogleReason(null);
+    fetchGoogleAccounts(googleToken)
+      .then((d) => { if (!alive) return; setGoogleAccounts(d.accounts || []); setGoogleReason(d.available ? null : (d.reason || null)); setGoogleStatus('idle'); })
+      .catch((e) => { if (!alive) return; setGoogleReason(String(e.message || e)); setGoogleStatus('error'); });
+    return () => { alive = false; };
+  }, [googleToken]);
 
   // Load real accounts whenever we hold a token.
   useEffect(() => {
@@ -96,6 +131,16 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const connectMeta = useCallback(() => metaLogin(), []);
   const disconnectMeta = useCallback(() => {
     clearStoredMetaToken(); setMetaToken(null); setMetaAccounts([]); setMetaUser(null); setMetaError(null);
+  }, []);
+
+  const connectGoogle = useCallback(() => googleLogin(), []);
+  const disconnectGoogle = useCallback(() => {
+    clearStoredGoogle(); setGoogleToken(null); setGoogleAccounts([]); setGoogleReason(null);
+  }, []);
+  const refreshGoogleToken = useCallback(async () => {
+    const r = getStoredGoogleRefresh();
+    if (!r) return null;
+    try { const t = await refreshGoogle(r); setStoredGoogle(t); setGoogleToken(t); return t; } catch { return null; }
   }, []);
 
   const connect = useCallback((id: string) => {
@@ -134,6 +179,8 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
     metaConnected: !!metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
+    googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
+    connectGoogle, disconnectGoogle, refreshGoogleToken,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
