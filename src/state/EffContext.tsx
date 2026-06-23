@@ -10,6 +10,10 @@ import {
   clearStoredGoogle, fetchGoogleAccounts, getStoredGoogleToken, getStoredGoogleRefresh,
   googleLogin, refreshGoogle, setStoredGoogle, type GoogleLocation,
 } from '../lib/google';
+import {
+  clearStoredLiToken, fetchLinkedInMe, getStoredLiToken, linkedinLogin, setStoredLiToken,
+  type LinkedInMe,
+} from '../lib/linkedin';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
@@ -56,6 +60,12 @@ interface EffCtx {
   connectGoogle: () => void;
   disconnectGoogle: () => void;
   refreshGoogleToken: () => Promise<string | null>;
+  /* --- real LinkedIn connection (member profile) --- */
+  linkedinConnected: boolean;
+  linkedinToken: string | null;
+  linkedinMe: LinkedInMe | null;
+  connectLinkedin: () => void;
+  disconnectLinkedin: () => void;
 }
 
 const Ctx = createContext<EffCtx | null>(null);
@@ -79,17 +89,23 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [googleStatus, setGoogleStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [googleReason, setGoogleReason] = useState<string | null>(null);
 
+  const [linkedinToken, setLinkedinToken] = useState<string | null>(() => getStoredLiToken());
+  const [linkedinMe, setLinkedinMe] = useState<LinkedInMe | null>(null);
+
   // Capture the OAuth bounce (Meta + Google tokens / errors in URL hash) once.
   useEffect(() => {
     if (!location.hash) return;
     const h = new URLSearchParams(location.hash.slice(1));
     const mt = h.get('meta_token'), me = h.get('meta_error');
     const gt = h.get('google_token'), gr = h.get('google_refresh'), ge = h.get('google_error');
-    if (mt || me || gt || ge) history.replaceState(null, '', location.pathname + location.search);
+    const lt = h.get('li_token'), le = h.get('li_error');
+    if (mt || me || gt || ge || lt || le) history.replaceState(null, '', location.pathname + location.search);
     if (mt) { setStoredMetaToken(mt); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
     else if (me) { setMetaError(me); showToast(UI.close, `Connexion Meta : ${me}`); }
     if (gt) { setStoredGoogle(gt, gr || undefined); setGoogleToken(gt); showToast(UI.check, 'Google Business connecté'); }
     else if (ge) { setGoogleReason(ge); showToast(UI.close, `Connexion Google : ${ge}`); }
+    if (lt) { setStoredLiToken(lt); setLinkedinToken(lt); showToast(UI.check, 'LinkedIn connecté'); }
+    else if (le) { showToast(UI.close, `Connexion LinkedIn : ${le}`); }
   }, []);
 
   // Load Google locations whenever we hold a token.
@@ -102,6 +118,16 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
       .catch((e) => { if (!alive) return; setGoogleReason(String(e.message || e)); setGoogleStatus('error'); });
     return () => { alive = false; };
   }, [googleToken]);
+
+  // Load LinkedIn member profile when a token is held.
+  useEffect(() => {
+    if (!linkedinToken) { setLinkedinMe(null); return; }
+    let alive = true;
+    fetchLinkedInMe(linkedinToken)
+      .then((d) => { if (alive) setLinkedinMe(d); })
+      .catch(() => { if (alive) setLinkedinMe(null); });
+    return () => { alive = false; };
+  }, [linkedinToken]);
 
   // Load real accounts whenever we hold a token.
   useEffect(() => {
@@ -126,7 +152,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const accountFor = useCallback((network: string) => metaAccounts.find((a) => a.network === network), [metaAccounts]);
-  const isConnected = useCallback((id: string) => (id === 'google' ? !!googleToken : metaAccounts.some((a) => a.network === id)), [metaAccounts, googleToken]);
+  const isConnected = useCallback((id: string) => (id === 'google' ? !!googleToken : id === 'linkedin' ? !!linkedinToken : metaAccounts.some((a) => a.network === id)), [metaAccounts, googleToken, linkedinToken]);
 
   const connectMeta = useCallback(() => metaLogin(), []);
   const disconnectMeta = useCallback(() => {
@@ -143,16 +169,21 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     try { const t = await refreshGoogle(r); setStoredGoogle(t); setGoogleToken(t); return t; } catch { return null; }
   }, []);
 
+  const connectLinkedin = useCallback(() => linkedinLogin(), []);
+  const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); setLinkedinToken(null); setLinkedinMe(null); }, []);
+
   const connect = useCallback((id: string) => {
     if (META_NETS.includes(id)) connectMeta();
     else if (id === 'google') connectGoogle();
+    else if (id === 'linkedin') connectLinkedin();
     else showToast(UI.link, `Connexion ${id} — bientôt (nécessite l’app développeur de cette plateforme)`);
-  }, [connectMeta, connectGoogle]);
+  }, [connectMeta, connectGoogle, connectLinkedin]);
 
   const disconnect = useCallback((id: string) => {
     if (META_NETS.includes(id)) disconnectMeta();
     else if (id === 'google') disconnectGoogle();
-  }, [disconnectMeta, disconnectGoogle]);
+    else if (id === 'linkedin') disconnectLinkedin();
+  }, [disconnectMeta, disconnectGoogle, disconnectLinkedin]);
 
   const connectAll = useCallback(() => connectMeta(), [connectMeta]);
 
@@ -160,15 +191,16 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     const m: Record<string, boolean> = {};
     metaAccounts.forEach((a) => { m[a.network] = true; });
     if (googleToken) m.google = true;
+    if (linkedinToken) m.linkedin = true;
     return m;
-  }, [metaAccounts, googleToken]);
+  }, [metaAccounts, googleToken, linkedinToken]);
 
   const phase = useMemo<Record<string, Phase>>(() => {
     const loading: Record<string, Phase> = { instagram: 'loading', facebook: 'loading' };
     return metaToken && metaStatus === 'loading' ? loading : {};
   }, [metaToken, metaStatus]);
 
-  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size + (googleToken ? 1 : 0), [metaAccounts, googleToken]);
+  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size + (googleToken ? 1 : 0) + (linkedinToken ? 1 : 0), [metaAccounts, googleToken, linkedinToken]);
   const totalReach = useMemo(() => metaAccounts.reduce((s, a) => s + (a.followers || 0), 0), [metaAccounts]);
 
   const newCampaign = useCallback((seg: string) => { setCampaignSeed({ seg }); show('campagnes'); }, [show]);
@@ -184,6 +216,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     metaConnected: !!metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
+    linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

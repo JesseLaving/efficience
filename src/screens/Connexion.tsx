@@ -7,6 +7,7 @@ import { fr } from '../lib/format';
 import { countUp } from '../lib/countup';
 import { BUSINESS as BIZ } from '../lib/business';
 import type { MetaAccount } from '../lib/meta';
+import { LinkedInPostModal } from '../components/LinkedInPostModal';
 
 const META_NETS = ['instagram', 'facebook'];
 
@@ -50,16 +51,36 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 }
 
 function NetCard({ net }: { net: Network }) {
-  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, show } = useEff();
+  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, show, linkedinMe } = useEff();
+  const [liModal, setLiModal] = useState(false);
   const isConn = isConnected(net.id);
   const ph = phase[net.id];
   const acc = accountFor(net.id);
   const meta = META_NETS.includes(net.id);
   const isGoogle = net.id === 'google';
+  const isLinkedin = net.id === 'linkedin';
 
   let stateLbl: React.ReactNode, body: React.ReactNode, foot: React.ReactNode;
 
-  if (isGoogle && isConn) {
+  if (isLinkedin && isConn) {
+    stateLbl = <span className="nc-dot on"><i />Connecté</span>;
+    body = (
+      <div className="nc-profile">
+        <div className="ava-wrap">
+          {linkedinMe?.picture ? <img className="ava" src={linkedinMe.picture} alt="" style={{ width: 48, height: 48, objectFit: 'cover' }} /> : <div className="nc-logo" style={{ width: 48, height: 48 }}><Brand name="linkedin" /></div>}
+        </div>
+        <div className="pi">
+          <div className="pn">{linkedinMe?.name || 'Profil LinkedIn'}<RawIcon svg={UI.check} className="vrf" /></div>
+          <div className="ph">Profil membre · publication activée</div>
+          <div className="pf" style={{ color: 'var(--tx-3)' }}>Page entreprise : sur validation LinkedIn</div>
+        </div>
+      </div>
+    );
+    foot = <>
+      <button className="btn ghost sm grow" onClick={() => setLiModal(true)}>Publier un post</button>
+      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('linkedin')}><Icon name="unlink" /></button>
+    </>;
+  } else if (isGoogle && isConn) {
     const g = googleAccounts[0];
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
     body = (
@@ -88,7 +109,7 @@ function NetCard({ net }: { net: Network }) {
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {
-    const integrated = meta || isGoogle;
+    const integrated = meta || isGoogle || isLinkedin;
     stateLbl = <span className="nc-dot"><i />Non connecté</span>;
     body = <div className="nc-avail"><div className="nc-desc">{net.desc}{!integrated ? <><br /><span style={{ color: 'var(--tx-3)', fontSize: 12 }}>Disponible après validation de l’app {net.name}.</span></> : null}</div></div>;
     foot = integrated
@@ -105,6 +126,7 @@ function NetCard({ net }: { net: Network }) {
       </div>
       <div className="nc-body">{body}</div>
       <div className="nc-foot">{foot}</div>
+      {liModal && <LinkedInPostModal onClose={() => setLiModal(false)} />}
     </div>
   );
 }
