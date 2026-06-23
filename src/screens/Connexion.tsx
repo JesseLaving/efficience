@@ -50,15 +50,33 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 }
 
 function NetCard({ net }: { net: Network }) {
-  const { phase, connect, disconnect, isConnected, accountFor } = useEff();
+  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, show } = useEff();
   const isConn = isConnected(net.id);
   const ph = phase[net.id];
   const acc = accountFor(net.id);
   const meta = META_NETS.includes(net.id);
+  const isGoogle = net.id === 'google';
 
   let stateLbl: React.ReactNode, body: React.ReactNode, foot: React.ReactNode;
 
-  if (ph === 'loading') {
+  if (isGoogle && isConn) {
+    const g = googleAccounts[0];
+    stateLbl = <span className="nc-dot on"><i />Connecté</span>;
+    body = (
+      <div className="nc-profile">
+        <div className="ava-wrap"><div className="nc-logo" style={{ width: 48, height: 48 }}><Brand name="google" /></div></div>
+        <div className="pi">
+          <div className="pn">{g ? g.title : 'Compte Google'}<RawIcon svg={UI.check} className="vrf" /></div>
+          <div className="ph">{g ? (g.address || 'Fiche d’établissement') : (googleStatus === 'loading' ? 'Lecture des fiches…' : 'Compte connecté')}</div>
+          <div className="pf">{g ? <><b>{googleAccounts.length}</b> fiche{googleAccounts.length > 1 ? 's' : ''}</> : (googleReason ? <span style={{ color: 'var(--warn)' }}>Accès API en attente</span> : '—')}</div>
+        </div>
+      </div>
+    );
+    foot = <>
+      <button className="btn ghost sm grow" onClick={() => show('planning')}>Publier une actualité</button>
+      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('google')}><Icon name="unlink" /></button>
+    </>;
+  } else if (ph === 'loading') {
     stateLbl = <span className="nc-dot on"><i />Import…</span>;
     body = <ProfileBlock net={net} loading />;
     foot = <button className="btn ghost sm grow" disabled style={{ opacity: 0.5 }}><span className="spin lt" />Récupération du profil…</button>;
@@ -70,9 +88,10 @@ function NetCard({ net }: { net: Network }) {
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {
+    const integrated = meta || isGoogle;
     stateLbl = <span className="nc-dot"><i />Non connecté</span>;
-    body = <div className="nc-avail"><div className="nc-desc">{net.desc}{!meta ? <><br /><span style={{ color: 'var(--tx-3)', fontSize: 12 }}>Disponible après validation de l’app {net.name}.</span></> : null}</div></div>;
-    foot = meta
+    body = <div className="nc-avail"><div className="nc-desc">{net.desc}{!integrated ? <><br /><span style={{ color: 'var(--tx-3)', fontSize: 12 }}>Disponible après validation de l’app {net.name}.</span></> : null}</div></div>;
+    foot = integrated
       ? <button className="btn acc sm grow" onClick={() => connect(net.id)}><RawIcon svg={UI.link} />Connecter</button>
       : <button className="btn outline sm grow" onClick={() => connect(net.id)}>Bientôt disponible</button>;
   }

@@ -126,7 +126,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const accountFor = useCallback((network: string) => metaAccounts.find((a) => a.network === network), [metaAccounts]);
-  const isConnected = useCallback((id: string) => metaAccounts.some((a) => a.network === id), [metaAccounts]);
+  const isConnected = useCallback((id: string) => (id === 'google' ? !!googleToken : metaAccounts.some((a) => a.network === id)), [metaAccounts, googleToken]);
 
   const connectMeta = useCallback(() => metaLogin(), []);
   const disconnectMeta = useCallback(() => {
@@ -145,27 +145,30 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
 
   const connect = useCallback((id: string) => {
     if (META_NETS.includes(id)) connectMeta();
+    else if (id === 'google') connectGoogle();
     else showToast(UI.link, `Connexion ${id} — bientôt (nécessite l’app développeur de cette plateforme)`);
-  }, [connectMeta]);
+  }, [connectMeta, connectGoogle]);
 
   const disconnect = useCallback((id: string) => {
     if (META_NETS.includes(id)) disconnectMeta();
-  }, [disconnectMeta]);
+    else if (id === 'google') disconnectGoogle();
+  }, [disconnectMeta, disconnectGoogle]);
 
   const connectAll = useCallback(() => connectMeta(), [connectMeta]);
 
   const connected = useMemo(() => {
     const m: Record<string, boolean> = {};
     metaAccounts.forEach((a) => { m[a.network] = true; });
+    if (googleToken) m.google = true;
     return m;
-  }, [metaAccounts]);
+  }, [metaAccounts, googleToken]);
 
   const phase = useMemo<Record<string, Phase>>(() => {
     const loading: Record<string, Phase> = { instagram: 'loading', facebook: 'loading' };
     return metaToken && metaStatus === 'loading' ? loading : {};
   }, [metaToken, metaStatus]);
 
-  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size, [metaAccounts]);
+  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size + (googleToken ? 1 : 0), [metaAccounts, googleToken]);
   const totalReach = useMemo(() => metaAccounts.reduce((s, a) => s + (a.followers || 0), 0), [metaAccounts]);
 
   const newCampaign = useCallback((seg: string) => { setCampaignSeed({ seg }); show('campagnes'); }, [show]);
