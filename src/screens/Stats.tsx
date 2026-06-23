@@ -3,6 +3,8 @@ import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { type MetaStatAccount, type MetaPost } from '../lib/meta';
+import { type GoogleLocation } from '../lib/google';
+import { type LinkedInMe } from '../lib/linkedin';
 
 const shortDate = (s: string | null) => {
   if (!s) return '';
@@ -89,11 +91,74 @@ function AccountBlock({ a }: { a: MetaStatAccount }) {
   );
 }
 
+function LinkedInBlock({ me }: { me: LinkedInMe }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {me.picture
+            ? <img src={me.picture} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+            : <div className="nc-logo" style={{ width: 38, height: 38 }}><Brand name={'linkedin' as BrandName} /></div>}
+          <div>
+            <h3>{me.name || 'Profil LinkedIn'}</h3>
+            <div className="sub"><Brand name={'linkedin' as BrandName} /> {me.email || 'Profil membre connecté'}</div>
+          </div>
+        </div>
+      </div>
+      <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13 }}>
+        Profil membre connecté — vous pouvez publier depuis le <b style={{ color: 'var(--tx-2)' }}>Studio</b>.
+        Les statistiques détaillées (abonnés, impressions de posts) nécessitent l’API LinkedIn <span style={{ color: 'var(--warn)' }}>Community Management</span> (accès partenaire soumis à validation) — non disponible pour le moment.
+      </div>
+    </div>
+  );
+}
+
+function GoogleBlock({ accounts, reason }: { accounts: GoogleLocation[]; reason: string | null }) {
+  const n = accounts.length;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="nc-logo" style={{ width: 38, height: 38 }}><Brand name={'google' as BrandName} /></div>
+          <div>
+            <h3>Google Business</h3>
+            <div className="sub">{n ? `${n} fiche${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}` : 'Compte connecté'}</div>
+          </div>
+        </div>
+      </div>
+      <div className="pad">
+        {n ? accounts.map((g) => (
+          <div key={g.path} className="disc-info-row" style={{ marginBottom: 8 }}>
+            <span className="k"><Icon name="target" style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> {g.title || 'Fiche'}</span>
+            <span className="v" style={{ fontSize: 12.5 }}>
+              {g.address || ''}
+              {g.website ? <> · <a href={g.website} target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>{g.website.replace(/^https?:\/\//, '')}</a></> : null}
+            </span>
+          </div>
+        )) : (
+          <div style={{ color: 'var(--tx-3)', fontSize: 13 }}>
+            {reason
+              ? <>Fiches non récupérées — <span style={{ color: 'var(--warn)' }}>{reason}</span></>
+              : 'Aucune fiche d’établissement récupérée sur ce compte Google.'}
+          </div>
+        )}
+        <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--tx-3)' }}>
+          Vues de la fiche, recherches &amp; avis : nécessitent l’API <span style={{ color: 'var(--warn)' }}>Google Business Profile Performance</span> (à activer dans votre projet Google Cloud).
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Stats() {
-  const { metaConnected, show, metaStats, metaStatsStatus, metaStatsError, refreshMetaStats } = useEff();
+  const {
+    metaConnected, show, metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
+    linkedinConnected, linkedinMe, googleConnected, googleAccounts, googleReason,
+  } = useEff();
   const accounts = metaStats;
   const loading = metaStatsStatus === 'loading';
   const error = metaStatsError;
+  const anyConnected = metaConnected || linkedinConnected || googleConnected;
 
   return (
     <section className="screen show anim">
@@ -101,17 +166,17 @@ export function Stats() {
         <div>
           <div className="eyebrow">Statistiques</div>
           <h1>Performances de vos réseaux</h1>
-          <p>Données réelles importées via l’API officielle Meta : publications récentes, j’aime, commentaires et partages. Portée &amp; impressions arriveront avec la permission insights avancée.</p>
+          <p>Données réelles importées via les API officielles de vos réseaux connectés : Instagram &amp; Facebook (publications, j’aime, commentaires, partages), LinkedIn et Google Business. Certaines métriques avancées (portée, vues de fiche, abonnés LinkedIn) nécessitent des accès API supplémentaires.</p>
         </div>
         {metaConnected && <button className="btn outline" onClick={refreshMetaStats} disabled={loading}>{loading ? <><span className="spin lt" />Chargement…</> : <><Icon name="refresh" />Actualiser</>}</button>}
       </div>
 
-      {!metaConnected && (
+      {!anyConnected && (
         <div className="net-summary">
           <div className="ns-ic"><Icon name="target" /></div>
           <div>
             <div className="ns-t">Aucun réseau connecté</div>
-            <div className="ns-s">Connectez Instagram &amp; Facebook pour voir vos statistiques réelles.</div>
+            <div className="ns-s">Connectez Instagram, Facebook, LinkedIn ou Google Business pour voir vos statistiques réelles.</div>
           </div>
           <button className="btn acc" style={{ marginLeft: 'auto' }} onClick={() => show('connexion')}><RawIcon svg={UI.link} />Connecter mes réseaux</button>
         </div>
@@ -120,6 +185,8 @@ export function Stats() {
       {error && <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(255,107,107,.35)', background: 'rgba(255,107,107,.08)', color: 'var(--danger)', fontSize: 13, marginBottom: 16 }}>Erreur : {error}</div>}
       {metaConnected && loading && !accounts && <div style={{ color: 'var(--tx-3)', fontSize: 13, padding: 24, textAlign: 'center' }}><span className="spin lt" style={{ display: 'inline-block', marginRight: 8 }} />Récupération de vos publications…</div>}
       {accounts && accounts.map((a) => <AccountBlock key={a.network + (a.name || '')} a={a} />)}
+      {linkedinConnected && linkedinMe && <LinkedInBlock me={linkedinMe} />}
+      {googleConnected && <GoogleBlock accounts={googleAccounts} reason={googleReason} />}
     </section>
   );
 }
