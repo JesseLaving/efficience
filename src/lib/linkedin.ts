@@ -25,5 +25,7 @@ export async function publishLinkedInPost(token: string, text: string): Promise<
   const r = await fetch(`${API_BASE}/linkedin/post`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, text }),
   });
-  return r.json();
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok && !d.error && !d.reason) return { error: `HTTP ${r.status}` };
+  return d as LiPostResult;
 }

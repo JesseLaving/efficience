@@ -6,6 +6,7 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
 import { BUSINESS as BIZ } from '../lib/business';
+import { PublishPanel } from '../components/PublishPanel';
 
 /* ig action glyphs */
 const A = {
@@ -129,6 +130,8 @@ export function Studio() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragMedia, setDragMedia] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const anyConnected = sel.some((id) => isConnected(id));
 
   return (
     <section className="screen show anim">
@@ -253,10 +256,10 @@ export function Studio() {
               </div>
 
               <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input className="inp" type="datetime-local" style={{ maxWidth: 220 }} />
+                <FlashBtn className="btn outline" label="Enregistrer le brouillon" flash="Brouillon enregistré" />
                 <span style={{ flex: 1 }} />
-                <FlashBtn className="btn outline" label="Enregistrer" flash="Brouillon enregistré" />
-                <button className="btn acc" onClick={() => finish('Programmé')}><Icon name="send" />Programmer</button>
+                {!anyConnected && <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Reliez un réseau pour publier.</span>}
+                <button className="btn acc" disabled={!text.trim() || !anyConnected} onClick={() => setPublishOpen(true)}><Icon name="send" />Publier maintenant</button>
               </div>
             </>
           )}
@@ -273,6 +276,8 @@ export function Studio() {
           </div>
         </div>
       </div>
+
+      {publishOpen && <PublishPanel text={text} platforms={sel} localMedia={!!media} onClose={() => setPublishOpen(false)} />}
     </section>
   );
 }
