@@ -3,8 +3,8 @@ import { BUSINESS } from '../lib/business';
 import { showToast } from '../lib/toast';
 import { UI } from '../lib/icons';
 import {
-  clearStoredMetaToken, fetchMetaAccounts, getStoredMetaToken, setStoredMetaToken, metaLogin,
-  type MetaAccount,
+  clearStoredMetaToken, fetchMetaAccounts, fetchMetaStats, getStoredMetaToken, setStoredMetaToken, metaLogin,
+  type MetaAccount, type MetaStatAccount,
 } from '../lib/meta';
 import {
   clearStoredGoogle, fetchGoogleAccounts, getStoredGoogleToken, getStoredGoogleRefresh,
@@ -52,6 +52,10 @@ interface EffCtx {
   metaStatus: 'idle' | 'loading' | 'error';
   metaError: string | null;
   accountFor: (network: string) => MetaAccount | undefined;
+  metaStats: MetaStatAccount[] | null;
+  metaStatsStatus: 'idle' | 'loading' | 'error';
+  metaStatsError: string | null;
+  refreshMetaStats: () => void;
   /* --- real Google Business connection --- */
   googleConnected: boolean;
   googleToken: string | null;
@@ -84,6 +88,9 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [metaStatus, setMetaStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [metaError, setMetaError] = useState<string | null>(null);
+  const [metaStats, setMetaStats] = useState<MetaStatAccount[] | null>(null);
+  const [metaStatsStatus, setMetaStatsStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [metaStatsError, setMetaStatsError] = useState<string | null>(null);
 
   const [googleToken, setGoogleToken] = useState<string | null>(() => getStoredGoogleToken());
   const [googleAccounts, setGoogleAccounts] = useState<GoogleLocation[]>([]);
@@ -139,6 +146,26 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
       .then((d) => { if (!alive) return; setMetaAccounts(d.accounts || []); setMetaUser(d.user || null); setMetaStatus('idle'); })
       .catch((e) => { if (!alive) return; setMetaError(String(e.message || e)); setMetaStatus('error'); });
     return () => { alive = false; };
+  }, [metaToken]);
+
+  // Load real engagement stats (posts, likes, insights) once a token is held —
+  // shared by both the Statistics screen and the Dashboard.
+  useEffect(() => {
+    if (!metaToken) { setMetaStats(null); setMetaStatsError(null); return; }
+    let alive = true;
+    setMetaStatsStatus('loading'); setMetaStatsError(null);
+    fetchMetaStats(metaToken)
+      .then((d) => { if (!alive) return; setMetaStats(d.accounts || []); setMetaStatsStatus('idle'); })
+      .catch((e) => { if (!alive) return; setMetaStatsError(String(e.message || e)); setMetaStatsStatus('error'); });
+    return () => { alive = false; };
+  }, [metaToken]);
+
+  const refreshMetaStats = useCallback(() => {
+    if (!metaToken) return;
+    setMetaStatsStatus('loading'); setMetaStatsError(null);
+    fetchMetaStats(metaToken)
+      .then((d) => { setMetaStats(d.accounts || []); setMetaStatsStatus('idle'); })
+      .catch((e) => { setMetaStatsError(String(e.message || e)); setMetaStatsStatus('error'); });
   }, [metaToken]);
 
   const setCrmImported = useCallback((v: boolean) => {
@@ -215,6 +242,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
     metaConnected: !!metaToken, metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
+    metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,

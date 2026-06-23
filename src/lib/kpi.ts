@@ -6,7 +6,9 @@ export interface KpiDef {
   icon: string;
   src: string;
   val: number;
-  live?: 'reach';
+  /** Hook to a real, computed value. Keys map to live Meta aggregates in the Dashboard.
+   *  'reach' is kept as an alias of 'followers' for backward-compat with persisted state. */
+  live?: 'reach' | 'followers' | 'engagementRate' | 'totalEngagement' | 'reachInsights' | 'postsMonth';
   fmt: string;
   trend?: Trend;
   suggested?: boolean;
@@ -33,12 +35,13 @@ export const SRC: Record<string, { label: string; glyph: string }> = {
    Real numbers appear once accounts are connected and data flows in. */
 const NT: Trend = { dir: 'neutral', val: '—' };
 export const CATALOG: Record<string, KpiDef> = {
-  subs: { label: 'Abonnés · tous réseaux', icon: 'users', src: 'global', val: 0, live: 'reach', fmt: 'int', trend: NT },
-  engagement: { label: 'Taux d’engagement', icon: 'heart', src: 'global', val: 0, fmt: 'pct', trend: NT },
+  subs: { label: 'Abonnés · tous réseaux', icon: 'users', src: 'global', val: 0, live: 'followers', fmt: 'int', trend: NT },
+  engagement: { label: 'Taux d’engagement', icon: 'heart', src: 'global', val: 0, live: 'engagementRate', fmt: 'pct', trend: NT },
   posts: { label: 'Posts à venir', icon: 'calendar', src: 'global', val: 0, fmt: 'int', trend: { dir: 'neutral', val: 'cette semaine' } },
   review: { label: 'À valider', icon: 'clock', src: 'global', val: 0, fmt: 'int', trend: NT },
 
-  reach: { label: 'Portée · 30j', icon: 'target', src: 'global', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Vos réseaux connectés' },
+  reach: { label: 'Portée · 30j', icon: 'target', src: 'global', val: 0, live: 'reachInsights', fmt: 'int', trend: NT, suggested: true, why: 'Vos réseaux connectés' },
+  engagementTotal: { label: 'Interactions · publications', icon: 'heart', src: 'global', val: 0, live: 'totalEngagement', fmt: 'int', trend: NT, suggested: true, why: 'J’aime + commentaires + partages' },
   gRating: { label: 'Note Google', icon: 'target', src: 'google', val: 0, fmt: 'rating', trend: NT, suggested: true, why: 'Fiche Google' },
   gViews: { label: 'Visites fiche Google', icon: 'eye', src: 'google', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Référencement local' },
   orders: { label: 'Demandes / leads', icon: 'clipboard', src: 'site', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Activité conseil & formation' },
@@ -51,7 +54,7 @@ export const CATALOG: Record<string, KpiDef> = {
   crmContacts: { label: 'Contacts opt-in (CRM)', icon: 'shield', src: 'crm', val: 0, fmt: 'int', trend: NT },
   emailRevenue: { label: 'CA e-mailing estimé', icon: 'euro', src: 'email', val: 0, fmt: 'eur', trend: NT },
   storyViews: { label: 'Vues de stories', icon: 'eye', src: 'instagram', val: 0, fmt: 'int', trend: NT },
-  postsMonth: { label: 'Posts publiés ce mois', icon: 'image', src: 'global', val: 0, fmt: 'int', trend: NT },
+  postsMonth: { label: 'Posts publiés ce mois', icon: 'image', src: 'global', val: 0, live: 'postsMonth', fmt: 'int', trend: NT },
 };
 
 export interface KpiState { board: string[]; custom: Record<string, KpiDef>; suggestOpen: boolean; }

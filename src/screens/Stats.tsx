@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
-import { getStoredMetaToken, fetchMetaStats, type MetaStatAccount, type MetaPost } from '../lib/meta';
+import { type MetaStatAccount, type MetaPost } from '../lib/meta';
 
 const shortDate = (s: string | null) => {
   if (!s) return '';
@@ -91,21 +90,10 @@ function AccountBlock({ a }: { a: MetaStatAccount }) {
 }
 
 export function Stats() {
-  const { metaConnected, show } = useEff();
-  const [accounts, setAccounts] = useState<MetaStatAccount[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = () => {
-    const token = getStoredMetaToken();
-    if (!token) return;
-    setLoading(true); setError(null);
-    fetchMetaStats(token)
-      .then((d) => setAccounts(d.accounts || []))
-      .catch((e) => setError(String(e.message || e)))
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => { if (metaConnected) load(); /* eslint-disable-next-line */ }, [metaConnected]);
+  const { metaConnected, show, metaStats, metaStatsStatus, metaStatsError, refreshMetaStats } = useEff();
+  const accounts = metaStats;
+  const loading = metaStatsStatus === 'loading';
+  const error = metaStatsError;
 
   return (
     <section className="screen show anim">
@@ -115,7 +103,7 @@ export function Stats() {
           <h1>Performances de vos réseaux</h1>
           <p>Données réelles importées via l’API officielle Meta : publications récentes, j’aime, commentaires et partages. Portée &amp; impressions arriveront avec la permission insights avancée.</p>
         </div>
-        {metaConnected && <button className="btn outline" onClick={load} disabled={loading}>{loading ? <><span className="spin lt" />Chargement…</> : <><Icon name="refresh" />Actualiser</>}</button>}
+        {metaConnected && <button className="btn outline" onClick={refreshMetaStats} disabled={loading}>{loading ? <><span className="spin lt" />Chargement…</> : <><Icon name="refresh" />Actualiser</>}</button>}
       </div>
 
       {!metaConnected && (

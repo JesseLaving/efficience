@@ -7,6 +7,7 @@ import { countUp } from '../lib/countup';
 import { netName } from '../lib/networks';
 import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from '../lib/kpi';
 import { KpiModal } from '../components/KpiModal';
+import { aggregateMeta, engagementSeries, type MetaSeries } from '../lib/meta';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
@@ -25,7 +26,7 @@ function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef
     countUp(valRef.current, raw, { fmt: (v) => fmtVal(def.fmt, v), dur: 850 });
     if (barRef.current) requestAnimationFrame(() => { if (barRef.current) barRef.current.style.width = pct + '%'; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [raw, pct]);
 
   const pill = tr.dir === 'up'
     ? <span className="pill up"><RawIcon svg={UI.arrowup} />{tr.val}</span>
@@ -84,13 +85,15 @@ function smooth(pts: number[][]): string {
   return d;
 }
 
-function Chart() {
+function Chart({ series }: { series: MetaSeries | null }) {
   const lineRef = useRef<SVGPathElement>(null);
   const areaRef = useRef<SVGPathElement>(null);
   const W = 620, H = 200, pad = 6;
-  // Empty by default — flat baseline until real data flows in.
-  const raw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  const max = 105, n = raw.length;
+  // Real engagement series when posts are available; flat baseline otherwise (no invented data).
+  const raw = series && series.values.length ? series.values : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const peak = Math.max(...raw, 0);
+  const max = peak > 0 ? peak * 1.15 : 105;
+  const n = raw.length;
   const pts = raw.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
   const line = smooth(pts);
   const area = line + ` L ${pts[n - 1][0]} ${H} L ${pts[0][0]} ${H} Z`;
@@ -136,14 +139,28 @@ function Prog({ label, pct }: { label: string; pct: number }) {
 }
 
 export function Dashboard() {
-  const { totalReach } = useEff();
+  const { totalReach, metaStats } = useEff();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
   const [removing, setRemoving] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState(false);
 
+  // Real Meta aggregates (followers, engagement, posts…) — all derived, never invented.
+  const agg = aggregateMeta(metaStats);
+  const series = engagementSeries(metaStats);
+
   const update = (next: KpiState) => { setState(next); saveKpiState(next); };
   const def = (id: string): KpiDef | undefined => CATALOG[id] || state.custom[id];
-  const rawVal = (d: KpiDef): number => (d.live === 'reach' ? totalReach : d.val);
+  const rawVal = (d: KpiDef): number => {
+    switch (d.live) {
+      case 'reach':
+      case 'followers': return totalReach;
+      case 'engagementRate': return agg.engagementRate ?? 0;
+      case 'totalEngagement': return agg.totalEngagement;
+      case 'reachInsights': return agg.reach ?? 0;
+      case 'postsMonth': return agg.postsMonth;
+      default: return d.val;
+    }
+  };
 
   const addKpi = (id: string, customDef?: KpiDef) => {
     const custom = customDef ? { ...state.custom, [id]: customDef } : state.custom;
@@ -207,15 +224,21 @@ export function Dashboard() {
       <div className="dash-grid">
         <div className="card">
           <div className="card-h">
-            <div><h3>Performance</h3><div className="sub">Portée cumulée · 30 derniers jours</div></div>
+            <div><h3>Performance</h3><div className="sub">{series ? `Interactions par publication · ${series.from} → ${series.to}` : 'Interactions des publications récentes'}</div></div>
             <div className="chart-legend">
-              <span className="lg"><i style={{ background: 'var(--acc)' }} />Portée</span>
-              <span className="chip"><RawIcon svg={UI.dot} />En attente de données</span>
+              <span className="lg"><i style={{ background: 'var(--acc)' }} />Interactions</span>
+              {series
+                ? <span className="chip"><RawIcon svg={UI.dot} />{FMT.int(series.total)} au total</span>
+                : <span className="chip"><RawIcon svg={UI.dot} />En attente de données</span>}
             </div>
           </div>
           <div className="chart-wrap">
-            <Chart />
-            <div className="chart-x"><span>15 mai</span><span>22 mai</span><span>29 mai</span><span>5 juin</span><span>12 juin</span></div>
+            <Chart key={series ? series.total + '-' + series.from : 'empty'} series={series} />
+            <div className="chart-x">
+              {series
+                ? <><span>{series.labels[0]}</span><span>{series.labels[1]}</span><span>{series.labels[2]}</span></>
+                : <><span>—</span><span>—</span><span>—</span></>}
+            </div>
           </div>
         </div>
 
