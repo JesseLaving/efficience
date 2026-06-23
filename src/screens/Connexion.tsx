@@ -8,6 +8,7 @@ import { countUp } from '../lib/countup';
 import { BUSINESS as BIZ } from '../lib/business';
 import type { MetaAccount } from '../lib/meta';
 import { LinkedInPostModal } from '../components/LinkedInPostModal';
+import { MetaPostModal } from '../components/MetaPostModal';
 
 const META_NETS = ['instagram', 'facebook'];
 
@@ -53,6 +54,7 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 function NetCard({ net }: { net: Network }) {
   const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, show, linkedinMe } = useEff();
   const [liModal, setLiModal] = useState(false);
+  const [metaModal, setMetaModal] = useState(false);
   const isConn = isConnected(net.id);
   const ph = phase[net.id];
   const acc = accountFor(net.id);
@@ -101,6 +103,13 @@ function NetCard({ net }: { net: Network }) {
     stateLbl = <span className="nc-dot on"><i />Import…</span>;
     body = <ProfileBlock net={net} loading />;
     foot = <button className="btn ghost sm grow" disabled style={{ opacity: 0.5 }}><span className="spin lt" />Récupération du profil…</button>;
+  } else if (isConn && meta) {
+    stateLbl = <span className="nc-dot on"><i />Connecté</span>;
+    body = <ProfileBlock net={net} loading={false} acc={acc} />;
+    foot = <>
+      <button className="btn ghost sm grow" onClick={() => setMetaModal(true)}>Publier</button>
+      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
+    </>;
   } else if (isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
     body = <ProfileBlock net={net} loading={false} acc={acc} />;
@@ -127,6 +136,7 @@ function NetCard({ net }: { net: Network }) {
       <div className="nc-body">{body}</div>
       <div className="nc-foot">{foot}</div>
       {liModal && <LinkedInPostModal onClose={() => setLiModal(false)} />}
+      {metaModal && <MetaPostModal onClose={() => setMetaModal(false)} defaultTargets={net.id === 'instagram' ? ['instagram'] : ['facebook']} />}
     </div>
   );
 }

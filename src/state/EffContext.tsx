@@ -46,6 +46,7 @@ interface EffCtx {
   clearCampaignSeed: () => void;
   /* --- real Meta (Instagram + Facebook) connection --- */
   metaConnected: boolean;
+  metaToken: string | null;
   metaUser: string | null;
   metaAccounts: MetaAccount[];
   metaStatus: 'idle' | 'loading' | 'error';
@@ -213,7 +214,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     client, setClient,
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
-    metaConnected: !!metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
+    metaConnected: !!metaToken, metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,

@@ -70,3 +70,17 @@ export async function fetchMetaStats(token: string): Promise<MetaStatsResponse> 
   if (!r.ok) throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
   return data as MetaStatsResponse;
 }
+
+export interface MetaPostResult { network: string; page?: string; ok: boolean; id?: string | null; reason?: string | null; }
+export interface MetaPostResponse { ok: boolean; results?: MetaPostResult[]; reason?: string | null; }
+
+export async function publishMetaPost(opts: { token: string; targets: string[]; message: string; photoUrl?: string }): Promise<MetaPostResponse> {
+  const r = await fetch(`${API_BASE}/meta/post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && data.error) || `HTTP ${r.status}`);
+  return data as MetaPostResponse;
+}

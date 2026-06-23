@@ -5,8 +5,9 @@ import login from '../_h/meta/login.js';
 import callback from '../_h/meta/callback.js';
 import accounts from '../_h/meta/accounts.js';
 import stats from '../_h/meta/stats.js';
+import post from '../_h/meta/post.js';
 
-const MAP = { login, callback, accounts, stats };
+const MAP = { login, callback, accounts, stats, post };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;
