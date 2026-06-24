@@ -142,6 +142,57 @@ async function basicFetch(url) {
   }
 }
 
+const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+/* Rejette les noms de fichiers de police « hashés » (Wix, CDN…) qui ne sont pas
+   de vrais noms de famille : tokens trop longs, casse interne aléatoire,
+   chiffres, ou sans voyelle. */
+function isPlausibleFontName(name) {
+  const toks = (name || '').split(/\s+/).filter(Boolean);
+  if (!toks.length || toks.length > 4) return false;
+  for (const t of toks) {
+    if (t.length < 2 || t.length > 14) return false;
+    if (!/^[A-Za-z]+$/.test(t)) return false;      // lettres uniquement
+    if (/[A-Z]/.test(t.slice(1))) return false;    // pas de majuscule interne (camel/aléatoire)
+    if (!/[aeiouy]/i.test(t)) return false;        // au moins une voyelle
+  }
+  return true;
+}
+function fontNameFromUrl(url) {
+  try {
+    const u = new URL(url);
+    if (/fonts\.gstatic\.com$/i.test(u.hostname)) {
+      const m = /\/s\/([^/]+)\//.exec(u.pathname);
+      if (m) { const fam = titleCase(m[1].replace(/[-_]+/g, ' ').trim()); return isPlausibleFontName(fam) ? fam : null; }
+    }
+    let f = (u.pathname.split('/').pop() || '').replace(/\.(woff2?|ttf|otf|eot)(\?.*)?$/i, '');
+    f = f.replace(/[-_](regular|bold|semibold|demibold|medium|light|extralight|italic|oblique|thin|black|heavy|extrabold|book|roman|\d{2,3})/gi, '');
+    f = f.replace(/[-_]+/g, ' ').trim();
+    const fam = titleCase(f);
+    return isPlausibleFontName(fam) ? fam : null;
+  } catch { return null; }
+}
+
+/* Mine l'audit Lighthouse network-requests (page RENDUE en JS) pour récupérer
+   les polices réellement chargées et un éventuel logo — ce que le HTML statique
+   ne révèle pas sur un site rendu côté client. */
+function extractBrandHints(audits) {
+  const out = { fonts: [], logo: null };
+  const nr = audits && audits['network-requests'];
+  const items = (nr && nr.details && nr.details.items) || [];
+  for (const it of items) {
+    const url = it.url || '';
+    const rt = it.resourceType || '';
+    if (rt === 'Font' || /\.(woff2?|ttf|otf|eot)(\?|$)/i.test(url)) {
+      const fam = fontNameFromUrl(url);
+      if (fam && !out.fonts.some((f) => f.toLowerCase() === fam.toLowerCase())) out.fonts.push(fam);
+    } else if (!out.logo && (rt === 'Image') && /logo|brand[-_]?mark|wordmark/i.test(url)) {
+      out.logo = url;
+    }
+  }
+  out.fonts = out.fonts.slice(0, 4);
+  return out;
+}
+
 async function pageSpeed(url, key) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 60000);
@@ -183,6 +234,7 @@ async function pageSpeed(url, key) {
     return {
       available: true,
       strategy: 'mobile',
+      brandHints: extractBrandHints(a),
       scores: { performance: score(cat.performance), seo: score(cat.seo), accessibilite: score(cat.accessibility), bonnesPratiques: score(cat['best-practices']) },
       metrics: {
         fcp: dv('first-contentful-paint'), lcp: dv('largest-contentful-paint'),
@@ -223,6 +275,14 @@ export default async function handler(req, res) {
     // Use the URL Lighthouse can actually load (after redirects / www fallback).
     const psiUrl = (basic && basic.finalUrl) || url;
     const psi = withPsi ? await pageSpeed(psiUrl, key) : { available: false, error: 'désactivé' };
+    // Enrichit la charte (statique) avec ce que Lighthouse a vu sur la page rendue.
+    const hints = psi && psi.brandHints;
+    if (psi && psi.brandHints) delete psi.brandHints;
+    if (brand && hints) {
+      if ((!brand.fonts || !brand.fonts.length) && hints.fonts && hints.fonts.length) brand.fonts = hints.fonts;
+      if (!brand.logo && hints.logo) brand.logo = absUrl(hints.logo, psiUrl) || hints.logo;
+      brand.available = !!(brand.palette.length || brand.logo || brand.fonts.length);
+    }
     return json(res, 200, { url, basic, brand, pagespeed: psi, psiKeyConfigured: !!key });
   } catch (e) {
     return json(res, 500, { error: 'Échec analyse du site', detail: String(e && e.message || e) });
