@@ -7,6 +7,7 @@ import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
 import { BUSINESS as BIZ } from '../lib/business';
 import { PublishPanel } from '../components/PublishPanel';
+import { VisualGenerator } from '../components/VisualGenerator';
 
 /* ig action glyphs */
 const A = {
@@ -138,6 +139,7 @@ export function Studio() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragMedia, setDragMedia] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [visualOpen, setVisualOpen] = useState(false);
   const anyConnected = sel.some((id) => isConnected(id));
 
   return (
@@ -216,6 +218,11 @@ export function Studio() {
                   <div className="spec-row"><Icon name="play" /><div><div className="sr-l">Vidéo</div><div className="sr-v">{spec?.video || '—'}</div></div></div>
                   <div className="spec-row"><Icon name="filter" /><div><div className="sr-l">Ratio</div><div className="sr-v">{ratio}</div></div></div>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                  <button className="btn outline sm" onClick={() => setVisualOpen(true)} title="Composer un visuel aux couleurs de votre marque">
+                    <RawIcon svg={UI.sparkles2} />Générer un visuel de marque
+                  </button>
+                </div>
                 <div>
                   {media ? (
                     <div className="media-has">
@@ -285,6 +292,14 @@ export function Studio() {
       </div>
 
       {publishOpen && <PublishPanel text={text} platforms={sel} localMedia={!!media} onClose={() => setPublishOpen(false)} />}
+      {visualOpen && (
+        <VisualGenerator
+          text={text}
+          ratio={ratio}
+          onClose={() => setVisualOpen(false)}
+          onUse={(url, size) => setMedia({ url, kind: 'image', name: 'visuel-de-marque.png', size })}
+        />
+      )}
     </section>
   );
 }

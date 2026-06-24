@@ -22,8 +22,21 @@ export interface CompanyResult {
 }
 export interface CompanyResponse { query: string; total: number; results: CompanyResult[]; }
 
+export interface BrandKit {
+  name: string | null;
+  themeColor: string | null;
+  logo: string | null;
+  fonts: string[];
+  palette: string[];
+  accent: string | null;
+  dark: string | null;
+  light: string | null;
+  available: boolean;
+}
+
 export interface SiteResponse {
   url: string;
+  brand?: BrandKit | null;
   basic: {
     status?: number; finalUrl?: string; https?: boolean; server?: string | null; contentType?: string | null;
     sizeKB?: number; lang?: string | null; title?: string | null; metaDescription?: string | null;

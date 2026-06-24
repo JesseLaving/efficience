@@ -14,6 +14,11 @@ import {
   clearStoredLiToken, fetchLinkedInMe, getStoredLiToken, linkedinLogin, setStoredLiToken,
   type LinkedInMe,
 } from '../lib/linkedin';
+import { analyzeSite, type SiteResponse } from '../lib/api';
+import {
+  fallbackBrand, getStoredBrand, getStoredSiteUrl, normalizeBrand, setStoredBrand, setStoredSiteUrl,
+  type BrandKit,
+} from '../lib/brand';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
@@ -48,6 +53,12 @@ interface EffCtx {
   studioSeed: string | null;
   seedStudio: (text: string) => void;
   clearStudioSeed: () => void;
+  /* --- charte graphique extraite du site (générateur de visuels) --- */
+  brandKit: BrandKit;
+  brandStatus: 'idle' | 'loading' | 'error';
+  setBrandKit: (b: BrandKit) => void;
+  applySiteBrand: (site: SiteResponse) => void;
+  refreshBrand: (url?: string) => Promise<void>;
   /* --- real Meta (Instagram + Facebook) connection --- */
   metaConnected: boolean;
   metaToken: string | null;
@@ -87,6 +98,8 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
   const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
   const [studioSeed, setStudioSeed] = useState<string | null>(null);
+  const [brandKit, setBrandKitState] = useState<BrandKit>(() => getStoredBrand() || fallbackBrand());
+  const [brandStatus, setBrandStatus] = useState<'idle' | 'loading' | 'error'>('idle');
 
   const [metaToken, setMetaToken] = useState<string | null>(() => getStoredMetaToken());
   const [metaUser, setMetaUser] = useState<string | null>(null);
@@ -242,6 +255,25 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const seedStudio = useCallback((t: string) => { setStudioSeed(t); show('studio'); }, [show]);
   const clearStudioSeed = useCallback(() => setStudioSeed(null), []);
 
+  const setBrandKit = useCallback((b: BrandKit) => { const n = normalizeBrand(b); setBrandKitState(n); setStoredBrand(n); }, []);
+  const applySiteBrand = useCallback((site: SiteResponse) => {
+    if (site && site.brand && (site.brand.available || (site.brand.palette && site.brand.palette.length))) {
+      const n = normalizeBrand(site.brand);
+      setBrandKitState(n); setStoredBrand(n);
+    }
+  }, []);
+  const refreshBrand = useCallback(async (url?: string) => {
+    const target = (url || getStoredSiteUrl()).trim();
+    if (!target) return;
+    setStoredSiteUrl(target);
+    setBrandStatus('loading');
+    try {
+      const site = await analyzeSite(target);
+      if (site && site.brand) { const n = normalizeBrand(site.brand); setBrandKitState(n); setStoredBrand(n); }
+      setBrandStatus('idle');
+    } catch { setBrandStatus('error'); }
+  }, []);
+
   const value: EffCtx = {
     screen, show,
     connected, phase, connect, disconnect, connectAll, isConnected,
@@ -250,6 +282,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
     studioSeed, seedStudio, clearStudioSeed,
+    brandKit, brandStatus, setBrandKit, applySiteBrand, refreshBrand,
     metaConnected: !!metaToken, metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
     metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,

@@ -43,6 +43,69 @@ async function doFetch(url) {
   } finally { clearTimeout(t); }
 }
 
+const absUrl = (src, base) => { try { return new URL(src, base).toString(); } catch { return null; } };
+
+/* Extrait la charte graphique réelle depuis le HTML/CSS de la page :
+   couleurs dominantes, logo, polices et nom. Aucune valeur inventée —
+   ce qui n'est pas trouvé reste null / liste vide. */
+function extractBrand(html, baseUrl, seo) {
+  const scan = html.slice(0, 400000);
+  const themeColor = attrContent(scan, 'theme-color');
+  const siteName = attrContent(scan, 'og:site_name') || (seo && seo.ogTitle) || (seo && seo.title) || null;
+  const name = siteName ? siteName.split(/[|\-–—·•:]/)[0].trim() : null;
+
+  // --- logo ---
+  let logo = null;
+  const appleM = /<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]*>/i.exec(scan);
+  const appleHref = appleM && /href=["']([^"']+)["']/i.exec(appleM[0]);
+  const iconM = /<link[^>]+rel=["'](?:shortcut icon|icon)["'][^>]*>/i.exec(scan);
+  const iconHref = iconM && /href=["']([^"']+)["']/i.exec(iconM[0]);
+  let imgLogo = null;
+  const imgRe = /<img[^>]+>/gi; let im;
+  while ((im = imgRe.exec(scan))) { if (/logo/i.test(im[0])) { const s = /src=["']([^"']+)["']/i.exec(im[0]); if (s) { imgLogo = s[1]; break; } } }
+  const cand = imgLogo || (appleHref && appleHref[1]) || (seo && seo.ogImage) || (iconHref && iconHref[1]);
+  if (cand) logo = absUrl(cand, baseUrl);
+
+  // --- polices ---
+  const fonts = [];
+  const gfRe = /fonts\.googleapis\.com\/css2?\?([^"']+)/gi; let g;
+  while ((g = gfRe.exec(scan))) {
+    const famRe = /family=([^&"']+)/gi; let fm;
+    while ((fm = famRe.exec(g[1]))) {
+      const n = decodeURIComponent(fm[1]).split(':')[0].replace(/\+/g, ' ').trim();
+      if (n && !fonts.includes(n)) fonts.push(n);
+    }
+  }
+  const ffRe = /font-family\s*:\s*([^;}"']+)/gi; let f2;
+  while ((f2 = ffRe.exec(scan)) && fonts.length < 5) {
+    const first = f2[1].split(',')[0].replace(/["']/g, '').trim();
+    if (first && !/^(inherit|initial|unset|sans-serif|serif|monospace|system-ui)$/i.test(first) && !/var\(/i.test(first) && !fonts.includes(first)) fonts.push(first);
+  }
+
+  // --- couleurs ---
+  const counts = {};
+  const add = (hex) => { counts[hex] = (counts[hex] || 0) + 1; };
+  const hexRe = /#([0-9a-f]{6}|[0-9a-f]{3})\b/gi; let h;
+  while ((h = hexRe.exec(scan))) { let hx = h[1].toLowerCase(); if (hx.length === 3) hx = hx.split('').map((c) => c + c).join(''); add(hx); }
+  const rgbRe = /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/gi; let rb;
+  while ((rb = rgbRe.exec(scan))) { add([rb[1], rb[2], rb[3]].map((n) => Math.max(0, Math.min(255, +n)).toString(16).padStart(2, '0')).join('')); }
+  const props = (hex) => { const r = parseInt(hex.slice(0, 2), 16), gg = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16); const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b); return { r, g: gg, b, sat: mx === 0 ? 0 : (mx - mn) / mx, light: (mx + mn) / 510 }; };
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).map((e) => '#' + e[0]);
+  const vivid = sorted.filter((c) => { const p = props(c.slice(1)); return p.sat > 0.22 && p.light > 0.12 && p.light < 0.9; });
+  const palette = [];
+  if (themeColor && /^#?[0-9a-fA-F]{3,6}$/.test(themeColor.trim())) { const t = themeColor.trim(); palette.push((t.startsWith('#') ? t : '#' + t).toLowerCase()); }
+  for (const c of vivid) { if (!palette.includes(c) && palette.length < 5) palette.push(c); }
+  const dark = sorted.find((c) => props(c.slice(1)).light < 0.22) || null;
+  const light = sorted.find((c) => props(c.slice(1)).light > 0.92) || null;
+
+  return {
+    name, themeColor: themeColor || null, logo,
+    fonts: fonts.slice(0, 4), palette,
+    accent: palette[0] || null, dark, light,
+    available: !!(palette.length || logo || fonts.length),
+  };
+}
+
 async function basicFetch(url) {
   {
     let r;
@@ -55,7 +118,7 @@ async function basicFetch(url) {
     const body = await r.text();
     const head = body.slice(0, 200000);
     const count = (re) => (head.match(re) || []).length;
-    return {
+    const seo = {
       status: r.status,
       finalUrl: r.url,
       https: r.url.startsWith('https://'),
@@ -74,6 +137,8 @@ async function basicFetch(url) {
       linkCount: count(/<a[\s>]/gi),
       jsRendered: !/<title[^>]*>[\s\S]*?<\/title>/i.test(head) && body.length > 50000,
     };
+    seo.brand = extractBrand(body, r.url, seo);
+    return seo;
   }
 }
 
@@ -153,10 +218,12 @@ export default async function handler(req, res) {
   const key = process.env.GOOGLE_PSI_KEY || '';
   try {
     const basic = await basicFetch(url).catch((e) => ({ error: String(e && e.message || e) }));
+    const brand = (basic && basic.brand) || null;
+    if (basic && basic.brand) delete basic.brand;
     // Use the URL Lighthouse can actually load (after redirects / www fallback).
     const psiUrl = (basic && basic.finalUrl) || url;
     const psi = withPsi ? await pageSpeed(psiUrl, key) : { available: false, error: 'désactivé' };
-    return json(res, 200, { url, basic, pagespeed: psi, psiKeyConfigured: !!key });
+    return json(res, 200, { url, basic, brand, pagespeed: psi, psiKeyConfigured: !!key });
   } catch (e) {
     return json(res, 500, { error: 'Échec analyse du site', detail: String(e && e.message || e) });
   }

@@ -14,7 +14,7 @@ const scoreColor = (n: number | null | undefined) =>
 type Status = 'idle' | 'active' | 'done' | 'error';
 
 export function Onboarding() {
-  const { show, setClient } = useEff();
+  const { show, setClient, applySiteBrand } = useEff();
   const [step, setStep] = useState<'form' | 'scan' | 'result'>('form');
   const [siret, setSiret] = useState('483591616');           // Efficience Marketing (EI) — real SIREN
   const [domain, setDomain] = useState('efficiencemarketing.com');
@@ -46,7 +46,7 @@ export function Onboarding() {
       .catch(() => setStInsee('error'))
       .finally(tick);
     analyzeSite(domain.trim() || BIZ.name)
-      .then((r) => { setSite(r); setStSite('done'); })
+      .then((r) => { setSite(r); applySiteBrand(r); setStSite('done'); })
       .catch(() => setStSite('error'))
       .finally(tick);
   };
