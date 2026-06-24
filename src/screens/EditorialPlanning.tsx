@@ -8,6 +8,7 @@ import {
   DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planToCsv, type PlanItem,
 } from '../lib/editorial';
 import { buildAidaPost } from '../lib/aida';
+import { defaultDateTime } from '../lib/calendar';
 
 const netLabel: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', google: 'Google Business',
@@ -25,7 +26,7 @@ function downloadCsv(items: PlanItem[]) {
 }
 
 export function EditorialPlanning() {
-  const { client, seedStudio } = useEff();
+  const { client, seedStudio, addToCalendar } = useEff();
   const [sector, setSector] = useState(BUSINESS.sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
@@ -61,6 +62,7 @@ export function EditorialPlanning() {
   // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
   const aidaFor = (p: PlanItem) => buildAidaPost(p, { sector: sector.trim() || BUSINESS.sector, name: BUSINESS.name, city: BUSINESS.city });
   const compose = (p: PlanItem) => seedStudio(aidaFor(p));
+  const schedule = (p: PlanItem) => addToCalendar({ dateTime: defaultDateTime(p.date, 9), text: aidaFor(p), networks: [p.network], photoUrl: null, pillar: p.pillar });
   const copyIdea = (p: PlanItem) => {
     navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Sujet copié'), () => {});
   };
@@ -183,6 +185,9 @@ export function EditorialPlanning() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                       <button className="btn acc sm" title="Rédiger un brouillon AIDA dans le Studio" onClick={() => compose(p)}>
                         <Icon name="spark" />Composer (AIDA)
+                      </button>
+                      <button className="btn outline sm" title="Ajouter au calendrier de programmation" onClick={() => schedule(p)}>
+                        <Icon name="clock" />Programmer
                       </button>
                       <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>
                         <Icon name="edit" />Copier

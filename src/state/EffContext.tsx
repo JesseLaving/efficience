@@ -16,13 +16,16 @@ import {
 } from '../lib/linkedin';
 import { analyzeSite, type SiteResponse } from '../lib/api';
 import {
+  loadScheduled, addScheduled, updateScheduled, removeScheduled, type ScheduledPost,
+} from '../lib/calendar';
+import {
   fallbackBrand, getStoredBrand, getStoredSiteUrl, normalizeBrand, setStoredBrand, setStoredSiteUrl,
   type BrandKit,
 } from '../lib/brand';
 
 export type Phase = 'connecting' | 'loading' | null;
 export type ScreenId =
-  | 'dashboard' | 'connexion' | 'studio' | 'planning'
+  | 'dashboard' | 'connexion' | 'studio' | 'planning' | 'calendar'
   | 'contacts' | 'campagnes' | 'stats' | 'inbox'
   | 'config' | 'settings' | 'help';
 
@@ -59,6 +62,11 @@ interface EffCtx {
   setBrandKit: (b: BrandKit) => void;
   applySiteBrand: (site: SiteResponse) => void;
   refreshBrand: (url?: string) => Promise<void>;
+  /* --- calendrier de programmation --- */
+  scheduled: ScheduledPost[];
+  addToCalendar: (p: Omit<ScheduledPost, 'id' | 'createdAt' | 'status'>) => void;
+  updateCalendar: (id: string, patch: Partial<ScheduledPost>) => void;
+  removeFromCalendar: (id: string) => void;
   /* --- real Meta (Instagram + Facebook) connection --- */
   metaConnected: boolean;
   metaToken: string | null;
@@ -100,6 +108,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [studioSeed, setStudioSeed] = useState<string | null>(null);
   const [brandKit, setBrandKitState] = useState<BrandKit>(() => getStoredBrand() || fallbackBrand());
   const [brandStatus, setBrandStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [scheduled, setScheduled] = useState<ScheduledPost[]>(() => loadScheduled());
 
   const [metaToken, setMetaToken] = useState<string | null>(() => getStoredMetaToken());
   const [metaUser, setMetaUser] = useState<string | null>(null);
@@ -255,6 +264,14 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const seedStudio = useCallback((t: string) => { setStudioSeed(t); show('studio'); }, [show]);
   const clearStudioSeed = useCallback(() => setStudioSeed(null), []);
 
+  const addToCalendar = useCallback((p: Omit<ScheduledPost, 'id' | 'createdAt' | 'status'>) => {
+    setScheduled((list) => addScheduled(list, p));
+    showToast(UI.calendar, 'Ajouté au calendrier de programmation');
+    show('calendar');
+  }, [show]);
+  const updateCalendar = useCallback((id: string, patch: Partial<ScheduledPost>) => { setScheduled((list) => updateScheduled(list, id, patch)); }, []);
+  const removeFromCalendar = useCallback((id: string) => { setScheduled((list) => removeScheduled(list, id)); }, []);
+
   const setBrandKit = useCallback((b: BrandKit) => { const n = normalizeBrand(b); setBrandKitState(n); setStoredBrand(n); }, []);
   const applySiteBrand = useCallback((site: SiteResponse) => {
     if (site && site.brand && (site.brand.available || (site.brand.palette && site.brand.palette.length))) {
@@ -283,6 +300,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     campaignSeed, newCampaign, clearCampaignSeed,
     studioSeed, seedStudio, clearStudioSeed,
     brandKit, brandStatus, setBrandKit, applySiteBrand, refreshBrand,
+    scheduled, addToCalendar, updateCalendar, removeFromCalendar,
     metaConnected: !!metaToken, metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
     metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,

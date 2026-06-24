@@ -5,14 +5,17 @@ import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { getStoredSiteUrl } from '../lib/brand';
+import { BUSINESS } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
+import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
 
 interface Props {
   text: string;
   ratio: string;
   onClose: () => void;
-  onUse: (pngDataUrl: string, sizeBytes: number) => void;
+  /** isPublic=true quand l'URL est déjà publique (photo Pexels) → publiable via API. */
+  onUse: (url: string, sizeBytes: number, isPublic: boolean) => void;
 }
 
 /* Charge une image distante en data-URL (pour l'intégrer proprement au PNG
@@ -30,11 +33,29 @@ async function toDataUrl(url: string): Promise<string | null> {
 export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const { brandKit, brandStatus, setBrandKit, refreshBrand } = useEff();
   const [kit, setKit] = useState<BrandKit>(brandKit);
+  const [mode, setMode] = useState<'template' | 'photo'>('template');
   const [template, setTemplate] = useState('citation');
   const [title, setTitle] = useState('À la une');
   const [siteUrl, setSiteUrl] = useState(getStoredSiteUrl());
   const [logoData, setLogoData] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // --- recherche de photos (Pexels) ---
+  const [pquery, setPquery] = useState(() => photoQueryFor(text, BUSINESS.sector));
+  const [photos, setPhotos] = useState<StockPhoto[]>([]);
+  const [ploading, setPloading] = useState(false);
+  const [preason, setPreason] = useState<string | null>(null);
+  const [selPhoto, setSelPhoto] = useState<StockPhoto | null>(null);
+
+  const searchPhotos = async (q: string) => {
+    if (!q.trim()) return;
+    setPloading(true); setPreason(null);
+    try {
+      const d = await fetchStockPhotos(q.trim(), orientationFor(ratio));
+      setPhotos(d.photos || []);
+      setPreason(d.available ? (d.photos.length ? null : 'Aucune photo trouvée pour cette recherche.') : (d.reason || 'Recherche indisponible.'));
+    } catch (e) { setPreason(String((e as Error).message || e)); }
+    setPloading(false);
+  };
 
   // Resynchronise quand l'extraction du site met à jour la charte.
   useEffect(() => { setKit(brandKit); }, [brandKit]);
@@ -76,10 +97,18 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   });
 
   const use = async () => {
+    if (mode === 'photo') {
+      if (!selPhoto) { showToast(UI.close, 'Sélectionnez une photo'); return; }
+      // L'URL Pexels est publique → directement publiable via API.
+      onUse(selPhoto.url, (selPhoto.width || 0) * (selPhoto.height || 0), true);
+      showToast(UI.check, 'Photo ajoutée à la publication');
+      onClose();
+      return;
+    }
     setBusy(true);
     try {
       const png = await rasterize();
-      onUse(png, Math.round(png.length * 0.75));
+      onUse(png, Math.round(png.length * 0.75), false);
       showToast(UI.check, 'Visuel ajouté à la publication');
       onClose();
     } catch { showToast(UI.close, 'Échec de la génération du visuel'); }
@@ -87,6 +116,10 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   };
 
   const download = async () => {
+    if (mode === 'photo') {
+      if (selPhoto) window.open(selPhoto.url, '_blank', 'noopener');
+      return;
+    }
     try {
       const png = await rasterize();
       const a = document.createElement('a');
@@ -94,6 +127,9 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
       document.body.appendChild(a); a.click(); a.remove();
     } catch { showToast(UI.close, 'Échec du téléchargement'); }
   };
+
+  const switchToPhoto = () => { setMode('photo'); if (!photos.length && !ploading) searchPhotos(pquery); };
+  const modeBtn = (on: boolean): React.CSSProperties => ({ flex: 1, fontSize: 13, fontWeight: 600, padding: '9px 14px', borderRadius: 'var(--r-btn)', cursor: 'pointer', border: '1px solid ' + (on ? 'var(--acc)' : 'var(--line)'), background: on ? 'var(--acc)' : 'transparent', color: on ? '#04231a' : 'var(--tx-2)' });
 
   const fileRef = useRef<HTMLInputElement>(null);
   const onLogoFile = (f: File) => { const fr = new FileReader(); fr.onload = () => patch({ logo: fr.result as string }); fr.readAsDataURL(f); };
@@ -109,7 +145,13 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
           <button className="km-x" onClick={onClose}><Icon name="close" /></button>
         </div>
 
-        <div className="kmodal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
+        <div className="kmodal-body" style={{ display: 'block' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button onClick={() => setMode('template')} style={modeBtn(mode === 'template')}><RawIcon svg={UI.sparkles2} style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Modèle de marque</button>
+            <button onClick={switchToPhoto} style={modeBtn(mode === 'photo')}><RawIcon svg={UI.image} style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Photo du sujet</button>
+          </div>
+          {mode === 'template' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
           {/* ---- aperçu ---- */}
           <div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -187,12 +229,42 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               <Icon name="wand" />Générer par IA — bientôt
             </button>
           </div>
+          </div>
+          ) : (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input className="inp" value={pquery} onChange={(e) => setPquery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') searchPhotos(pquery); }} placeholder="Rechercher une photo (ex : formation réunion)" />
+              <button className="btn acc sm" disabled={ploading} onClick={() => searchPhotos(pquery)} style={{ flexShrink: 0 }}>{ploading ? <span className="spin" /> : <Icon name="search" />}Rechercher</button>
+            </div>
+            {preason && (
+              <div style={{ fontSize: 12.5, color: 'var(--warn)', marginBottom: 12 }}>
+                {preason}{/Clé Pexels/.test(preason) ? <span style={{ color: 'var(--tx-3)' }}> — ajoutez la variable <b>PEXELS_API_KEY</b> dans Vercel.</span> : null}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(118px, 1fr))', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+              {photos.map((p) => (
+                <button key={p.id} onClick={() => setSelPhoto(p)} title={p.alt} style={{ padding: 0, border: '2px solid ' + (selPhoto && selPhoto.id === p.id ? 'var(--acc)' : 'transparent'), borderRadius: 10, overflow: 'hidden', cursor: 'pointer', aspectRatio: '1 / 1', background: p.avgColor || 'var(--canvas-soft)' }}>
+                  <img src={p.thumb} alt={p.alt} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                </button>
+              ))}
+            </div>
+            {!photos.length && !ploading && !preason && <div style={{ fontSize: 12.5, color: 'var(--tx-3)' }}>Lancez une recherche pour illustrer votre sujet en photo.</div>}
+            {selPhoto && (
+              <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx-3)' }}>
+                {selPhoto.photographer ? <>Photo © <a href={selPhoto.photographerUrl || '#'} target="_blank" rel="noopener" style={{ color: 'var(--tx-2)' }}>{selPhoto.photographer}</a> · Pexels — </> : 'Pexels — '}
+                URL publique, publiable directement sur vos réseaux.
+              </div>
+            )}
+          </div>
+          )}
         </div>
 
         <div className="kmodal-foot">
-          <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>Respecte vos couleurs, logo, police et nom de marque.</span>
-          <button className="btn outline" onClick={download}><Icon name="download" />Télécharger</button>
-          <button className="btn acc" disabled={busy} onClick={use}>{busy ? <span className="spin" /> : <Icon name="check" />}Utiliser comme visuel</button>
+          <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
+            {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.' : 'Respecte vos couleurs, logo, police et nom de marque.'}
+          </span>
+          <button className="btn outline" onClick={download} disabled={mode === 'photo' && !selPhoto}><Icon name="download" />Télécharger</button>
+          <button className="btn acc" disabled={busy || (mode === 'photo' && !selPhoto)} onClick={use}>{busy ? <span className="spin" /> : <Icon name="check" />}Utiliser comme visuel</button>
         </div>
       </div>
     </div>,

@@ -122,7 +122,7 @@ export function Studio() {
   const loadMedia = (f: File) => {
     const kind: Media['kind'] = f.type.startsWith('video') ? 'video' : 'image';
     const rd = new FileReader();
-    rd.onload = () => setMedia({ url: rd.result as string, kind, name: f.name, size: f.size });
+    rd.onload = () => { setMedia({ url: rd.result as string, kind, name: f.name, size: f.size }); setPublicImageUrl(null); };
     rd.readAsDataURL(f);
   };
 
@@ -140,6 +140,7 @@ export function Studio() {
   const [dragMedia, setDragMedia] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [visualOpen, setVisualOpen] = useState(false);
+  const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
   const anyConnected = sel.some((id) => isConnected(id));
 
   return (
@@ -230,7 +231,7 @@ export function Studio() {
                         {media.kind === 'video' && <Icon name="play" style={{ width: 20, height: 20 }} />}
                       </div>
                       <div className="mh-i"><div className="mh-n">{media.name}</div><div className="mh-m">{media.kind === 'video' ? 'Vidéo' : 'Image'} · format {ratio} · {netName(active || '')}</div></div>
-                      <button className="unlink-btn" title="Retirer" onClick={() => setMedia(null)}><Icon name="trash" /></button>
+                      <button className="unlink-btn" title="Retirer" onClick={() => { setMedia(null); setPublicImageUrl(null); }}><Icon name="trash" /></button>
                     </div>
                   ) : (
                     <div className={'media-drop' + (dragMedia ? ' drag' : '')}
@@ -291,13 +292,16 @@ export function Studio() {
         </div>
       </div>
 
-      {publishOpen && <PublishPanel text={text} platforms={sel} localMedia={!!media} onClose={() => setPublishOpen(false)} />}
+      {publishOpen && <PublishPanel text={text} platforms={sel} localMedia={!!media} defaultPhotoUrl={publicImageUrl} onClose={() => setPublishOpen(false)} />}
       {visualOpen && (
         <VisualGenerator
           text={text}
           ratio={ratio}
           onClose={() => setVisualOpen(false)}
-          onUse={(url, size) => setMedia({ url, kind: 'image', name: 'visuel-de-marque.png', size })}
+          onUse={(url, size, isPublic) => {
+            setMedia({ url, kind: 'image', name: isPublic ? 'photo-pexels.jpg' : 'visuel-de-marque.png', size });
+            setPublicImageUrl(isPublic ? url : null);
+          }}
         />
       )}
     </section>

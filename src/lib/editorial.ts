@@ -159,7 +159,7 @@ const PROFILE_IDEAS: Record<string, Partial<Record<string, string[]>>> = {
   },
 };
 
-function profileFor(sector: string): string {
+export function profileFor(sector: string): string {
   const s = sector.toLowerCase();
   if (/(formation|conseil|coach|consult|forma)/.test(s)) return 'formation';
   if (/(restau|food|traiteur|boulang|p[âa]tiss|caf[ée]|\bbar\b|pizz|cuisine|brasserie)/.test(s)) return 'restauration';

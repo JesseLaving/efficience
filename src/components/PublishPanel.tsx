@@ -9,15 +9,15 @@ import { publishMetaPost } from '../lib/meta';
 import { publishLinkedInPost } from '../lib/linkedin';
 import { publishGooglePost } from '../lib/google';
 
-interface Props { text: string; platforms: string[]; localMedia: boolean; onClose: () => void; }
+interface Props { text: string; platforms: string[]; localMedia: boolean; defaultPhotoUrl?: string | null; onClose: () => void; }
 
 interface Row { id: string; label: string; status: 'pending' | 'ok' | 'error'; reason?: string | null; url?: string | null; }
 
 const META_NETS = ['instagram', 'facebook'];
 
-export function PublishPanel({ text, platforms, localMedia, onClose }: Props) {
+export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onClose }: Props) {
   const { metaToken, metaAccounts, linkedinToken, googleToken, googleAccounts } = useEff();
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUrl, setPhotoUrl] = useState(defaultPhotoUrl || '');
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
 
