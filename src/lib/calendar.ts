@@ -15,6 +15,7 @@ export interface ScheduledPost {
   status: SchedStatus;
   createdAt: string;
   lastResult?: string | null;
+  auto?: boolean;        // auto-publication serveur activée
 }
 
 const LS = 'eff_calendar_v1';
