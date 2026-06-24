@@ -7,6 +7,7 @@ import { showToast } from '../lib/toast';
 import {
   DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planToCsv, type PlanItem,
 } from '../lib/editorial';
+import { buildAidaPost } from '../lib/aida';
 
 const netLabel: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', google: 'Google Business',
@@ -57,8 +58,11 @@ export function EditorialPlanning() {
     return PILLARS.filter((pl) => c[pl.key]).map((pl) => ({ ...pl, n: c[pl.key] }));
   }, [plan]);
 
+  // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
+  const aidaFor = (p: PlanItem) => buildAidaPost(p, { sector: sector.trim() || BUSINESS.sector, name: BUSINESS.name, city: BUSINESS.city });
+  const compose = (p: PlanItem) => seedStudio(aidaFor(p));
   const copyIdea = (p: PlanItem) => {
-    navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Idée copiée'), () => {});
+    navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Sujet copié'), () => {});
   };
 
   return (
@@ -177,10 +181,10 @@ export function EditorialPlanning() {
                       <div style={{ fontSize: 13.5, color: 'var(--tx-1)', lineHeight: 1.45 }}>{p.idea}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      <button className="btn acc sm" title="Composer dans le Studio" onClick={() => seedStudio(p.idea)}>
-                        <Icon name="spark" />Composer
+                      <button className="btn acc sm" title="Rédiger un brouillon AIDA dans le Studio" onClick={() => compose(p)}>
+                        <Icon name="spark" />Composer (AIDA)
                       </button>
-                      <button className="btn ghost sm" title="Copier l’idée" onClick={() => copyIdea(p)}>
+                      <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>
                         <Icon name="edit" />Copier
                       </button>
                     </div>

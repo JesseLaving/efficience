@@ -34,8 +34,14 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(localPost),
     });
-    const d = await r.json();
+    // L'API peut répondre du HTML (401/404, accès non activé) — parse défensif
+    // pour dégrader proprement en { ok:false, reason } plutôt que de planter.
+    const raw = await r.text();
+    let d = {};
+    try { d = raw ? JSON.parse(raw) : {}; }
+    catch { return json(res, 200, { ok: false, reason: `Réponse inattendue de l’API Google (HTTP ${r.status}). L’accès à la Business Profile API n’est probablement pas encore activé.` }); }
     if (d.error) return json(res, 200, { ok: false, reason: d.error.message });
+    if (!r.ok) return json(res, 200, { ok: false, reason: `Publication refusée par Google (HTTP ${r.status}).` });
     return json(res, 200, { ok: true, post: { name: d.name || null, state: d.state || null, searchUrl: d.searchUrl || null } });
   } catch (e) {
     return json(res, 500, { error: 'Échec publication Google', detail: String(e && e.message || e) });
