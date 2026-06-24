@@ -44,6 +44,10 @@ interface EffCtx {
   campaignSeed: { seg: string } | null;
   newCampaign: (seg: string) => void;
   clearCampaignSeed: () => void;
+  /* --- Studio prefill (depuis le Planning éditorial) --- */
+  studioSeed: string | null;
+  seedStudio: (text: string) => void;
+  clearStudioSeed: () => void;
   /* --- real Meta (Instagram + Facebook) connection --- */
   metaConnected: boolean;
   metaToken: string | null;
@@ -82,6 +86,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [client, setClient] = useState<ClientProfile>({ name: BUSINESS.name, initials: BUSINESS.initials });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
   const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
+  const [studioSeed, setStudioSeed] = useState<string | null>(null);
 
   const [metaToken, setMetaToken] = useState<string | null>(() => getStoredMetaToken());
   const [metaUser, setMetaUser] = useState<string | null>(null);
@@ -234,6 +239,9 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const newCampaign = useCallback((seg: string) => { setCampaignSeed({ seg }); show('campagnes'); }, [show]);
   const clearCampaignSeed = useCallback(() => setCampaignSeed(null), []);
 
+  const seedStudio = useCallback((t: string) => { setStudioSeed(t); show('studio'); }, [show]);
+  const clearStudioSeed = useCallback(() => setStudioSeed(null), []);
+
   const value: EffCtx = {
     screen, show,
     connected, phase, connect, disconnect, connectAll, isConnected,
@@ -241,6 +249,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     client, setClient,
     crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
+    studioSeed, seedStudio, clearStudioSeed,
     metaConnected: !!metaToken, metaToken, metaUser, metaAccounts, metaStatus, metaError, accountFor,
     metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,

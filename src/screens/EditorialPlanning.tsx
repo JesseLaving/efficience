@@ -24,7 +24,7 @@ function downloadCsv(items: PlanItem[]) {
 }
 
 export function EditorialPlanning() {
-  const { client } = useEff();
+  const { client, seedStudio } = useEff();
   const [sector, setSector] = useState(BUSINESS.sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
@@ -176,9 +176,14 @@ export function EditorialPlanning() {
                       </div>
                       <div style={{ fontSize: 13.5, color: 'var(--tx-1)', lineHeight: 1.45 }}>{p.idea}</div>
                     </div>
-                    <button className="btn ghost sm" title="Copier l’idée" onClick={() => copyIdea(p)} style={{ flexShrink: 0 }}>
-                      <Icon name="edit" />Copier
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                      <button className="btn acc sm" title="Composer dans le Studio" onClick={() => seedStudio(p.idea)}>
+                        <Icon name="spark" />Composer
+                      </button>
+                      <button className="btn ghost sm" title="Copier l’idée" onClick={() => copyIdea(p)}>
+                        <Icon name="edit" />Copier
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

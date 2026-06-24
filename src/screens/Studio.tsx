@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
@@ -57,9 +57,16 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
 }
 
 export function Studio() {
-  const { isConnected } = useEff();
+  const { isConnected, studioSeed, clearStudioSeed } = useEff();
   const [type, setType] = useState<ComposeType>('post');
-  const [text, setText] = useState('');
+  const [text, setText] = useState(studioSeed || '');
+
+  // Le Studio peut être ouvert pré-rempli depuis le Planning éditorial.
+  // On consomme le seed une seule fois (le texte reste éditable ensuite).
+  useEffect(() => {
+    if (studioSeed) clearStudioSeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [ratio, setRatio] = useState('4:5');
   const [media, setMedia] = useState<Media | null>(null);
   const [subject, setSubject] = useState('');
