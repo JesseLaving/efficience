@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useCalendar } from '../state/CalendarContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { BUSINESS } from '../lib/business';
@@ -26,7 +27,8 @@ function downloadCsv(items: PlanItem[]) {
 }
 
 export function EditorialPlanning() {
-  const { client, seedStudio, addToCalendar } = useEff();
+  const { client, seedStudio } = useEff();
+  const { addToCalendar } = useCalendar();
   const [sector, setSector] = useState(BUSINESS.sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);

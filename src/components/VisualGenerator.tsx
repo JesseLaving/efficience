@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useEff } from '../state/EffContext';
+import { useBrand } from '../state/BrandContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
@@ -32,7 +32,7 @@ async function toDataUrl(url: string): Promise<string | null> {
 }
 
 export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
-  const { brandKit, brandStatus, setBrandKit, refreshBrand } = useEff();
+  const { brandKit, brandStatus, setBrandKit, refreshBrand } = useBrand();
   const [kit, setKit] = useState<BrandKit>(brandKit);
   const [mode, setMode] = useState<'template' | 'photo'>('template');
   const [template, setTemplate] = useState('citation');

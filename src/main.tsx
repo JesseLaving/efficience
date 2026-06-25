@@ -7,12 +7,18 @@ import './styles/create.css';
 import './styles/stats.css';
 import { EffProvider } from './state/EffContext';
 import { ConnectionsProvider } from './state/ConnectionsContext';
+import { CalendarProvider } from './state/CalendarContext';
+import { BrandProvider } from './state/BrandContext';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
   <EffProvider>
     <ConnectionsProvider>
-      <App />
+      <CalendarProvider>
+        <BrandProvider>
+          <App />
+        </BrandProvider>
+      </CalendarProvider>
     </ConnectionsProvider>
   </EffProvider>
 );

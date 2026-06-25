@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEff } from '../state/EffContext';
+import { useBrand } from '../state/BrandContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
@@ -14,7 +15,8 @@ const scoreColor = (n: number | null | undefined) =>
 type Status = 'idle' | 'active' | 'done' | 'error';
 
 export function Onboarding() {
-  const { show, setClient, applySiteBrand } = useEff();
+  const { show, setClient } = useEff();
+  const { applySiteBrand } = useBrand();
   const [step, setStep] = useState<'form' | 'scan' | 'result'>('form');
   const [siret, setSiret] = useState('483591616');           // Efficience Marketing (EI) — real SIREN
   const [domain, setDomain] = useState('efficiencemarketing.com');
