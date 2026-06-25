@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
@@ -11,7 +11,7 @@ const CTAS: [string, string][] = [
 ];
 
 export function GoogleBusiness() {
-  const { googleConnected, googleToken, googleAccounts, googleStatus, googleReason, connectGoogle, disconnectGoogle } = useEff();
+  const { googleConnected, googleToken, googleAccounts, googleStatus, googleReason, connectGoogle, disconnectGoogle } = useConnections();
   const [loc, setLoc] = useState('');
   const [summary, setSummary] = useState('');
   const [actionType, setActionType] = useState('');

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { NETWORKS, type Network } from '../lib/networks';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
@@ -52,7 +53,8 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 }
 
 function NetCard({ net }: { net: Network }) {
-  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, show, linkedinMe } = useEff();
+  const { show } = useEff();
+  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe } = useConnections();
   const [liModal, setLiModal] = useState(false);
   const [metaModal, setMetaModal] = useState(false);
   const isConn = isConnected(net.id);
@@ -142,7 +144,7 @@ function NetCard({ net }: { net: Network }) {
 }
 
 export function Connexion() {
-  const { connectedCount, totalReach, connectAll, metaConnected, metaUser, metaStatus, metaError } = useEff();
+  const { connectedCount, totalReach, connectAll, metaConnected, metaUser, metaStatus, metaError } = useConnections();
   const reachRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => { countUp(reachRef.current, totalReach); }, [totalReach]);

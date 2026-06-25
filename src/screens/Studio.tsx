@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -58,7 +59,8 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
 }
 
 export function Studio() {
-  const { isConnected, studioSeed, clearStudioSeed } = useEff();
+  const { studioSeed, clearStudioSeed } = useEff();
+  const { isConnected } = useConnections();
   const [type, setType] = useState<ComposeType>('post');
   const [text, setText] = useState(studioSeed || '');
 

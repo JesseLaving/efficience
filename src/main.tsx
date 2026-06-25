@@ -6,10 +6,13 @@ import './styles/emailing.css';
 import './styles/create.css';
 import './styles/stats.css';
 import { EffProvider } from './state/EffContext';
+import { ConnectionsProvider } from './state/ConnectionsContext';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
   <EffProvider>
-    <App />
+    <ConnectionsProvider>
+      <App />
+    </ConnectionsProvider>
   </EffProvider>
 );

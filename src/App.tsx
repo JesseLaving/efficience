@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useEff, type ScreenId } from './state/EffContext';
+import { useConnections } from './state/ConnectionsContext';
 import { Icon } from './lib/Icon';
 import { fr } from './lib/format';
 import { TOTAL } from './lib/population';
@@ -42,7 +43,8 @@ const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }>
 };
 
 export function App() {
-  const { screen, show, connectedCount, crmImported, client } = useEff();
+  const { screen, show, crmImported, client } = useEff();
+  const { connectedCount } = useConnections();
 
   // First connection: open the Configurateur so the real analysis runs.
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { FMT, UNIT } from '../lib/format';
@@ -139,7 +139,7 @@ function Prog({ label, pct }: { label: string; pct: number }) {
 }
 
 export function Dashboard() {
-  const { totalReach, metaStats } = useEff();
+  const { totalReach, metaStats } = useConnections();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
   const [removing, setRemoving] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState(false);

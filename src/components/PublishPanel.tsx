@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { netName } from '../lib/networks';
@@ -16,7 +16,7 @@ interface Row { id: string; label: string; status: 'pending' | 'ok' | 'error'; r
 const META_NETS = ['instagram', 'facebook'];
 
 export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onClose }: Props) {
-  const { metaToken, metaAccounts, linkedinToken, googleToken, googleAccounts } = useEff();
+  const { metaToken, metaAccounts, linkedinToken, googleToken, googleAccounts } = useConnections();
   const [photoUrl, setPhotoUrl] = useState(defaultPhotoUrl || '');
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);

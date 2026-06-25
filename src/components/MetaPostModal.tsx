@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
@@ -9,7 +9,7 @@ import { publishMetaPost, type MetaPostResult } from '../lib/meta';
 interface Props { onClose: () => void; defaultTargets?: ('facebook' | 'instagram')[]; }
 
 export function MetaPostModal({ onClose, defaultTargets = ['facebook', 'instagram'] }: Props) {
-  const { metaToken, metaAccounts } = useEff();
+  const { metaToken, metaAccounts } = useConnections();
   const [message, setMessage] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [targets, setTargets] = useState<Set<string>>(new Set(defaultTargets));

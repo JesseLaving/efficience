@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { publishLinkedInPost, type LiPostResult } from '../lib/linkedin';
 
 export function LinkedInPostModal({ onClose }: { onClose: () => void }) {
-  const { linkedinToken, linkedinMe } = useEff();
+  const { linkedinToken, linkedinMe } = useConnections();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<LiPostResult | null>(null);

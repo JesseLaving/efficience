@@ -1,4 +1,5 @@
 import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -151,10 +152,11 @@ function GoogleBlock({ accounts, reason }: { accounts: GoogleLocation[]; reason:
 }
 
 export function Stats() {
+  const { show } = useEff();
   const {
-    metaConnected, show, metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
+    metaConnected, metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     linkedinConnected, linkedinMe, googleConnected, googleAccounts, googleReason,
-  } = useEff();
+  } = useConnections();
   const accounts = metaStats;
   const loading = metaStatsStatus === 'loading';
   const error = metaStatsError;

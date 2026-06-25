@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { netName } from '../lib/networks';
@@ -25,7 +26,8 @@ function StatusBadge({ s }: { s: ScheduledPost['status'] }) {
 }
 
 export function Calendar() {
-  const { scheduled, updateCalendar, removeFromCalendar, isConnected, show, metaToken, linkedinToken, googleToken, googleAccounts } = useEff();
+  const { scheduled, updateCalendar, removeFromCalendar, show } = useEff();
+  const { isConnected, metaToken, linkedinToken, googleToken, googleAccounts } = useConnections();
   const [publishing, setPublishing] = useState<ScheduledPost | null>(null);
   const [arming, setArming] = useState<string | null>(null);
 
