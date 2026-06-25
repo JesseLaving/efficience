@@ -21,6 +21,28 @@ function getParam(req, name) {
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
+
+  // Proxy d'image (CORS *) — permet de compositer une photo Pexels sur un canvas
+  // sans « tainter » le canvas. Restreint aux images Pexels pour éviter l'open-proxy.
+  const proxy = getParam(req, 'proxy');
+  if (proxy) {
+    let u;
+    try { u = new URL(proxy); } catch { return json(res, 400, { error: 'URL invalide' }); }
+    if (!/(^|\.)pexels\.com$/i.test(u.hostname)) return json(res, 403, { error: 'Hôte non autorisé' });
+    try {
+      const ir = await fetch(u.toString());
+      if (!ir.ok) { cors(res); res.statusCode = ir.status; res.end(); return; }
+      const ct = ir.headers.get('content-type') || 'image/jpeg';
+      const ab = await ir.arrayBuffer();
+      cors(res);
+      res.setHeader('Content-Type', ct);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.statusCode = 200;
+      res.end(Buffer.from(ab));
+      return;
+    } catch (e) { return json(res, 502, { error: 'Proxy échec', detail: String(e && e.message || e) }); }
+  }
+
   const key = process.env.PEXELS_API_KEY || '';
   if (!key) return json(res, 200, { available: false, reason: 'Clé Pexels non configurée (PEXELS_API_KEY).', photos: [] });
 

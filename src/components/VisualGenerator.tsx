@@ -9,6 +9,7 @@ import { BUSINESS } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
+import { brandPhoto, uploadImage } from '../lib/upload';
 
 interface Props {
   text: string;
@@ -45,6 +46,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [ploading, setPloading] = useState(false);
   const [preason, setPreason] = useState<string | null>(null);
   const [selPhoto, setSelPhoto] = useState<StockPhoto | null>(null);
+  const [brandPhotoOn, setBrandPhotoOn] = useState(true);
 
   const searchPhotos = async (q: string) => {
     if (!q.trim()) return;
@@ -99,7 +101,23 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const use = async () => {
     if (mode === 'photo') {
       if (!selPhoto) { showToast(UI.close, 'Sélectionnez une photo'); return; }
-      // L'URL Pexels est publique → directement publiable via API.
+      if (brandPhotoOn) {
+        setBusy(true);
+        try {
+          const dataUrl = await brandPhoto({ photoUrl: selPhoto.url, ratio, logoData, brandName: kit.name || undefined, accent: kit.accent || undefined });
+          const up = await uploadImage(dataUrl);
+          setBusy(false);
+          if (up.ok && up.url) { onUse(up.url, 0, true); showToast(UI.check, 'Visuel brandé ajouté (URL publique)'); onClose(); return; }
+          // Hébergement indisponible → on retombe sur la photo brute (publique aussi).
+          showToast(UI.close, (up.reason || 'Hébergement indisponible') + ' — photo non brandée utilisée.');
+          onUse(selPhoto.url, 0, true); onClose(); return;
+        } catch {
+          setBusy(false);
+          showToast(UI.close, 'Compositing impossible — photo brute utilisée.');
+          onUse(selPhoto.url, 0, true); onClose(); return;
+        }
+      }
+      // Sans logo : l'URL Pexels est déjà publique → directement publiable.
       onUse(selPhoto.url, (selPhoto.width || 0) * (selPhoto.height || 0), true);
       showToast(UI.check, 'Photo ajoutée à la publication');
       onClose();
@@ -236,6 +254,11 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               <input className="inp" value={pquery} onChange={(e) => setPquery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') searchPhotos(pquery); }} placeholder="Rechercher une photo (ex : formation réunion)" />
               <button className="btn acc sm" disabled={ploading} onClick={() => searchPhotos(pquery)} style={{ flexShrink: 0 }}>{ploading ? <span className="spin" /> : <Icon name="search" />}Rechercher</button>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-2)', marginBottom: 12, cursor: 'pointer' }}>
+              <input type="checkbox" checked={brandPhotoOn} onChange={(e) => setBrandPhotoOn(e.target.checked)} style={{ accentColor: 'var(--acc)' }} />
+              Incruster mon logo {kit.logo ? '' : '(nom de marque)'} sur la photo
+              <span style={{ color: 'var(--tx-3)' }}>· hébergée en URL publique</span>
+            </label>
             {preason && (
               <div style={{ fontSize: 12.5, color: 'var(--warn)', marginBottom: 12 }}>
                 {preason}{/Clé Pexels/.test(preason) ? <span style={{ color: 'var(--tx-3)' }}> — ajoutez la variable <b>PEXELS_API_KEY</b> dans Vercel.</span> : null}
