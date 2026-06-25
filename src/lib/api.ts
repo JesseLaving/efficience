@@ -2,7 +2,21 @@
    In dev and on Vercel the API is same-origin (/api). For the static 42web
    copy, build with VITE_API_BASE=https://<vercel-app>/api so it calls the
    deployed functions (which send CORS *). */
-export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api';
+/* Résout l'URL de l'API. VITE_API_BASE (baké au build) a priorité. Sinon :
+   - localhost / *.vercel.app → same-origin '/api' (dev + déploiement Vercel) ;
+   - tout autre hôte (42web, GitHub Pages, domaine perso) → l'API Vercel déployée,
+     car ces copies statiques n'ont pas de fonctions serverless. Évite les 404. */
+function resolveApiBase(): string {
+  const env = import.meta.env.VITE_API_BASE as string | undefined;
+  if (env) return env;
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' || h.endsWith('.vercel.app')) return '/api';
+    return 'https://efficience.vercel.app/api';
+  }
+  return '/api';
+}
+export const API_BASE = resolveApiBase();
 
 export interface CompanyResult {
   nom: string | null; sigle: string | null; siren: string | null; siret: string | null;
