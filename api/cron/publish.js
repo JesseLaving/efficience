@@ -11,12 +11,19 @@ const getParam = (req, name) => {
   if (req.query && req.query[name] != null) return req.query[name];
   try { return new URL(req.url, 'http://x').searchParams.get(name); } catch { return null; }
 };
-const BASE = process.env.PUBLISH_BASE || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://efficience.vercel.app');
+// Alias public stable — PAS VERCEL_URL (URL de déploiement immuable, souvent
+// protégée → la self-requête y échouerait en renvoyant du HTML).
+const BASE = process.env.PUBLISH_BASE || 'https://efficience.vercel.app';
 
 async function postJson(path, body) {
-  const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const d = await r.json().catch(() => ({}));
-  return d || {};
+  try {
+    const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const txt = await r.text();
+    let d = {};
+    try { d = txt ? JSON.parse(txt) : {}; } catch { return { ok: false, reason: `HTTP ${r.status} (réponse non-JSON de ${path})` }; }
+    if (!r.ok && !d.reason && !d.error) d.reason = `HTTP ${r.status}`;
+    return d || {};
+  } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
 }
 
 async function publishOne(post) {
