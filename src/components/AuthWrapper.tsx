@@ -30,25 +30,38 @@ export function AuthWrapper() {
   const lastSaved = useRef<string>('');
 
   // Switch space: pull the space's stored data into localStorage and reload so
-  // every provider (which reads localStorage at boot) re-initialises. A brand
-  // new/empty space keeps the current localStorage and seeds itself on save.
+  // every provider (which reads localStorage at boot) re-initialises.
+  // Isolation rules:
+  //  - Existing target (has stored data) → replace localStorage with its snapshot.
+  //  - Empty target while another space was active → start CLEAN (don't leak the
+  //    previous space's networks/data into the new one).
+  //  - Empty target with no prior active space → keep current localStorage as the
+  //    seed (first space adopts the visitor's pre-login setup).
+  // Before swapping we flush the current space to the server so unsaved changes
+  // (e.g. a network connected seconds ago) are never lost.
   const activateSpace = useCallback(async (spaceId: number) => {
-    if (localStorage.getItem(ACTIVE_KEY) === String(spaceId)) {
+    const current = localStorage.getItem(ACTIVE_KEY);
+    if (current === String(spaceId)) {
       setActiveSpaceId(spaceId);
       return;
     }
     setActivating(true);
     try {
+      if (current) {
+        try { await saveSpaceData(Number(current), snapshot()); } catch (e) { console.error('Flush before switch failed:', e); }
+      }
       const data = await getSpaceData(spaceId) as Record<string, string>;
       const keys = Object.keys(data || {});
       if (keys.length > 0) {
-        // Existing space → replace localStorage with its snapshot.
         Object.keys(snapshot()).forEach((k) => localStorage.removeItem(k));
         for (const [k, v] of Object.entries(data)) {
           if (typeof v === 'string') localStorage.setItem(k, v);
         }
+      } else if (current) {
+        // Empty target, switching from another space → clean slate for isolation.
+        Object.keys(snapshot()).forEach((k) => localStorage.removeItem(k));
       }
-      // Empty space → keep current localStorage; it becomes this space's seed.
+      // (no prior active space + empty target) → keep current localStorage as seed.
       localStorage.setItem(ACTIVE_KEY, String(spaceId));
       window.location.reload();
     } catch (e) {
