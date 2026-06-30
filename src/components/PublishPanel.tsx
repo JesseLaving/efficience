@@ -57,7 +57,7 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
     // LinkedIn — member profile.
     if (canLinkedin && linkedinToken) {
       try {
-        const r = await publishLinkedInPost(linkedinToken, text.trim());
+        const r = await publishLinkedInPost(linkedinToken, text.trim(), photo);
         out.push({ id: 'linkedin', label: netName('linkedin'), status: r.ok ? 'ok' : 'error', reason: r.reason || r.error, url: r.url });
       } catch (e) { out.push({ id: 'linkedin', label: netName('linkedin'), status: 'error', reason: String((e as Error).message || e) }); }
     }

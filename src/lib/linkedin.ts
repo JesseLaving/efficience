@@ -21,9 +21,9 @@ export async function fetchLinkedInMe(token: string): Promise<LinkedInMe> {
 
 export interface LiPostResult { ok?: boolean; reason?: string; id?: string | null; url?: string | null; error?: string; }
 
-export async function publishLinkedInPost(token: string, text: string): Promise<LiPostResult> {
+export async function publishLinkedInPost(token: string, text: string, photoUrl?: string | null): Promise<LiPostResult> {
   const r = await fetch(`${API_BASE}/linkedin/post`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, text }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, text, photoUrl: photoUrl || undefined }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok && !d.error && !d.reason) return { error: `HTTP ${r.status}` };
