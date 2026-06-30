@@ -146,11 +146,26 @@ function NetCard({ net }: { net: Network }) {
 export function Connexion() {
   const { connectedCount, totalReach, connectAll, metaConnected, metaUser, metaStatus, metaError } = useConnections();
   const reachRef = useRef<HTMLSpanElement>(null);
+  const [guide, setGuide] = useState(() => localStorage.getItem('eff_guide_connect') === '1');
 
   useEffect(() => { countUp(reachRef.current, totalReach); }, [totalReach]);
 
+  // Une fois au moins un réseau connecté, le guide d'onboarding n'a plus lieu d'être.
+  useEffect(() => { if (connectedCount > 0 && guide) { localStorage.removeItem('eff_guide_connect'); setGuide(false); } }, [connectedCount, guide]);
+  const dismissGuide = () => { localStorage.removeItem('eff_guide_connect'); setGuide(false); };
+
   return (
     <section className="screen show anim">
+      {guide && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid var(--acc-soft, rgba(16,185,129,.35))', background: 'var(--acc-soft, rgba(16,185,129,.08))' }}>
+          <div className="ns-ic" style={{ flex: 'none' }}><Icon name="link" /></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Dernière étape de configuration</div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>Connectez votre page Facebook, votre compte Instagram rattaché et votre fiche Google pour publier directement depuis Efficience.</div>
+          </div>
+          <button className="btn ghost sm" onClick={dismissGuide}>Plus tard</button>
+        </div>
+      )}
       <div className="page-head">
         <div>
           <div className="eyebrow">Intégrations</div>

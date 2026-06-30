@@ -26,7 +26,7 @@ type Status = 'idle' | 'active' | 'done' | 'error';
 
 export function Onboarding() {
   const { show, setClient } = useEff();
-  const { applySiteBrand } = useBrand();
+  const { applySiteBrand, brandKit, setBrandKit } = useBrand();
   const prof0 = loadProfile();
   const [step, setStep] = useState<'form' | 'scan' | 'result'>('form');
   const [siret, setSiret] = useState(prof0?.siret || prof0?.siren || '');
@@ -35,6 +35,10 @@ export function Onboarding() {
   const [stSite, setStSite] = useState<Status>('idle');
   const [company, setCompany] = useState<CompanyResult | null>(null);
   const [site, setSite] = useState<SiteResponse | null>(null);
+  // Éditable à l'étape « result » : l'utilisateur confirme/ajuste son identité.
+  const [editName, setEditName] = useState('');
+  const [editSector, setEditSector] = useState('');
+  const [editAccent, setEditAccent] = useState<string | null>(null);
 
   const close = () => show('dashboard');
   useEffect(() => {
@@ -64,26 +68,36 @@ export function Onboarding() {
           || siteResult?.basic?.title
           || domainLabel(d);
         analyzeCompany(q)
-          .then((r) => { setCompany(r.results[0] || null); setStInsee(r.results[0] ? 'done' : 'error'); })
+          .then((r) => {
+            const c = r.results[0] || null;
+            setCompany(c); setStInsee(c ? 'done' : 'error');
+            // Pré-remplit les champs éditables avec les données réelles.
+            setEditName(c?.nom || siteResult?.brand?.name || siteResult?.basic?.ogTitle || siteResult?.basic?.title || domainLabel(d));
+            setEditSector(c?.naf?.libelle || '');
+            setEditAccent(siteResult?.brand?.accent || siteResult?.brand?.palette?.[0] || null);
+          })
           .catch(() => setStInsee('error'))
           .finally(finish);
       });
   };
 
   const apply = () => {
-    const prof = profileFromAnalysis(domain.trim(), company, site);
+    const base = profileFromAnalysis(domain.trim(), company, site);
+    const name = editName.trim() || base.name;
+    const prof = { ...base, name, initials: initialsFrom(name), sector: editSector.trim() || base.sector };
     saveProfile(prof);
     setStoredSiteUrl(domain.trim());
+    if (editAccent && brandKit) setBrandKit({ ...brandKit, accent: editAccent });
     setClient({ name: prof.name, initials: prof.initials });
     localStorage.setItem('eff_onboarded', '1');
-    close();
-    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b>`);
+    localStorage.setItem('eff_guide_connect', '1'); // bannière « connectez vos réseaux » sur l'écran Connexion
+    show('connexion');
+    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b> — dernière étape : connectez vos réseaux`);
   };
 
-  const stepLabel = step === 'form' ? 'Étape 1 / 3' : step === 'scan' ? 'Étape 2 / 3' : 'Étape 3 / 3';
+  const stepLabel = step === 'form' ? 'Étape 1 / 3 · Domaine' : step === 'scan' ? 'Étape 2 / 3 · Analyse' : 'Étape 3 / 3 · Confirmation';
   const ps = site?.pagespeed;
   const palette = (site?.brand?.palette && site.brand.palette.length ? site.brand.palette.slice(0, 4) : ['#00d992', '#10b981', '#0e4a39', '#101010']);
-  const logoInitials = initialsFrom(company?.nom || site?.brand?.name || domain || '—');
 
   return createPortal(
     <div className="onb">
@@ -144,14 +158,16 @@ export function Onboarding() {
         {step === 'result' && (
           <>
             <div className="onb-body">
-              <div className="onb-eyebrow" style={{ color: 'var(--acc)' }}>Profil reconstitué — données réelles</div>
-              {company ? (
-                <div className="disc-head" style={{ marginTop: 14 }}>
-                  <div className="dh-logo" style={{ background: 'linear-gradient(150deg,#0e4a39,#10b981 58%,#00d992)' }}>{logoInitials}</div>
-                  <div><div className="dh-n">{company.nom}{company.etatAdministratif === 'A' && <RawIcon svg={UI.check} className="vrf" />}</div>
-                    <div className="dh-meta">{[company.naf.libelle, company.codePostal && company.commune ? `${company.codePostal} ${company.commune}` : null, company.dateCreation ? 'créée en ' + company.dateCreation.slice(0, 4) : null].filter(Boolean).join(' · ')}</div></div>
+              <div className="onb-eyebrow" style={{ color: 'var(--acc)' }}>Confirmez votre profil — données réelles, modifiables</div>
+              <div className="disc-head" style={{ marginTop: 14, alignItems: 'flex-start' }}>
+                <div className="dh-logo" style={{ background: `linear-gradient(150deg,#0e4a39,${editAccent || '#10b981'} 58%,${editAccent || '#00d992'})` }}>{initialsFrom(editName || domain || '—')}</div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input className="inp" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nom de l’entreprise" style={{ fontWeight: 600 }} />
+                  <input className="inp" value={editSector} onChange={(e) => setEditSector(e.target.value)} placeholder="Secteur d’activité" style={{ fontSize: 13 }} />
+                  {company && <div className="dh-meta">{[company.codePostal && company.commune ? `${company.codePostal} ${company.commune}` : null, company.dateCreation ? 'créée en ' + company.dateCreation.slice(0, 4) : null].filter(Boolean).join(' · ')}</div>}
                 </div>
-              ) : <div style={{ color: 'var(--warn)', marginTop: 14 }}>Entreprise non identifiée automatiquement — renseignez le SIREN/SIRET pour l’associer, ou continuez : le site et la charte sont enregistrés.</div>}
+              </div>
+              {!company && <div style={{ color: 'var(--warn)', marginTop: 10, fontSize: 12.5 }}>Entreprise non identifiée automatiquement — renseignez le SIREN/SIRET pour l’associer, ou continuez : le nom, le site et la charte sont enregistrés.</div>}
 
               <div className="disc-grid">
                 <div className="disc-card">
@@ -184,7 +200,15 @@ export function Onboarding() {
 
                 <div className="disc-card">
                   <div className="dc-l"><Icon name="image" />Charte visuelle {site?.brand?.available && <span style={{ fontSize: 10.5, color: 'var(--acc)', fontWeight: 600 }}>· extraite du site</span>}</div>
-                  <div className="swatch-row">{palette.map((c) => <div className="swatch" style={{ background: c }} key={c}><span>{c}</span></div>)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--tx-3)', margin: '2px 0 6px' }}>Couleur d’accent — cliquez pour choisir</div>
+                  <div className="swatch-row">{palette.map((c) => (
+                    <button type="button" key={c} onClick={() => setEditAccent(c)} title={c}
+                      style={{ all: 'unset', cursor: 'pointer' }}>
+                      <div className="swatch" style={{ background: c, outline: editAccent === c ? '2px solid var(--acc)' : 'none', outlineOffset: 2, borderRadius: 6 }}>
+                        <span>{editAccent === c ? '✓' : c}</span>
+                      </div>
+                    </button>
+                  ))}</div>
                   {site?.brand?.fonts && site.brand.fonts.length > 0 && (
                     <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 6 }}>Police : {site.brand.fonts.slice(0, 2).join(', ')}</div>
                   )}
@@ -200,9 +224,9 @@ export function Onboarding() {
               </div>
             </div>
             <div className="onb-foot">
-              <span className="grow">Analyse complète disponible dans « Analyse entreprise &amp; site ».</span>
+              <span className="grow">Étape suivante : connecter vos réseaux sociaux pour publier.</span>
               <button className="btn outline" onClick={() => setStep('form')}>Recommencer</button>
-              <button className="btn acc" onClick={apply}><Icon name="rocket" />Personnaliser mon espace</button>
+              <button className="btn acc" onClick={apply}><Icon name="rocket" />Personnaliser &amp; connecter mes réseaux</button>
             </div>
           </>
         )}
