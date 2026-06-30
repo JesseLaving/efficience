@@ -63,7 +63,9 @@ async function callGemini(system, user, maxTokens) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.8 },
+      // Gemini 2.5 "thinking" consumes the output budget → disable it for copy,
+      // and keep a generous ceiling so the answer is never truncated.
+      generationConfig: { maxOutputTokens: Math.max(maxTokens, 1024), temperature: 0.8, thinkingConfig: { thinkingBudget: 0 } },
     }),
   });
   const d = await r.json().catch(() => ({}));
