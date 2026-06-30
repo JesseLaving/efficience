@@ -27,13 +27,22 @@ export default async function handler(req, res) {
     if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
     const author = `urn:li:person:${uj.sub}`;
 
-    // 2) LinkedIn UGC Posts v2 does not support image attachments via the API.
-    // Only text posts are supported. Image attachment would require complex upload flow
-    // that LinkedIn's UGC API v2 doesn't fully support for member profiles.
-    const shareContent = {
-      shareCommentary: { text: text.trim() },
+    // 2) LinkedIn UGC Posts v2 doesn't support image attachments.
+    // Workaround: create a preview page with og:image metadata at /api/preview.
+    // LinkedIn will scrape this page and create a rich card with the image.
+    let postText = text.trim();
+    let shareContent = {
+      shareCommentary: { text: postText },
       shareMediaCategory: 'NONE',
     };
+
+    if (photoUrl && photoUrl.trim()) {
+      const previewUrl = 'https://efficience.vercel.app/api/preview?' +
+        'img=' + encodeURIComponent(photoUrl) +
+        '&title=' + encodeURIComponent('Visuel Efficience');
+      postText = postText + '\n\n' + previewUrl;
+      shareContent.shareCommentary.text = postText;
+    }
 
     const payload = {
       author,
