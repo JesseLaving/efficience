@@ -27,21 +27,16 @@ export default async function handler(req, res) {
     if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
     const author = `urn:li:person:${uj.sub}`;
 
-    // 2) if photoUrl is provided, attach as ARTICLE with thumbnail
-    // LinkedIn UGC Posts can't directly embed images, but ARTICLE type with a link
-    // allows LinkedIn to scrape og:image from the page. For now, attach image URL directly.
-    const shareContent = {
-      shareCommentary: { text: text.trim() },
-      shareMediaCategory: (photoUrl && photoUrl.trim()) ? 'ARTICLE' : 'NONE',
-    };
+    // 2) LinkedIn UGC Posts v2 doesn't support direct image embedding.
+    // Include image URL in the text; LinkedIn will generate a preview automatically.
+    let postText = text.trim();
     if (photoUrl && photoUrl.trim()) {
-      shareContent.shareArticle = {
-        title: 'Visuel',
-        description: '',
-        thumbnail: photoUrl,
-        originalUrl: photoUrl,
-      };
+      postText = postText + '\n\n' + photoUrl;
     }
+    const shareContent = {
+      shareCommentary: { text: postText },
+      shareMediaCategory: 'NONE',
+    };
 
     const payload = {
       author,
