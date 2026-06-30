@@ -3,7 +3,7 @@ import { useEff } from '../state/EffContext';
 import { useCalendar } from '../state/CalendarContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
-import { BUSINESS } from '../lib/business';
+import { getBusiness } from '../lib/business';
 import { showToast } from '../lib/toast';
 import {
   DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planToCsv, type PlanItem,
@@ -29,7 +29,7 @@ function downloadCsv(items: PlanItem[]) {
 export function EditorialPlanning() {
   const { client, seedStudio } = useEff();
   const { addToCalendar } = useCalendar();
-  const [sector, setSector] = useState(BUSINESS.sector);
+  const [sector, setSector] = useState(() => getBusiness().sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
@@ -37,7 +37,8 @@ export function EditorialPlanning() {
   const weeks = DURATIONS.find((d) => d.key === durKey)?.weeks ?? 4;
 
   const generate = () => {
-    const items = generatePlan({ sector: sector.trim() || BUSINESS.sector, city: BUSINESS.city, weeks, perWeek });
+    const b = getBusiness();
+    const items = generatePlan({ sector: sector.trim() || b.sector, city: b.city, weeks, perWeek });
     setPlan(items);
     showToast(UI.check, `${items.length} publications proposées`);
   };
@@ -62,7 +63,7 @@ export function EditorialPlanning() {
   }, [plan]);
 
   // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
-  const aidaFor = (p: PlanItem) => buildAidaPost(p, { sector: sector.trim() || BUSINESS.sector, name: BUSINESS.name, city: BUSINESS.city });
+  const aidaFor = (p: PlanItem) => { const b = getBusiness(); return buildAidaPost(p, { sector: sector.trim() || b.sector, name: b.name, city: b.city }); };
   const compose = (p: PlanItem) => seedStudio(aidaFor(p));
   const schedule = (p: PlanItem) => addToCalendar({ dateTime: defaultDateTime(p.date, 9), text: aidaFor(p), networks: [p.network], photoUrl: null, pillar: p.pillar });
   const copyIdea = (p: PlanItem) => {

@@ -6,7 +6,7 @@ import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { countUp } from '../lib/countup';
-import { BUSINESS as BIZ } from '../lib/business';
+import { getBusiness } from '../lib/business';
 import type { MetaAccount } from '../lib/meta';
 import { LinkedInPostModal } from '../components/LinkedInPostModal';
 import { MetaPostModal } from '../components/MetaPostModal';
@@ -33,14 +33,14 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
       </div>
     );
   }
-  const name = acc?.name || BIZ.name;
+  const name = acc?.name || getBusiness().name;
   const handle = acc?.handle || 'Compte connecté';
   return (
     <div className="nc-profile">
       <div className="ava-wrap">
         {acc?.picture
           ? <img className="ava" src={acc.picture} alt="" style={{ width: 48, height: 48, objectFit: 'cover' }} />
-          : <div className="ava">{BIZ.initials}</div>}
+          : <div className="ava">{getBusiness().initials}</div>}
         <span className="pbadge"><Brand name={net.id as BrandName} /></span>
       </div>
       <div className="pi">

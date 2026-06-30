@@ -5,9 +5,9 @@ import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { segmentInfos, type SegmentInfo } from '../lib/population';
-import { BUSINESS as BIZ } from '../lib/business';
+import { getBusiness } from '../lib/business';
 
-const BUSINESS = { name: BIZ.name, email: BIZ.email, logo: `${import.meta.env.BASE_URL}assets/logo-white.png` };
+const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
 const TONES = ['Direct', 'Pédagogique', 'Expert', 'Chaleureux'];
 
@@ -228,18 +228,18 @@ export function Campagnes() {
               ) : (
                 <div className="ep-mail">
                   <div className="ep-from">
-                    <div className="ava">{BIZ.initials}</div>
-                    <div><div className="ef-t">{BUSINESS.name}</div><div className="ef-s">{BUSINESS.email}</div></div>
+                    <div className="ava">{getBusiness().initials}</div>
+                    <div><div className="ef-t">{getBusiness().name}</div><div className="ef-s">{getBusiness().email}</div></div>
                     <div className="ef-time">09:00</div>
                   </div>
                   <div className="ep-subj-line">{gen.subjects[subject]}</div>
                   <div style={{ fontSize: 12, color: '#999', padding: '4px 20px 0' }}>{gen.pre}</div>
-                  <div className="ep-head-band"><img src={BUSINESS.logo} alt="Efficience" /><div className="ehb-t">{gen.headline.replace('{prenom}', 'Prénom')}</div></div>
+                  <div className="ep-head-band"><img src={MAIL_LOGO} alt="Logo" /><div className="ehb-t">{gen.headline.replace('{prenom}', 'Prénom')}</div></div>
                   <TypedBody paras={gen.body} genId={genId} />
                   <div className="ep-cta-wrap"><a className="ep-cta" href="#">{gen.cta}</a></div>
                   <div className="ep-foot">
                     <div className="ef-social">{SOCIAL.map((s) => <span key={s}><Brand name={s} /></span>)}</div>
-                    {BUSINESS.name} · {BIZ.addressLine}<br />
+                    {getBusiness().name} · {getBusiness().addressLine}<br />
                     Vous recevez cet e-mail car vous êtes client·e. <a href="#">Se désinscrire</a> · <a href="#">Préférences</a><br />
                     <span style={{ opacity: 0.7 }}>Envoyé avec Efficience</span>
                   </div>

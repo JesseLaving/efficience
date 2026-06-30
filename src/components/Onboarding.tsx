@@ -5,21 +5,32 @@ import { useBrand } from '../state/BrandContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
-import { BUSINESS as BIZ } from '../lib/business';
+import { setStoredSiteUrl } from '../lib/brand';
+import { loadProfile, saveProfile, profileFromAnalysis, initialsFrom } from '../lib/profile';
 import { analyzeCompany, analyzeSite, type CompanyResult, type SiteResponse } from '../lib/api';
 
 const ndaFmt = (s: string | null) => (s && s.length === 11 ? `${s.slice(0, 2)} ${s.slice(2, 5)} ${s.slice(5, 8)} ${s.slice(8)}` : s);
 const scoreColor = (n: number | null | undefined) =>
   n == null ? 'var(--tx-3)' : n >= 90 ? 'var(--acc)' : n >= 50 ? 'var(--warn)' : 'var(--danger)';
 
+// Strip protocol/www and keep the second-level label, used as a fallback search
+// term when the user doesn't give a SIREN and the site exposes no clear name.
+function domainLabel(d: string): string {
+  try {
+    const host = d.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    return host.split('.')[0] || host;
+  } catch { return d; }
+}
+
 type Status = 'idle' | 'active' | 'done' | 'error';
 
 export function Onboarding() {
   const { show, setClient } = useEff();
   const { applySiteBrand } = useBrand();
+  const prof0 = loadProfile();
   const [step, setStep] = useState<'form' | 'scan' | 'result'>('form');
-  const [siret, setSiret] = useState('483591616');           // Efficience Marketing (EI) — real SIREN
-  const [domain, setDomain] = useState('efficiencemarketing.com');
+  const [siret, setSiret] = useState(prof0?.siret || prof0?.siren || '');
+  const [domain, setDomain] = useState(prof0?.domain || '');
   const [stInsee, setStInsee] = useState<Status>('idle');
   const [stSite, setStSite] = useState<Status>('idle');
   const [company, setCompany] = useState<CompanyResult | null>(null);
@@ -33,35 +44,46 @@ export function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // First connection: launch the real analysis automatically.
-  useEffect(() => {
-    if (!localStorage.getItem('eff_onboarded')) analyze();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Domain-first analysis: scan the site (brand + audit), then look up the legal
+  // entity by the discovered name (or the SIREN, if the user provided one).
   const analyze = () => {
+    const d = domain.trim();
+    if (!d) return;
     setStep('scan'); setCompany(null); setSite(null);
     setStInsee('active'); setStSite('active');
-    let done = 0; const tick = () => { if (++done === 2) setTimeout(() => setStep('result'), 350); };
-    analyzeCompany(siret.trim() || BIZ.name)
-      .then((r) => { setCompany(r.results[0] || null); setStInsee(r.results[0] ? 'done' : 'error'); })
-      .catch(() => setStInsee('error'))
-      .finally(tick);
-    analyzeSite(domain.trim() || BIZ.name)
-      .then((r) => { setSite(r); applySiteBrand(r); setStSite('done'); })
+    const finish = () => setTimeout(() => setStep('result'), 350);
+
+    let siteResult: SiteResponse | null = null;
+    analyzeSite(d)
+      .then((r) => { siteResult = r; setSite(r); applySiteBrand(r); setStSite('done'); })
       .catch(() => setStSite('error'))
-      .finally(tick);
+      .finally(() => {
+        const q = siret.trim()
+          || siteResult?.brand?.name
+          || siteResult?.basic?.ogTitle
+          || siteResult?.basic?.title
+          || domainLabel(d);
+        analyzeCompany(q)
+          .then((r) => { setCompany(r.results[0] || null); setStInsee(r.results[0] ? 'done' : 'error'); })
+          .catch(() => setStInsee('error'))
+          .finally(finish);
+      });
   };
 
   const apply = () => {
-    setClient({ name: BIZ.name, initials: BIZ.initials });
+    const prof = profileFromAnalysis(domain.trim(), company, site);
+    saveProfile(prof);
+    setStoredSiteUrl(domain.trim());
+    setClient({ name: prof.name, initials: prof.initials });
     localStorage.setItem('eff_onboarded', '1');
     close();
-    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${company?.nom || BIZ.name}</b>`);
+    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b>`);
   };
 
   const stepLabel = step === 'form' ? 'Étape 1 / 3' : step === 'scan' ? 'Étape 2 / 3' : 'Étape 3 / 3';
   const ps = site?.pagespeed;
+  const palette = (site?.brand?.palette && site.brand.palette.length ? site.brand.palette.slice(0, 4) : ['#00d992', '#10b981', '#0e4a39', '#101010']);
+  const logoInitials = initialsFrom(company?.nom || site?.brand?.name || domain || '—');
 
   return createPortal(
     <div className="onb">
@@ -76,19 +98,19 @@ export function Onboarding() {
           <>
             <div className="onb-body">
               <div className="onb-eyebrow">Configurateur</div>
-              <h2>Analysons votre entreprise en 30 secondes</h2>
-              <p className="onb-lead">Renseignez votre SIRET et votre site : Efficience récupère vos données légales officielles (INSEE / SIRENE) et réalise un audit technique de votre site (Lighthouse). Données réelles uniquement, rien n’est inventé.</p>
+              <h2>Renseignez le domaine de votre entreprise</h2>
+              <p className="onb-lead">À partir de votre nom de domaine, Efficience récupère automatiquement vos données légales officielles (SIREN/SIRET, secteur d’activité, zone géographique via INSEE/SIRENE), audite votre site (Lighthouse) et extrait votre charte graphique. Données réelles uniquement, rien n’est inventé.</p>
               <div className="onb-form">
-                <div className="field"><label className="field-lbl">Numéro SIREN / SIRET</label>
+                <div className="field"><label className="field-lbl">Nom de domaine <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <input className="inp" placeholder="monentreprise.fr" value={domain} onChange={(e) => setDomain(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') analyze(); }} /></div>
+                <div className="field"><label className="field-lbl">SIREN / SIRET <span style={{ color: 'var(--tx-3)' }}>(optionnel — détecté automatiquement)</span></label>
                   <input className="inp siret-inp" maxLength={17} placeholder="483 591 616" value={siret} onChange={(e) => setSiret(e.target.value)} /></div>
-                <div className="field"><label className="field-lbl">Site web</label>
-                  <input className="inp" placeholder="efficiencemarketing.com" value={domain} onChange={(e) => setDomain(e.target.value)} /></div>
               </div>
             </div>
             <div className="onb-foot">
               <span className="grow"><RawIcon svg={UI.shield} style={{ width: 13, height: 13, display: 'inline-grid', verticalAlign: -2, color: 'var(--acc)' }} /> Données publiques officielles · conforme RGPD</span>
-              <button className="btn outline" onClick={close}>Passer</button>
-              <button className="btn acc" onClick={analyze}><Icon name="search" />Analyser mon entreprise</button>
+              <button className="btn outline" onClick={close}>Plus tard</button>
+              <button className="btn acc" onClick={analyze} disabled={!domain.trim()}><Icon name="search" />Analyser mon entreprise</button>
             </div>
           </>
         )}
@@ -101,8 +123,8 @@ export function Onboarding() {
               <div className="scan-wrap" style={{ marginTop: 22 }}>
                 <div className="scan-list">
                   {([
-                    ['INSEE · base SIRENE', 'Identité légale, NAF, dirigeants', stInsee],
-                    ['Google Lighthouse', 'Audit performance, SEO & accessibilité du site', stSite],
+                    ['Site web · charte graphique', 'Couleurs, logo, polices, audit Lighthouse', stSite],
+                    ['INSEE · base SIRENE', 'SIREN/SIRET, secteur (NAF), zone géographique, dirigeants', stInsee],
                   ] as [string, string, Status][]).map(([label, sub, st]) => (
                     <div key={label} className={'scan-item' + (st === 'active' ? ' active' : st === 'done' ? ' done' : '')}>
                       <div className="si-logo"><RawIcon svg={st === 'error' ? UI.close : UI.shield} /></div>
@@ -125,11 +147,11 @@ export function Onboarding() {
               <div className="onb-eyebrow" style={{ color: 'var(--acc)' }}>Profil reconstitué — données réelles</div>
               {company ? (
                 <div className="disc-head" style={{ marginTop: 14 }}>
-                  <div className="dh-logo" style={{ background: 'linear-gradient(150deg,#0e4a39,#10b981 58%,#00d992)' }}>{BIZ.initials}</div>
+                  <div className="dh-logo" style={{ background: 'linear-gradient(150deg,#0e4a39,#10b981 58%,#00d992)' }}>{logoInitials}</div>
                   <div><div className="dh-n">{company.nom}{company.etatAdministratif === 'A' && <RawIcon svg={UI.check} className="vrf" />}</div>
                     <div className="dh-meta">{[company.naf.libelle, company.codePostal && company.commune ? `${company.codePostal} ${company.commune}` : null, company.dateCreation ? 'créée en ' + company.dateCreation.slice(0, 4) : null].filter(Boolean).join(' · ')}</div></div>
                 </div>
-              ) : <div style={{ color: 'var(--warn)', marginTop: 14 }}>Entreprise introuvable — vérifiez le SIREN/SIRET.</div>}
+              ) : <div style={{ color: 'var(--warn)', marginTop: 14 }}>Entreprise non identifiée automatiquement — renseignez le SIREN/SIRET pour l’associer, ou continuez : le site et la charte sont enregistrés.</div>}
 
               <div className="disc-grid">
                 <div className="disc-card">
@@ -161,16 +183,19 @@ export function Onboarding() {
                 </div>
 
                 <div className="disc-card">
-                  <div className="dc-l"><Icon name="image" />Charte visuelle</div>
-                  <div className="swatch-row">{['#00d992', '#10b981', '#0e4a39', '#101010'].map((c) => <div className="swatch" style={{ background: c }} key={c}><span>{c}</span></div>)}</div>
+                  <div className="dc-l"><Icon name="image" />Charte visuelle {site?.brand?.available && <span style={{ fontSize: 10.5, color: 'var(--acc)', fontWeight: 600 }}>· extraite du site</span>}</div>
+                  <div className="swatch-row">{palette.map((c) => <div className="swatch" style={{ background: c }} key={c}><span>{c}</span></div>)}</div>
+                  {site?.brand?.fonts && site.brand.fonts.length > 0 && (
+                    <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 6 }}>Police : {site.brand.fonts.slice(0, 2).join(', ')}</div>
+                  )}
                 </div>
 
                 <div className="disc-card">
                   <div className="dc-l"><Icon name="sparkles2" />Pré-configuration</div>
-                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Identité légale appliquée à l’espace</span></div>
-                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Audit du site enregistré</span></div>
+                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Identité légale &amp; secteur appliqués à l’espace</span></div>
+                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Charte graphique extraite &amp; enregistrée</span></div>
+                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Zone géographique &amp; audit du site enregistrés</span></div>
                   <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Réseaux sociaux : à connecter (étape suivante)</span></div>
-                  <div className="disc-info-row"><RawIcon svg={UI.check} style={{ width: 15, height: 15, color: 'var(--acc)' }} /><span>Ton de marque : direct &amp; pédagogique</span></div>
                 </div>
               </div>
             </div>

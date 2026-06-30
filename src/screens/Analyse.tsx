@@ -3,6 +3,7 @@ import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
 import { analyzeCompany, analyzeSite, type CompanyResult, type SiteResponse, type Audit } from '../lib/api';
+import { loadProfile } from '../lib/profile';
 
 const frDate = (s: string | null) => {
   if (!s) return '—';
@@ -39,8 +40,9 @@ function IssueList({ title, items }: { title: string; items: Audit[] }) {
 }
 
 export function Analyse() {
-  const [siret, setSiret] = useState('483591616'); // Efficience Marketing (EI) — real SIREN
-  const [site, setSite] = useState('efficiencemarketing.com');
+  const prof = loadProfile();
+  const [siret, setSiret] = useState(prof?.siret || prof?.siren || '');
+  const [site, setSite] = useState(prof?.domain || '');
   const [loading, setLoading] = useState(false);
   const [company, setCompany] = useState<{ total: number; result: CompanyResult } | null>(null);
   const [siteRes, setSiteRes] = useState<SiteResponse | null>(null);

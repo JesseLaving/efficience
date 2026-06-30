@@ -1,5 +1,5 @@
 import type { BrandKit } from './api';
-import { BUSINESS } from './business';
+import { getBusiness } from './business';
 
 export type { BrandKit };
 
@@ -14,7 +14,7 @@ export const setStoredSiteUrl = (u: string) => localStorage.setItem(URL_LS, u);
    donnée inventée, ce sont les couleurs réelles du produit Efficience. */
 export function fallbackBrand(): BrandKit {
   return {
-    name: BUSINESS.name,
+    name: getBusiness().name,
     themeColor: '#00d992',
     logo: null,
     fonts: ['Inter'],

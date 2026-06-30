@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useState } from 'react';
-import { BUSINESS } from '../lib/business';
+import { getBusiness } from '../lib/business';
 
 export type ScreenId =
   | 'dashboard' | 'connexion' | 'studio' | 'planning' | 'calendar'
@@ -36,7 +36,10 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const [screen, setScreen] = useState<ScreenId>(
     () => (localStorage.getItem(SCR_LS) as ScreenId) || 'connexion'
   );
-  const [client, setClient] = useState<ClientProfile>({ name: BUSINESS.name, initials: BUSINESS.initials });
+  const [client, setClient] = useState<ClientProfile>(() => {
+    const b = getBusiness();
+    return { name: b.name, initials: b.initials };
+  });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
   const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
   const [studioSeed, setStudioSeed] = useState<string | null>(null);

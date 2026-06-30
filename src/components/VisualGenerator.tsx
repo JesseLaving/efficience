@@ -5,7 +5,7 @@ import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { getStoredSiteUrl } from '../lib/brand';
-import { BUSINESS } from '../lib/business';
+import { getBusiness } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
@@ -41,7 +41,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [logoData, setLogoData] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // --- recherche de photos (Pexels) ---
-  const [pquery, setPquery] = useState(() => photoQueryFor(text, BUSINESS.sector));
+  const [pquery, setPquery] = useState(() => photoQueryFor(text, getBusiness().sector));
   const [photos, setPhotos] = useState<StockPhoto[]>([]);
   const [ploading, setPloading] = useState(false);
   const [preason, setPreason] = useState<string | null>(null);
