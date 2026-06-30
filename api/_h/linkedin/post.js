@@ -28,11 +28,10 @@ export default async function handler(req, res) {
     const author = `urn:li:person:${uj.sub}`;
 
     // 2) LinkedIn UGC Posts v2 doesn't support image attachments.
-    // Workaround: create a preview page with og:image metadata at /api/preview.
-    // LinkedIn will scrape this page and create a rich card with the image.
-    let postText = text.trim();
-    let shareContent = {
-      shareCommentary: { text: postText },
+    // Workaround: use ARTICLE type with preview page that has og:image metadata.
+    // LinkedIn will scrape the page and show the image as a rich preview.
+    const shareContent = {
+      shareCommentary: { text: text.trim() },
       shareMediaCategory: 'NONE',
     };
 
@@ -40,8 +39,11 @@ export default async function handler(req, res) {
       const previewUrl = 'https://efficience.vercel.app/api/preview?' +
         'img=' + encodeURIComponent(photoUrl) +
         '&title=' + encodeURIComponent('Visuel Efficience');
-      postText = postText + '\n\n' + previewUrl;
-      shareContent.shareCommentary.text = postText;
+
+      shareContent.shareMediaCategory = 'ARTICLE';
+      shareContent.shareArticle = {
+        source: previewUrl,
+      };
     }
 
     const payload = {
