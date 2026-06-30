@@ -27,68 +27,20 @@ export default async function handler(req, res) {
     if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
     const author = `urn:li:person:${uj.sub}`;
 
-    // 2) if photoUrl is provided, upload the image
-    let mediaElements = [];
-    if (photoUrl && photoUrl.trim()) {
-      try {
-        // 2a) Register upload
-        const regRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
-          body: JSON.stringify({
-            registerUploadRequest: {
-              recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-              owner: author,
-              serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
-            },
-          }),
-        });
-        const regData = await regRes.json().catch(() => ({}));
-        console.error('[LinkedIn registerUpload]', regRes.status, JSON.stringify(regData).slice(0, 500));
-        if (regData.value && regData.value.uploadMechanism && regData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']) {
-          const uploadReq = regData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'];
-          const assetUrn = regData.value.asset;
-          console.error('[LinkedIn upload] uploadUrl:', uploadReq.uploadUrl, 'asset:', assetUrn);
-
-          // 2b) Download image from photoUrl
-          const imgRes = await fetch(photoUrl);
-          if (!imgRes.ok) throw new Error(`Failed to fetch image: HTTP ${imgRes.status}`);
-          const imgBuffer = await imgRes.arrayBuffer();
-
-          // 2c) Upload to LinkedIn
-          const uploadRes = await fetch(uploadReq.uploadUrl, {
-            method: 'PUT',
-            headers: uploadReq.headers || { 'Content-Type': 'image/jpeg' },
-            body: imgBuffer,
-          });
-          if (!uploadRes.ok) throw new Error(`Image upload failed: HTTP ${uploadRes.status}`);
-
-          // 2d) Finalize upload
-          const finalRes = await fetch('https://api.linkedin.com/v2/assets?action=finalizeUpload', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
-            body: JSON.stringify({ finalizeUploadRequest: { upload: assetUrn } }),
-          });
-          if (finalRes.ok) {
-            mediaElements = [{
-              status: 'READY',
-              media: assetUrn,
-            }];
-          }
-        }
-      } catch (imgErr) {
-        // Silently skip image upload if it fails; post text-only instead
-        console.error('Image upload failed:', imgErr);
-      }
-    }
-
-    // 3) publish the UGC post
+    // 2) if photoUrl is provided, attach as ARTICLE with thumbnail
+    // LinkedIn UGC Posts can't directly embed images, but ARTICLE type with a link
+    // allows LinkedIn to scrape og:image from the page. For now, attach image URL directly.
     const shareContent = {
       shareCommentary: { text: text.trim() },
-      shareMediaCategory: mediaElements.length > 0 ? 'IMAGE' : 'NONE',
+      shareMediaCategory: (photoUrl && photoUrl.trim()) ? 'ARTICLE' : 'NONE',
     };
-    if (mediaElements.length > 0) {
-      shareContent.shareMedia = mediaElements;
+    if (photoUrl && photoUrl.trim()) {
+      shareContent.shareArticle = {
+        title: 'Visuel',
+        description: '',
+        thumbnail: photoUrl,
+        originalUrl: photoUrl,
+      };
     }
 
     const payload = {
