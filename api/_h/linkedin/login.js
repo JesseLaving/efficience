@@ -1,7 +1,7 @@
 /* LinkedIn OAuth — step 1: redirect to the consent screen.
-   Scopes: OpenID (identity) + w_member_social (post to the member's profile). */
+   Scopes: OpenID (identity) + w_member_social (post) + w_1d_messaging_state (digital media/images). */
 const REDIRECT = 'https://efficience.vercel.app/api/linkedin/callback';
-const SCOPE = 'openid profile email w_member_social';
+const SCOPE = 'openid profile email w_member_social w_1d_messaging_state';
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
