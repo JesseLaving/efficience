@@ -1,0 +1,201 @@
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+  position: relative;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.login-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 20% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  padding: 48px;
+  width: 100%;
+  max-width: 420px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: loginEnter 400ms ease-out forwards;
+}
+
+@keyframes loginEnter {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-screen.mounted .login-card {
+  animation: loginEnter 400ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card {
+    opacity: 1;
+    transform: translateY(0);
+    animation: none;
+  }
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 24px;
+  animation: logoScale 500ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 100ms;
+  opacity: 0;
+}
+
+@keyframes logoScale {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.login-content {
+  animation: contentFadeIn 500ms ease-out forwards;
+  animation-delay: 150ms;
+  opacity: 0;
+}
+
+@keyframes contentFadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+.login-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2937;
+  letter-spacing: -0.5px;
+}
+
+.login-subtitle {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.login-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 24px 0;
+}
+
+.login-description {
+  margin: 24px 0;
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.login-button {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-button.google {
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.login-button.google:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.login-button.google:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .login-button.google:hover {
+    background: #f9fafb;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.login-button:active {
+  transform: scale(0.97);
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}
+
+.login-footer {
+  margin: 24px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+/* Stagger animations for content */
+@media (prefers-reduced-motion: no-preference) {
+  .login-card {
+    animation: loginEnter 400ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  }
+
+  .login-logo {
+    animation: logoScale 500ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    animation-delay: 100ms;
+  }
+
+  .login-content {
+    animation: contentFadeIn 500ms ease-out forwards;
+    animation-delay: 150ms;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-card {
+    margin: 16px;
+    padding: 32px 24px;
+  }
+
+  .login-title {
+    font-size: 24px;
+  }
+
+  .login-button {
+    font-size: 13px;
+    padding: 11px 14px;
+  }
+}

@@ -9,14 +9,14 @@ import { EffProvider } from './state/EffContext';
 import { ConnectionsProvider } from './state/ConnectionsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { BrandProvider } from './state/BrandContext';
-import { App } from './App';
+import { AuthWrapper } from './components/AuthWrapper';
 
 createRoot(document.getElementById('root')!).render(
   <EffProvider>
     <ConnectionsProvider>
       <CalendarProvider>
         <BrandProvider>
-          <App />
+          <AuthWrapper />
         </BrandProvider>
       </CalendarProvider>
     </ConnectionsProvider>
