@@ -7,6 +7,7 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
 import { getBusiness } from '../lib/business';
+import { generatePost, improvePost } from '../lib/ai';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
 
@@ -128,9 +129,32 @@ export function Studio() {
     rd.readAsDataURL(f);
   };
 
-  const insert = (k: 'emoji' | 'hash' | 'ai') => {
-    const map = { emoji: ' ✦', hash: ' #formation #stratégiecommerciale', ai: ' Une méthode concrète, applicable dès le lendemain. On en parle ?' };
+  const insert = (k: 'emoji' | 'hash') => {
+    const map = { emoji: ' ✦', hash: ' #formation #stratégiecommerciale' };
     setText((t) => t + map[k]);
+  };
+
+  // Rédaction / amélioration par IA (Claude), avec repli propre si la clé manque.
+  const [aiBusy, setAiBusy] = useState(false);
+  const runAi = async (mode: 'post' | 'improve') => {
+    const b = getBusiness();
+    const brief = text.trim();
+    if (mode === 'improve' && !brief) { showToast(UI.close, 'Écrivez d’abord un texte à améliorer.'); return; }
+    setAiBusy(true);
+    try {
+      const ctx = { name: b.name, sector: b.sector, city: b.city, network: active ? netName(active) : undefined };
+      const res = mode === 'improve'
+        ? await improvePost(brief, ctx)
+        : await generatePost(brief || `Une publication pour ${b.name} — secteur ${b.sector}`, ctx);
+      if (res.available && res.text) {
+        setText(res.text);
+        showToast(UI.check, mode === 'improve' ? 'Texte amélioré par IA' : 'Texte rédigé par IA');
+      } else {
+        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'}`);
+      }
+    } catch (e) {
+      showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
+    } finally { setAiBusy(false); }
   };
 
   const finish = (label: string) => {
@@ -202,7 +226,8 @@ export function Studio() {
                     <div className="cmp-tools">
                       <button title="Emoji" onClick={() => insert('emoji')}>😊</button>
                       <button title="Hashtag" onClick={() => insert('hash')}><Icon name="tag" /></button>
-                      <button title="Suggestion IA" onClick={() => insert('ai')}><Icon name="wand" /></button>
+                      <button title="Rédiger par IA (Claude)" disabled={aiBusy} onClick={() => runAi('post')}>{aiBusy ? <span className="spin lt" /> : <Icon name="wand" />}</button>
+                      <button title="Améliorer le texte par IA" disabled={aiBusy} onClick={() => runAi('improve')}><Icon name="sparkles2" /></button>
                     </div>
                   </div>
                 </div>

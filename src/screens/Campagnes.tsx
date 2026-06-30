@@ -6,6 +6,7 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { segmentInfos, type SegmentInfo } from '../lib/population';
 import { getBusiness } from '../lib/business';
+import { generateEmail } from '../lib/ai';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
@@ -106,16 +107,36 @@ export function Campagnes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignSeed]);
 
-  const doGenerate = () => {
+  const doGenerate = async () => {
     const p = prompt.trim() || 'Partager une actualité utile à mes contacts cette semaine';
     if (!prompt.trim()) setPrompt(p);
     setGenerating(true); setGen(null);
-    setTimeout(() => {
-      setGenerating(false);
+    // Vraie IA Claude en priorité ; repli sur le moteur de modèles si la clé manque.
+    const b = getBusiness();
+    try {
+      const res = await generateEmail(p, { name: b.name, sector: b.sector, city: b.city, audience: seg.name, tone });
+      if (res.available && res.email && (res.email.subject || res.email.body)) {
+        const e = res.email;
+        setGen({
+          subjects: [e.subject || generate(p, tone, seg.name).subjects[0]],
+          pre: e.preheader || '',
+          headline: e.subject || '',
+          body: (e.body || '').split(/\n+/).map((s) => s.trim()).filter(Boolean),
+          cta: e.cta || 'En savoir plus',
+          segName: seg.name,
+          pct: num(p),
+        });
+      } else {
+        setGen(generate(p, tone, seg.name));
+        if (res.reason) showToast(UI.wand, `Modèle utilisé (IA indisponible : ${res.reason})`);
+      }
+    } catch {
       setGen(generate(p, tone, seg.name));
+    } finally {
+      setGenerating(false);
       setSubject(0);
       setGenId((g) => g + 1);
-    }, 1500);
+    }
   };
 
   const finish = (status: 'sent' | 'sched') => {
