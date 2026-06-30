@@ -1,7 +1,9 @@
 /* LinkedIn OAuth — step 1: redirect to the consent screen.
-   Scopes: OpenID (identity) + w_member_social (post) + w_1d_messaging_state (digital media/images). */
+   Scopes: OpenID (identity) + w_member_social (post to the member's profile).
+   Note: LinkedIn UGC Posts API v2 does not support native image uploads.
+   Images must be added manually or via web link previews. */
 const REDIRECT = 'https://efficience.vercel.app/api/linkedin/callback';
-const SCOPE = 'openid profile email w_member_social w_1d_messaging_state';
+const SCOPE = 'openid profile email w_member_social';
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];

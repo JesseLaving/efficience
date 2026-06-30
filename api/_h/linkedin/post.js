@@ -27,14 +27,11 @@ export default async function handler(req, res) {
     if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
     const author = `urn:li:person:${uj.sub}`;
 
-    // 2) LinkedIn UGC Posts v2 doesn't support direct image embedding.
-    // Include image URL in the text; LinkedIn will generate a preview automatically.
-    let postText = text.trim();
-    if (photoUrl && photoUrl.trim()) {
-      postText = postText + '\n\n' + photoUrl;
-    }
+    // 2) LinkedIn UGC Posts v2 does not support image attachments via the API.
+    // Only text posts are supported. Image attachment would require complex upload flow
+    // that LinkedIn's UGC API v2 doesn't fully support for member profiles.
     const shareContent = {
-      shareCommentary: { text: postText },
+      shareCommentary: { text: text.trim() },
       shareMediaCategory: 'NONE',
     };
 
