@@ -44,9 +44,11 @@ export default async function handler(req, res) {
           }),
         });
         const regData = await regRes.json().catch(() => ({}));
+        console.error('[LinkedIn registerUpload]', regRes.status, JSON.stringify(regData).slice(0, 500));
         if (regData.value && regData.value.uploadMechanism && regData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']) {
           const uploadReq = regData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'];
           const assetUrn = regData.value.asset;
+          console.error('[LinkedIn upload] uploadUrl:', uploadReq.uploadUrl, 'asset:', assetUrn);
 
           // 2b) Download image from photoUrl
           const imgRes = await fetch(photoUrl);
