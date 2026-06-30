@@ -57,7 +57,7 @@ function userPrompt(kind, brief, ctx) {
 // ---- providers: each returns the generated text or throws ----
 async function callGemini(system, user, maxTokens) {
   const key = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
