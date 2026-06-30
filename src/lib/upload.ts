@@ -27,8 +27,10 @@ function loadImg(src: string, cors: boolean): Promise<HTMLImageElement> {
    recadré au ratio cible, avec un léger dégradé bas pour la lisibilité du logo. */
 export async function brandPhoto(opts: {
   photoUrl: string; ratio: string; logoData?: string | null; brandName?: string; accent?: string;
+  /** true quand l'URL est déjà servie en CORS (ex. image IA) → pas de proxy Pexels. */
+  direct?: boolean;
 }): Promise<string> {
-  const { photoUrl, ratio, logoData, brandName, accent } = opts;
+  const { photoUrl, ratio, logoData, brandName, accent, direct } = opts;
   const [rw, rh] = (ratio || '1:1').split(':').map(Number);
   const W = 1080;
   const H = rw && rh ? Math.round((W * rh) / rw) : 1080;
@@ -37,7 +39,7 @@ export async function brandPhoto(opts: {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas');
 
-  const photo = await loadImg(proxiedPhoto(photoUrl), true);
+  const photo = await loadImg(direct ? photoUrl : proxiedPhoto(photoUrl), true);
   // cover-fit
   const s = Math.max(W / photo.width, H / photo.height);
   const dw = photo.width * s, dh = photo.height * s;

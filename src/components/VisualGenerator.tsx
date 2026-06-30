@@ -9,6 +9,7 @@ import { getBusiness } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
+import { aiImageUrl, aiImagePrompt } from '../lib/ai';
 import { brandPhoto, uploadImage } from '../lib/upload';
 
 interface Props {
@@ -34,7 +35,7 @@ async function toDataUrl(url: string): Promise<string | null> {
 export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const { brandKit, brandStatus, setBrandKit, refreshBrand } = useBrand();
   const [kit, setKit] = useState<BrandKit>(brandKit);
-  const [mode, setMode] = useState<'template' | 'photo'>('template');
+  const [mode, setMode] = useState<'template' | 'photo' | 'ai'>('template');
   const [template, setTemplate] = useState('citation');
   const [title, setTitle] = useState('À la une');
   const [siteUrl, setSiteUrl] = useState(getStoredSiteUrl());
@@ -47,6 +48,17 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [preason, setPreason] = useState<string | null>(null);
   const [selPhoto, setSelPhoto] = useState<StockPhoto | null>(null);
   const [brandPhotoOn, setBrandPhotoOn] = useState(true);
+  // --- génération d'image par IA (Pollinations, gratuit) ---
+  const [aiPrompt, setAiPrompt] = useState(() => aiImagePrompt(text, getBusiness().sector));
+  const [aiUrl, setAiUrl] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const generateAi = () => {
+    if (!aiPrompt.trim()) return;
+    setAiLoading(true);
+    setAiUrl(aiImageUrl(aiPrompt.trim(), ratio));
+  };
+  const switchToAi = () => { setMode('ai'); if (!aiUrl) generateAi(); };
 
   const searchPhotos = async (q: string) => {
     if (!q.trim()) return;
@@ -99,6 +111,25 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   });
 
   const use = async () => {
+    if (mode === 'ai') {
+      if (!aiUrl) { showToast(UI.close, 'Générez d’abord une image'); return; }
+      setBusy(true);
+      try {
+        const dataUrl = brandPhotoOn
+          ? await brandPhoto({ photoUrl: aiUrl, ratio, direct: true, logoData, brandName: kit.name || undefined, accent: kit.accent || undefined })
+          : await toDataUrl(aiUrl);
+        if (dataUrl) {
+          const up = await uploadImage(dataUrl);
+          if (up.ok && up.url) { setBusy(false); onUse(up.url, 0, true); showToast(UI.check, 'Image IA ajoutée (URL publique)'); onClose(); return; }
+        }
+        // Repli : l'URL Pollinations est publique et déterministe → publiable.
+        setBusy(false);
+        onUse(aiUrl, 0, true); showToast(UI.check, 'Image IA ajoutée'); onClose(); return;
+      } catch {
+        setBusy(false);
+        onUse(aiUrl, 0, true); showToast(UI.close, 'Compositing impossible — image brute utilisée.'); onClose(); return;
+      }
+    }
     if (mode === 'photo') {
       if (!selPhoto) { showToast(UI.close, 'Sélectionnez une photo'); return; }
       if (brandPhotoOn) {
@@ -134,6 +165,10 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   };
 
   const download = async () => {
+    if (mode === 'ai') {
+      if (aiUrl) window.open(aiUrl, '_blank', 'noopener');
+      return;
+    }
     if (mode === 'photo') {
       if (selPhoto) window.open(selPhoto.url, '_blank', 'noopener');
       return;
@@ -167,6 +202,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button onClick={() => setMode('template')} style={modeBtn(mode === 'template')}><RawIcon svg={UI.sparkles2} style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Modèle de marque</button>
             <button onClick={switchToPhoto} style={modeBtn(mode === 'photo')}><RawIcon svg={UI.image} style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Photo du sujet</button>
+            <button onClick={switchToAi} style={modeBtn(mode === 'ai')}><RawIcon svg={UI.wand} style={{ width: 14, height: 14, display: 'inline-grid', verticalAlign: -2 }} /> Image IA</button>
           </div>
           {mode === 'template' ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
@@ -243,12 +279,12 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               <input className="inp" value={kit.fonts[0] || ''} onChange={(e) => patch({ fonts: [e.target.value, ...kit.fonts.slice(1)] })} placeholder="Inter" />
             </div>
 
-            <button className="btn outline" disabled title="Génération d’images par IA — à venir (clé API requise)">
-              <Icon name="wand" />Générer par IA — bientôt
+            <button className="btn outline" onClick={switchToAi} title="Générer une image par IA (gratuit)">
+              <Icon name="wand" />Générer une image par IA
             </button>
           </div>
           </div>
-          ) : (
+          ) : mode === 'photo' ? (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <input className="inp" value={pquery} onChange={(e) => setPquery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') searchPhotos(pquery); }} placeholder="Rechercher une photo (ex : formation réunion)" />
@@ -279,15 +315,42 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               </div>
             )}
           </div>
+          ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
+            {/* ---- aperçu image IA ---- */}
+            <div>
+              <div style={{ borderRadius: 'var(--r-card)', overflow: 'hidden', border: '1px solid var(--line)', maxWidth: 420, margin: '0 auto', aspectRatio: ratio.replace(':', '/'), background: 'var(--canvas-soft)', display: 'grid', placeItems: 'center', position: 'relative' }}>
+                {aiUrl ? (
+                  <img src={aiUrl} alt="" onLoad={() => setAiLoading(false)} onError={() => setAiLoading(false)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                ) : <div style={{ fontSize: 12.5, color: 'var(--tx-3)', padding: 20, textAlign: 'center' }}>Décrivez l’image puis générez.</div>}
+                {aiLoading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.25)' }}><span className="spin" /></div>}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>Image générée par IA (Flux · gratuit). Aucune donnée chiffrée, illustration uniquement.</div>
+            </div>
+            {/* ---- prompt ---- */}
+            <div style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
+              <div className="field">
+                <label className="field-lbl">Décrivez l’image</label>
+                <textarea className="inp" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={5} placeholder="Ex : photographie d’un atelier de formation lumineux, style moderne" style={{ resize: 'vertical', minHeight: 96 }} />
+              </div>
+              <button className="btn acc" disabled={aiLoading || !aiPrompt.trim()} onClick={generateAi}>{aiLoading ? <span className="spin" /> : <Icon name="wand" />}{aiUrl ? 'Régénérer' : 'Générer l’image'}</button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-2)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={brandPhotoOn} onChange={(e) => setBrandPhotoOn(e.target.checked)} style={{ accentColor: 'var(--acc)' }} />
+                Incruster mon logo {kit.logo ? '' : '(nom de marque)'} sur l’image
+              </label>
+            </div>
+          </div>
           )}
         </div>
 
         <div className="kmodal-foot">
           <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
-            {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.' : 'Respecte vos couleurs, logo, police et nom de marque.'}
+            {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.'
+              : mode === 'ai' ? 'Image IA gratuite (Flux) — hébergée en URL publique, publiable.'
+              : 'Respecte vos couleurs, logo, police et nom de marque.'}
           </span>
-          <button className="btn outline" onClick={download} disabled={mode === 'photo' && !selPhoto}><Icon name="download" />Télécharger</button>
-          <button className="btn acc" disabled={busy || (mode === 'photo' && !selPhoto)} onClick={use}>{busy ? <span className="spin" /> : <Icon name="check" />}Utiliser comme visuel</button>
+          <button className="btn outline" onClick={download} disabled={(mode === 'photo' && !selPhoto) || (mode === 'ai' && !aiUrl)}><Icon name="download" />Télécharger</button>
+          <button className="btn acc" disabled={busy || (mode === 'photo' && !selPhoto) || (mode === 'ai' && !aiUrl)} onClick={use}>{busy ? <span className="spin" /> : <Icon name="check" />}Utiliser comme visuel</button>
         </div>
       </div>
     </div>,

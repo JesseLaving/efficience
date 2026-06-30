@@ -37,3 +37,23 @@ export function improvePost(text: string, context: AiContext = {}): Promise<Post
 export function generateEmail(objective: string, context: AiContext = {}): Promise<EmailResult> {
   return post('email', objective, context);
 }
+
+/* Génération d'image par IA — Pollinations (gratuit, sans clé, CORS *, modèle
+   Flux). L'URL est déterministe (prompt+seed) et publique → directement
+   affichable, compositable (canvas) et publiable. */
+export function aiImageUrl(prompt: string, ratio = '1:1', seed?: number): string {
+  const [rw, rh] = (ratio || '1:1').split(':').map(Number);
+  const base = 1024;
+  const W = base;
+  const H = rw && rh ? Math.round((base * rh) / rw) : base;
+  const s = seed ?? Math.floor(Math.random() * 1e6);
+  const p = encodeURIComponent(prompt.slice(0, 400));
+  return `https://image.pollinations.ai/prompt/${p}?width=${W}&height=${H}&nologo=true&model=flux&seed=${s}`;
+}
+
+/* Prompt d'image par défaut, dérivé du sujet de la publication + du secteur. */
+export function aiImagePrompt(subject: string, sector?: string): string {
+  const subj = (subject || '').replace(/[#@\n]/g, ' ').trim().slice(0, 160) || 'communication d’entreprise';
+  const sec = sector ? `, secteur ${sector}` : '';
+  return `Photographie professionnelle illustrant : ${subj}${sec}. Lumineuse, moderne, style corporate épuré, haute qualité, sans texte.`;
+}
