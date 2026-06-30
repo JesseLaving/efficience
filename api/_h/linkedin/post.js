@@ -56,7 +56,8 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, id, url: id ? `https://www.linkedin.com/feed/update/${id}` : null });
     }
     const err = await r.json().catch(() => ({}));
-    return json(res, 200, { ok: false, reason: err.message || `HTTP ${r.status}` });
+    console.error('[LinkedIn UGC Post Error]', r.status, JSON.stringify(err));
+    return json(res, 200, { ok: false, reason: err.message || err.detail?.['com.linkedin.common.error.ErrorInfo']?.[0]?.message || `HTTP ${r.status}` });
   } catch (e) {
     return json(res, 500, { error: 'Échec publication LinkedIn', detail: String(e && e.message || e) });
   }
