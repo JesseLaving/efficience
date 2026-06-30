@@ -1,9 +1,9 @@
-/* Authentication and space management. */
+/* Authentication and space management (client side). */
 
-export interface User {
-  id: number;
-  email: string;
-  name: string;
+export interface AuthUser {
+  userId: number;
+  email?: string;
+  name?: string;
 }
 
 export interface Space {
@@ -13,24 +13,37 @@ export interface Space {
   updated_at: string;
 }
 
-export async function loginWithGoogle() {
-  window.location.href = '/api/auth/google/login';
+export function loginWithGoogle() {
+  const ret = window.location.origin + window.location.pathname;
+  window.location.href = `/api/google/authlogin?return=${encodeURIComponent(ret)}`;
 }
 
 export async function logout() {
-  document.cookie = 'session=; Path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;';
+  try { await fetch('/api/spaces/logout', { method: 'POST' }); } catch { /* ignore */ }
   window.location.href = '/';
 }
 
+/** Returns the signed-in user, or null if not authenticated. Authoritative
+ *  (server verifies the signed cookie) — don't trust the cookie client-side. */
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const r = await fetch('/api/spaces/me');
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function getSpaces(): Promise<Space[]> {
-  const r = await fetch('/api/spaces');
+  const r = await fetch('/api/spaces/list');
   if (!r.ok) throw new Error('Failed to fetch spaces');
   const { spaces } = await r.json();
   return spaces;
 }
 
 export async function createSpace(name: string): Promise<Space> {
-  const r = await fetch('/api/spaces', {
+  const r = await fetch('/api/spaces/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -39,22 +52,17 @@ export async function createSpace(name: string): Promise<Space> {
   return r.json();
 }
 
-export async function getSpaceData(spaceId: number): Promise<Record<string, any>> {
+export async function getSpaceData(spaceId: number): Promise<Record<string, unknown>> {
   const r = await fetch(`/api/spaces/data?spaceId=${spaceId}`);
   if (!r.ok) throw new Error('Failed to fetch space data');
   return r.json();
 }
 
-export async function saveSpaceData(spaceId: number, data: Record<string, any>): Promise<void> {
+export async function saveSpaceData(spaceId: number, data: Record<string, unknown>): Promise<void> {
   const r = await fetch(`/api/spaces/data?spaceId=${spaceId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data }),
   });
   if (!r.ok) throw new Error('Failed to save space data');
-}
-
-export function isAuthenticated(): boolean {
-  if (typeof document === 'undefined') return false;
-  return document.cookie.includes('session=');
 }

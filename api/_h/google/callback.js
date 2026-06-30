@@ -1,7 +1,14 @@
 /* Google OAuth — step 2: exchange the code for tokens (server-side, with the
    client secret) and bounce back to the app with the access + refresh tokens in
    the URL hash (fragments are not sent to servers). Tokens live in the user's
-   browser only — no shared server store. */
+   browser only — no shared server store.
+
+   Two flows share this callback (same registered redirect URI):
+   - Business Profile connect (default): bounce tokens to the URL hash.
+   - Identity login (state.kind === 'auth'): upsert the user, set a signed
+     session cookie, and redirect to the app. */
+import { query, makeSession } from '../db.js';
+
 const REDIRECT = 'https://efficience.vercel.app/api/google/callback';
 
 function getParam(req, name) {
@@ -16,13 +23,52 @@ function bounce(res, ret, params) {
   res.end();
 }
 
+function redirect(res, location) {
+  res.statusCode = 302;
+  res.setHeader('Location', location);
+  res.end();
+}
+
+async function authCallback(res, ret, code) {
+  try {
+    const body = new URLSearchParams({
+      code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirect_uri: REDIRECT, grant_type: 'authorization_code',
+    });
+    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const d = await r.json();
+    if (d.error || !d.access_token) return redirect(res, `${ret}#auth_error=${encodeURIComponent(d.error_description || d.error || 'token')}`);
+
+    const ir = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${d.access_token}` } });
+    const info = await ir.json();
+    if (!info.id) return redirect(res, `${ret}#auth_error=userinfo`);
+
+    const up = await query(
+      `INSERT INTO app_users (google_id, email, name) VALUES ($1, $2, $3)
+       ON CONFLICT (google_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name
+       RETURNING id, email, name`,
+      [info.id, info.email || null, info.name || null]
+    );
+    const user = up.rows[0];
+
+    const token = makeSession({ userId: user.id, email: user.email, name: user.name });
+    res.setHeader('Set-Cookie', `session=${token}; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`);
+    return redirect(res, ret);
+  } catch (e) {
+    return redirect(res, `${ret}#auth_error=${encodeURIComponent(String(e && e.message || e))}`);
+  }
+}
+
 export default async function handler(req, res) {
   let ret = 'https://efficience.vercel.app/';
-  try { const s = JSON.parse(Buffer.from(getParam(req, 'state') || '', 'base64url').toString()); if (s.ret) ret = s.ret; } catch { /* ignore */ }
+  let kind = null;
+  try { const s = JSON.parse(Buffer.from(getParam(req, 'state') || '', 'base64url').toString()); if (s.ret) ret = s.ret; if (s.kind) kind = s.kind; } catch { /* ignore */ }
 
   const error = getParam(req, 'error');
   const code = getParam(req, 'code');
   if (error || !code) return bounce(res, ret, { google_error: error || 'Autorisation annulée' });
+
+  if (kind === 'auth') return authCallback(res, ret, code);
 
   try {
     const body = new URLSearchParams({

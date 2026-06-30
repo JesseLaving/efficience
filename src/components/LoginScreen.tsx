@@ -13,7 +13,7 @@ export function LoginScreen() {
     <div className={`login-screen ${mounted ? 'mounted' : ''}`}>
       <div className="login-card">
         <div className="login-logo">
-          <img src="/logo-green.png" alt="Efficience" style={{ width: 48, height: 48 }} />
+          <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" style={{ width: 48, height: 48 }} />
         </div>
 
         <div className="login-content">

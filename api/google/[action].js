@@ -1,11 +1,12 @@
 /* Single Vercel function routing all /api/google/* actions. */
 import login from '../_h/google/login.js';
+import authlogin from '../_h/google/authlogin.js';
 import callback from '../_h/google/callback.js';
 import refresh from '../_h/google/refresh.js';
 import accounts from '../_h/google/accounts.js';
 import post from '../_h/google/post.js';
 
-const MAP = { login, callback, refresh, accounts, post };
+const MAP = { login, authlogin, callback, refresh, accounts, post };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;
