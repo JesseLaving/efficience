@@ -4,9 +4,10 @@ import callback from '../_h/tiktok/callback.js';
 import userinfo from '../_h/tiktok/userinfo.js';
 import creatorinfo from '../_h/tiktok/creatorinfo.js';
 import videoinit from '../_h/tiktok/videoinit.js';
+import videolist from '../_h/tiktok/videolist.js';
 import refresh from '../_h/tiktok/refresh.js';
 
-const MAP = { login, callback, userinfo, creatorinfo, videoinit, refresh };
+const MAP = { login, callback, userinfo, creatorinfo, videoinit, videolist, refresh };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;

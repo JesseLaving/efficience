@@ -18,6 +18,7 @@ export function TiktokPostModal({ onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
+  const [mode, setMode] = useState<'direct' | 'inbox'>('direct');
   const [creator, setCreator] = useState<TiktokCreatorInfo | null>(null);
   const [privacy, setPrivacy] = useState('');
   const [loadingCreator, setLoadingCreator] = useState(true);
@@ -48,21 +49,21 @@ export function TiktokPostModal({ onClose }: Props) {
   const pickFile = (f: File | null) => {
     setErrorMsg('');
     if (f && f.size > MAX_MB * 1024 * 1024) { setErrorMsg(`Fichier trop volumineux (> ${MAX_MB} Mo).`); return; }
-    if (creator?.maxDurationSec) { /* durée non vérifiable côté client sans décodage vidéo — limite affichée à titre indicatif */ }
     setFile(f);
   };
 
   const publish = async () => {
-    if (!tiktokToken || !file || !privacy) return;
+    if (!tiktokToken || !file) return;
+    if (mode === 'direct' && !privacy) return;
     setBusy(true); setErrorMsg(''); setProgress(0);
     try {
       const init = await initTiktokPost(tiktokToken, {
-        title: title.trim(), privacyLevel: privacy,
+        title: title.trim(), privacyLevel: privacy, mode,
         disableComment: creator?.commentDisabled, disableDuet: creator?.duetDisabled, disableStitch: creator?.stitchDisabled,
       }, file);
       if (!init.ok || !init.uploadUrl) { setErrorMsg(init.reason || 'Échec de l’initialisation de l’envoi.'); setBusy(false); return; }
       const res = await uploadTiktokVideo(init.uploadUrl, file, setProgress);
-      if (res.ok) { setDone(true); showToast(UI.check, 'Vidéo envoyée sur TikTok'); }
+      if (res.ok) { setDone(true); showToast(UI.check, mode === 'direct' ? 'Vidéo envoyée sur TikTok' : 'Vidéo envoyée dans votre boîte de réception TikTok'); }
       else setErrorMsg(res.reason || 'Échec de l’envoi de la vidéo.');
     } catch (e) {
       setErrorMsg(String((e as Error).message || e));
@@ -70,7 +71,11 @@ export function TiktokPostModal({ onClose }: Props) {
     setBusy(false);
   };
 
-  const canSend = !!file && !!privacy && !busy && !done && !loadingCreator && !creatorError;
+  // Le mode brouillon (inbox) ne dépend pas de creator_info (pas de
+  // privacy_level à choisir) : il reste disponible même si cet appel échoue,
+  // utile en secours si Direct Post n'est pas encore approuvé par TikTok.
+  const directBlocked = loadingCreator || !!creatorError;
+  const canSend = !!file && !busy && !done && (mode === 'inbox' || (!directBlocked && !!privacy));
 
   return createPortal(
     <div className="kmodal" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
@@ -82,11 +87,20 @@ export function TiktokPostModal({ onClose }: Props) {
         </div>
 
         <div className="kmodal-body">
-          {loadingCreator ? (
+          <div className="field">
+            <label className="field-lbl">Mode de publication</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={'fmt-chip' + (mode === 'direct' ? ' on' : '')} style={{ cursor: busy ? 'default' : 'pointer' }} disabled={busy} onClick={() => setMode('direct')}>Publier directement</button>
+              <button className={'fmt-chip' + (mode === 'inbox' ? ' on' : '')} style={{ cursor: busy ? 'default' : 'pointer' }} disabled={busy} onClick={() => setMode('inbox')}>Envoyer en brouillon</button>
+            </div>
+            {mode === 'inbox' && <div className="counter" style={{ marginTop: 6 }}>La vidéo arrive dans votre boîte de réception TikTok — vous la publiez vous-même depuis l’app.</div>}
+          </div>
+
+          {mode === 'direct' && loadingCreator ? (
             <div className="ai-thinking"><span className="spin lt" /><div>Récupération des options de publication…</div></div>
-          ) : creatorError ? (
+          ) : mode === 'direct' && creatorError ? (
             <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>
-              {creatorError}
+              {creatorError} — vous pouvez utiliser le mode « Envoyer en brouillon » en attendant.
             </div>
           ) : (
             <>
@@ -113,16 +127,18 @@ export function TiktokPostModal({ onClose }: Props) {
                 <input className="inp" maxLength={150} placeholder="Légende de la vidéo" value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
               </div>
 
-              <div className="field">
-                <label className="field-lbl">Confidentialité</label>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {(creator?.privacyOptions || []).map((p) => (
-                    <button key={p} className={'fmt-chip' + (privacy === p ? ' on' : '')} style={{ cursor: busy ? 'default' : 'pointer' }} disabled={busy} onClick={() => setPrivacy(p)}>
-                      {PRIVACY_LABEL[p] || p}
-                    </button>
-                  ))}
+              {mode === 'direct' && (
+                <div className="field">
+                  <label className="field-lbl">Confidentialité</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(creator?.privacyOptions || []).map((p) => (
+                      <button key={p} className={'fmt-chip' + (privacy === p ? ' on' : '')} style={{ cursor: busy ? 'default' : 'pointer' }} disabled={busy} onClick={() => setPrivacy(p)}>
+                        {PRIVACY_LABEL[p] || p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {busy && (
                 <div className="field">
@@ -133,7 +149,9 @@ export function TiktokPostModal({ onClose }: Props) {
 
               {done && (
                 <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid var(--acc-soft, rgba(16,185,129,.35))', background: 'var(--acc-soft, rgba(16,185,129,.08))' }}>
-                  Vidéo envoyée — en cours de traitement par TikTok. Elle apparaîtra dans votre app TikTok sous quelques minutes.
+                  {mode === 'direct'
+                    ? 'Vidéo envoyée — en cours de traitement par TikTok. Elle apparaîtra sur votre profil sous quelques minutes.'
+                    : 'Vidéo envoyée dans votre boîte de réception TikTok — ouvrez l’app pour la publier.'}
                 </div>
               )}
 

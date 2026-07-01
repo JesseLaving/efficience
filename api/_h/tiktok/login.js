@@ -1,6 +1,8 @@
 /* TikTok OAuth — step 1: redirect to TikTok's consent screen.
-   Scopes: profile + stats (Connexion card) + video.publish (Direct Post). */
-const SCOPE = 'user.info.basic,user.info.stats,video.publish';
+   Scopes: profile + stats (Connexion card), video.list (video grid),
+   video.publish (Direct Post) and video.upload (draft to inbox, fallback if
+   Direct Post isn't approved for this app yet). */
+const SCOPE = 'user.info.basic,user.info.profile,user.info.stats,video.list,video.publish,video.upload';
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];

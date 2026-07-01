@@ -24,6 +24,7 @@ export async function refreshTiktok(refresh: string): Promise<{ token: string; r
 
 export interface TiktokProfile {
   openId: string; name: string | null; avatar: string | null;
+  username: string | null; bio: string | null; verified: boolean;
   followers: number | null; likes: number | null; videos: number | null;
 }
 export interface TiktokUserInfoResponse { available: boolean; reason?: string | null; profile: TiktokProfile | null; }
@@ -46,6 +47,18 @@ export async function fetchTiktokCreatorInfo(token: string): Promise<TiktokCreat
   return r.json().catch(() => ({ ok: false, reason: 'Réponse invalide du serveur.' }));
 }
 
+export interface TiktokVideo {
+  id: string; cover: string | null; url: string | null; description: string | null;
+  durationSec: number | null; views: number | null; likes: number | null;
+  comments: number | null; shares: number | null; createdAt: number | null;
+}
+export interface TiktokVideosResponse { ok: boolean; reason?: string; videos: TiktokVideo[]; }
+
+export async function fetchTiktokVideos(token: string): Promise<TiktokVideosResponse> {
+  const r = await fetch(`${API_BASE}/tiktok/videolist?token=${encodeURIComponent(token)}`);
+  return r.json().catch(() => ({ ok: false, reason: 'Réponse invalide du serveur.', videos: [] }));
+}
+
 /* ---------- Publication vidéo (Direct Post, upload résumable) ----------
    Étape 1 : notre serveur initie la session auprès de TikTok (petit JSON,
    tient dans une fonction Vercel) et renvoie l'URL d'upload.
@@ -55,6 +68,10 @@ export async function fetchTiktokCreatorInfo(token: string): Promise<TiktokCreat
 export interface TiktokPostMeta {
   title: string; privacyLevel: string;
   disableComment?: boolean; disableDuet?: boolean; disableStitch?: boolean;
+  /** 'direct' publie immédiatement (video.publish) ; 'inbox' envoie en
+   *  brouillon dans la boîte de réception TikTok, à valider dans l'app
+   *  (video.upload) — utile si Direct Post n'est pas encore approuvé. */
+  mode?: 'direct' | 'inbox';
 }
 export interface TiktokInitResult { ok: boolean; uploadUrl?: string; publishId?: string; reason?: string; }
 

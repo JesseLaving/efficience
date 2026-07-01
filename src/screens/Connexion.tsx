@@ -12,6 +12,7 @@ import { LinkedInPostModal } from '../components/LinkedInPostModal';
 import { MetaPostModal } from '../components/MetaPostModal';
 import { YoutubeUploadModal } from '../components/YoutubeUploadModal';
 import { TiktokPostModal } from '../components/TiktokPostModal';
+import { TiktokVideosModal } from '../components/TiktokVideosModal';
 
 const META_NETS = ['instagram', 'facebook'];
 
@@ -64,6 +65,7 @@ function NetCard({ net }: { net: Network }) {
   const [metaModal, setMetaModal] = useState(false);
   const [ytModal, setYtModal] = useState(false);
   const [ttModal, setTtModal] = useState(false);
+  const [ttVideos, setTtVideos] = useState(false);
   const isConn = isConnected(net.id);
   const ph = phase[net.id];
   const acc = accountFor(net.id);
@@ -137,13 +139,14 @@ function NetCard({ net }: { net: Network }) {
         </div>
         <div className="pi">
           <div className="pn">{tiktokProfile?.name || (tiktokStatus === 'loading' ? 'Chargement…' : 'Compte TikTok')}<RawIcon svg={UI.check} className="vrf" /></div>
-          <div className="ph">{tiktokProfile ? `${fr(tiktokProfile.videos || 0)} vidéos` : (tiktokReason ? <span style={{ color: 'var(--warn)' }}>{tiktokReason}</span> : 'Compte connecté')}</div>
-          <div className="pf"><b>{tiktokProfile?.followers != null ? fr(tiktokProfile.followers) : '—'}</b> abonnés{tiktokProfile?.likes != null ? ` · ${fr(tiktokProfile.likes)} likes` : ''}</div>
+          <div className="ph">{tiktokProfile?.username || (tiktokReason ? <span style={{ color: 'var(--warn)' }}>{tiktokReason}</span> : 'Compte connecté')}</div>
+          <div className="pf"><b>{tiktokProfile?.followers != null ? fr(tiktokProfile.followers) : '—'}</b> abonnés{tiktokProfile?.likes != null ? ` · ${fr(tiktokProfile.likes)} likes` : ''}{tiktokProfile?.videos != null ? ` · ${fr(tiktokProfile.videos)} vidéos` : ''}</div>
         </div>
       </div>
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setTtModal(true)}>Publier une vidéo</button>
+      <button className="btn ghost sm" title="Voir mes vidéos" onClick={() => setTtVideos(true)}><Icon name="play" /></button>
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('tiktok')}><Icon name="unlink" /></button>
     </>;
   } else if (ph === 'loading') {
@@ -186,6 +189,7 @@ function NetCard({ net }: { net: Network }) {
       {metaModal && <MetaPostModal onClose={() => setMetaModal(false)} defaultTargets={net.id === 'instagram' ? ['instagram'] : ['facebook']} />}
       {ytModal && <YoutubeUploadModal onClose={() => setYtModal(false)} />}
       {ttModal && <TiktokPostModal onClose={() => setTtModal(false)} />}
+      {ttVideos && <TiktokVideosModal onClose={() => setTtVideos(false)} />}
     </div>
   );
 }

@@ -14,7 +14,7 @@ function getParam(req, name) {
   try { return new URL(req.url, 'http://x').searchParams.get(name); } catch { return null; }
 }
 
-const FIELDS = 'open_id,display_name,avatar_url,follower_count,likes_count,video_count';
+const FIELDS = 'open_id,display_name,avatar_url,username,bio_description,is_verified,follower_count,likes_count,video_count';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
@@ -32,6 +32,7 @@ export default async function handler(req, res) {
       available: true,
       profile: {
         openId: u.open_id, name: u.display_name || null, avatar: u.avatar_url || null,
+        username: u.username ? '@' + u.username : null, bio: u.bio_description || null, verified: !!u.is_verified,
         followers: u.follower_count != null ? u.follower_count : null,
         likes: u.likes_count != null ? u.likes_count : null,
         videos: u.video_count != null ? u.video_count : null,
