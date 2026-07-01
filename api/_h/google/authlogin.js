@@ -2,7 +2,6 @@
    Requests openid/profile/email and reuses the ALREADY-REGISTERED redirect URI
    (/api/google/callback) so no Google Cloud Console change is needed. The
    callback branches on state.kind === 'auth'. */
-const REDIRECT = 'https://efficience.vercel.app/api/google/callback';
 const SCOPE = 'openid profile email';
 
 function getParam(req, name) {
@@ -13,11 +12,14 @@ function getParam(req, name) {
 export default function handler(req, res) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   if (!clientId) { res.statusCode = 500; res.end('GOOGLE_OAUTH_CLIENT_ID manquant'); return; }
-  const ret = getParam(req, 'return') || 'https://efficience.vercel.app/';
+  // Doit matcher le domaine réellement visité — sinon le cookie de session
+  // posé par le callback atterrit sur le mauvais domaine.
+  const redirect = `https://${req.headers.host}/api/google/callback`;
+  const ret = getParam(req, 'return') || `https://${req.headers.host}/`;
   const state = Buffer.from(JSON.stringify({ kind: 'auth', ret })).toString('base64url');
   const url = 'https://accounts.google.com/o/oauth2/v2/auth'
     + `?client_id=${encodeURIComponent(clientId)}`
-    + `&redirect_uri=${encodeURIComponent(REDIRECT)}`
+    + `&redirect_uri=${encodeURIComponent(redirect)}`
     + '&response_type=code'
     + `&scope=${encodeURIComponent(SCOPE)}`
     + '&include_granted_scopes=true'

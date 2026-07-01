@@ -3,7 +3,9 @@
    the URL hash (fragments are not sent to servers). Tokens live in the user's
    browser only — no shared server store.
 
-   Three flows share this callback (same registered redirect URI):
+   Three flows share this callback (redirect URI computed per-request from
+   the Host header, so it matches whichever domain the app is served on —
+   each such domain must be registered in Google Cloud Console):
    - Business Profile connect (default): bounce tokens to the URL hash.
    - Identity login (state.kind === 'auth'): upsert the user, set a signed
      session cookie, and redirect to the app.
@@ -11,7 +13,12 @@
      gc_token (one-shot, no refresh — the client fetches People API once). */
 import { query, makeSession } from '../db.js';
 
-const REDIRECT = 'https://efficience.vercel.app/api/google/callback';
+/* L'URI de redirection doit correspondre au domaine réellement visité (l'app
+   est accessible sur plusieurs domaines : efficience.vercel.app et
+   app.efficienceconsulting.com) — sinon le cookie de session atterrit sur le
+   mauvais domaine. Chaque domaine utilisé doit être enregistré comme URI de
+   redirection autorisée dans Google Cloud Console. */
+function redirectUri(req) { return `https://${req.headers.host}/api/google/callback`; }
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
@@ -31,11 +38,11 @@ function redirect(res, location) {
   res.end();
 }
 
-async function authCallback(res, ret, code) {
+async function authCallback(res, ret, code, redirect_uri) {
   try {
     const body = new URLSearchParams({
       code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-      redirect_uri: REDIRECT, grant_type: 'authorization_code',
+      redirect_uri, grant_type: 'authorization_code',
     });
     const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     const d = await r.json();
@@ -61,11 +68,11 @@ async function authCallback(res, ret, code) {
   }
 }
 
-async function contactsCallback(res, ret, code) {
+async function contactsCallback(res, ret, code, redirect_uri) {
   try {
     const body = new URLSearchParams({
       code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-      redirect_uri: REDIRECT, grant_type: 'authorization_code',
+      redirect_uri, grant_type: 'authorization_code',
     });
     const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     const d = await r.json();
@@ -77,7 +84,8 @@ async function contactsCallback(res, ret, code) {
 }
 
 export default async function handler(req, res) {
-  let ret = 'https://efficience.vercel.app/';
+  const redirect_uri = redirectUri(req);
+  let ret = `https://${req.headers.host}/`;
   let kind = null;
   try { const s = JSON.parse(Buffer.from(getParam(req, 'state') || '', 'base64url').toString()); if (s.ret) ret = s.ret; if (s.kind) kind = s.kind; } catch { /* ignore */ }
 
@@ -88,13 +96,13 @@ export default async function handler(req, res) {
     return bounce(res, ret, { google_error: error || 'Autorisation annulée' });
   }
 
-  if (kind === 'auth') return authCallback(res, ret, code);
-  if (kind === 'contacts') return contactsCallback(res, ret, code);
+  if (kind === 'auth') return authCallback(res, ret, code, redirect_uri);
+  if (kind === 'contacts') return contactsCallback(res, ret, code, redirect_uri);
 
   try {
     const body = new URLSearchParams({
       code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-      redirect_uri: REDIRECT, grant_type: 'authorization_code',
+      redirect_uri, grant_type: 'authorization_code',
     });
     const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     const d = await r.json();
