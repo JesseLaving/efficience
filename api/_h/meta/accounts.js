@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   };
   try {
     const me = await g('me', 'name');
-    const pagesRes = await g('me/accounts', 'name,fan_count,followers_count,instagram_business_account,link');
+    const pagesRes = await g('me/accounts', 'name,fan_count,followers_count,instagram_business_account,link,picture{url}');
     if (pagesRes.error) return json(res, 400, { error: pagesRes.error.message, user: me && me.name });
     const accounts = [];
     for (const p of (pagesRes.data || [])) {
@@ -42,6 +42,7 @@ export default async function handler(req, res) {
         network: 'facebook', id: p.id, name: p.name || null,
         followers: (p.followers_count != null ? p.followers_count : (p.fan_count != null ? p.fan_count : null)),
         url: p.link || null,
+        picture: (p.picture && p.picture.data && p.picture.data.url) || null,
       });
       if (p.instagram_business_account && p.instagram_business_account.id) {
         const ig = await g(p.instagram_business_account.id, 'username,name,followers_count,media_count,profile_picture_url,biography');
