@@ -1,11 +1,9 @@
-/* Google OAuth — refresh an expired access token using the refresh token. */
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
+/* Google OAuth — refresh an expired access token using the refresh token.
+   No CORS wildcard here: this returns a live access token and is only ever
+   called same-origin from the app itself (src/lib/google.ts uses a relative
+   API path), so there's no legitimate cross-origin caller to support. */
 function json(res, status, data) {
-  cors(res); res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.statusCode = status; res.end(JSON.stringify(data));
+  res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.statusCode = status; res.end(JSON.stringify(data));
 }
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
@@ -13,7 +11,7 @@ function getParam(req, name) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
+  if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return; }
   const refresh = getParam(req, 'refresh');
   if (!refresh) return json(res, 400, { error: 'Paramètre "refresh" requis.' });
   try {

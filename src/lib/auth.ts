@@ -20,6 +20,10 @@ export function loginWithGoogle() {
 
 export async function logout() {
   try { await fetch('/api/spaces/logout', { method: 'POST' }); } catch { /* ignore */ }
+  // Sans ça, les données du compte (contacts, calendrier, tokens réseaux)
+  // restent en clair dans le navigateur pour la prochaine personne qui se
+  // connecte sur cet appareil — un vrai risque sur un poste partagé.
+  try { localStorage.clear(); } catch { /* ignore */ }
   window.location.href = '/';
 }
 

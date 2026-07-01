@@ -71,7 +71,7 @@ async function publishOne(post) {
 export default async function handler(req, res) {
   const secret = (process.env.CRON_SECRET || '').trim();
   const provided = (getParam(req, 'key') || '').trim();
-  if (secret && provided !== secret) return json(res, 401, { ok: false, reason: 'Clé cron invalide.' });
+  if (!secret || provided !== secret) return json(res, 401, { ok: false, reason: 'Clé cron invalide.' });
   if (!kvConfigured()) return json(res, 200, { ok: false, reason: 'KV non configuré.' });
 
   const now = Date.now();

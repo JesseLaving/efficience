@@ -61,7 +61,7 @@ async function authCallback(res, ret, code, redirect_uri) {
     const user = up.rows[0];
 
     const token = makeSession({ userId: user.id, email: user.email, name: user.name });
-    res.setHeader('Set-Cookie', `session=${token}; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`);
+    res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`);
     return redirect(res, ret);
   } catch (e) {
     return redirect(res, `${ret}#auth_error=${encodeURIComponent(String(e && e.message || e))}`);

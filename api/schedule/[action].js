@@ -4,6 +4,7 @@
    Actions: /api/schedule/add | /api/schedule/list | /api/schedule/remove
    Dégrade proprement si KV n'est pas configuré. */
 import { kvConfigured, kvSet, kvDel, kvKeys, kvGetJson } from '../_h/kv.js';
+import { requireSession } from '../_h/spaces/_util.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,6 +25,10 @@ const getAction = (req) => {
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
+  cors(res);
+  // Ces posts programmés déclenchent une publication réelle (cron/publish.js)
+  // avec les tokens réseau stockés — jamais accessible sans session valide.
+  if (!requireSession(req, res)) return;
   if (!kvConfigured()) return json(res, 200, { ok: false, reason: 'Programmation serveur non configurée (Vercel KV manquant).' });
   const action = getAction(req);
 

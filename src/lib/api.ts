@@ -1,18 +1,22 @@
 /* Client for the real analysis backend (serverless /api functions).
-   In dev and on Vercel the API is same-origin (/api). For the static 42web
-   copy, build with VITE_API_BASE=https://<vercel-app>/api so it calls the
-   deployed functions (which send CORS *). */
+   In dev and on Vercel (or any custom domain aliased to the same Vercel
+   project) the API is same-origin (/api). Only the static-copy fallbacks
+   (InfinityFree, GitHub Pages) have no serverless functions and must proxy
+   to the deployed Vercel API. */
 /* Résout l'URL de l'API. VITE_API_BASE (baké au build) a priorité. Sinon :
-   - localhost / *.vercel.app → same-origin '/api' (dev + déploiement Vercel) ;
-   - tout autre hôte (42web, GitHub Pages, domaine perso) → l'API Vercel déployée,
-     car ces copies statiques n'ont pas de fonctions serverless. Évite les 404. */
+   - toute copie statique connue (42web/InfinityFree, GitHub Pages) → l'API
+     Vercel déployée, car ces copies n'ont pas de fonctions serverless ;
+   - tout le reste (localhost, *.vercel.app, ou un domaine perso pointé sur
+     ce même projet Vercel, ex. app.efficienceconsulting.com) → same-origin
+     '/api'. Same-origin est aussi indispensable pour que le cookie de
+     session (authentification) reste sur le bon domaine. */
 function resolveApiBase(): string {
   const env = import.meta.env.VITE_API_BASE as string | undefined;
   if (env) return env;
   if (typeof window !== 'undefined') {
     const h = window.location.hostname;
-    if (h === 'localhost' || h === '127.0.0.1' || h.endsWith('.vercel.app')) return '/api';
-    return 'https://efficience.vercel.app/api';
+    if (h.endsWith('.42web.io') || h.endsWith('.github.io')) return 'https://efficience.vercel.app/api';
+    return '/api';
   }
   return '/api';
 }

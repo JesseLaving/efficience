@@ -1,8 +1,6 @@
 /* LinkedIn OAuth — step 2: exchange the code for an access token (server-side,
    with the client secret) and bounce back to the app with the token in the URL
    hash. Token lives in the user's browser only — no shared server store. */
-const REDIRECT = 'https://efficience.vercel.app/api/linkedin/callback';
-
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
   try { return new URL(req.url, 'http://x').searchParams.get(name); } catch { return null; }
@@ -16,7 +14,8 @@ function bounce(res, ret, params) {
 }
 
 export default async function handler(req, res) {
-  let ret = 'https://efficience.vercel.app/';
+  const redirect = `https://${req.headers.host}/api/linkedin/callback`;
+  let ret = `https://${req.headers.host}/`;
   try { const s = JSON.parse(Buffer.from(getParam(req, 'state') || '', 'base64url').toString()); if (s.ret) ret = s.ret; } catch { /* ignore */ }
 
   const error = getParam(req, 'error_description') || getParam(req, 'error');
@@ -25,7 +24,7 @@ export default async function handler(req, res) {
 
   try {
     const body = new URLSearchParams({
-      grant_type: 'authorization_code', code, redirect_uri: REDIRECT,
+      grant_type: 'authorization_code', code, redirect_uri: redirect,
       client_id: process.env.LINKEDIN_CLIENT_ID, client_secret: process.env.LINKEDIN_CLIENT_SECRET,
     });
     const r = await fetch('https://www.linkedin.com/oauth/v2/accessToken', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
