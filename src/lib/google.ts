@@ -119,3 +119,46 @@ export async function fetchYoutubeChannel(token: string): Promise<YoutubeChannel
   if (!r.ok) throw new Error(d.error || d.detail || `HTTP ${r.status}`);
   return d as YoutubeChannelResponse;
 }
+
+/* ---------- YouTube — publication de vidéos (upload résumable) ----------
+   Étape 1 : notre serveur initie la session auprès de YouTube (petit JSON,
+   tient dans une fonction Vercel) et renvoie l'URL de session.
+   Étape 2 : le navigateur envoie les octets de la vidéo DIRECTEMENT à cette
+   URL — jamais via notre backend (taille et durée incompatibles avec les
+   limites d'une fonction serverless). */
+
+export interface YoutubeUploadMeta { title: string; description?: string; privacyStatus?: 'public' | 'unlisted' | 'private'; }
+export interface YoutubeInitResult { ok: boolean; uploadUrl?: string; reason?: string; }
+
+export async function initYoutubeUpload(token: string, meta: YoutubeUploadMeta, file: File): Promise<YoutubeInitResult> {
+  const r = await fetch(`${API_BASE}/google/youtubeupload`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, ...meta, fileSize: file.size, fileType: file.type || 'video/*' }),
+  });
+  return r.json().catch(() => ({ ok: false, reason: 'Réponse invalide du serveur.' }));
+}
+
+export interface YoutubeUploadResult { ok: boolean; videoId?: string; reason?: string; }
+
+/* XMLHttpRequest (pas fetch) pour pouvoir suivre la progression de l'envoi —
+   un fichier vidéo peut prendre plusieurs minutes sur une connexion lente. */
+export function uploadYoutubeVideo(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<YoutubeUploadResult> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'video/*');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { const d = JSON.parse(xhr.responseText); resolve({ ok: true, videoId: d.id }); }
+        catch { resolve({ ok: true }); }
+      } else {
+        let reason = `HTTP ${xhr.status}`;
+        try { const d = JSON.parse(xhr.responseText); reason = d.error?.message || reason; } catch { /* ignore */ }
+        resolve({ ok: false, reason });
+      }
+    };
+    xhr.onerror = () => resolve({ ok: false, reason: 'Échec réseau pendant l’envoi.' });
+    xhr.send(file);
+  });
+}

@@ -10,6 +10,7 @@ import { getBusiness } from '../lib/business';
 import type { MetaAccount } from '../lib/meta';
 import { LinkedInPostModal } from '../components/LinkedInPostModal';
 import { MetaPostModal } from '../components/MetaPostModal';
+import { YoutubeUploadModal } from '../components/YoutubeUploadModal';
 
 const META_NETS = ['instagram', 'facebook'];
 
@@ -60,6 +61,7 @@ function NetCard({ net }: { net: Network }) {
   } = useConnections();
   const [liModal, setLiModal] = useState(false);
   const [metaModal, setMetaModal] = useState(false);
+  const [ytModal, setYtModal] = useState(false);
   const isConn = isConnected(net.id);
   const ph = phase[net.id];
   const acc = accountFor(net.id);
@@ -120,7 +122,7 @@ function NetCard({ net }: { net: Network }) {
       </div>
     );
     foot = <>
-      <FlashButton className="btn ghost sm grow" label="Gérer la chaîne" flash="Ouvrez YouTube Studio" />
+      <button className="btn ghost sm grow" onClick={() => setYtModal(true)}>Publier une vidéo</button>
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('youtube')}><Icon name="unlink" /></button>
     </>;
   } else if (ph === 'loading') {
@@ -161,6 +163,7 @@ function NetCard({ net }: { net: Network }) {
       <div className="nc-foot">{foot}</div>
       {liModal && <LinkedInPostModal onClose={() => setLiModal(false)} />}
       {metaModal && <MetaPostModal onClose={() => setMetaModal(false)} defaultTargets={net.id === 'instagram' ? ['instagram'] : ['facebook']} />}
+      {ytModal && <YoutubeUploadModal onClose={() => setYtModal(false)} />}
     </div>
   );
 }

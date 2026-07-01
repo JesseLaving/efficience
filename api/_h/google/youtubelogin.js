@@ -1,7 +1,7 @@
-/* Google OAuth — connexion YouTube (lecture des stats de chaîne). Offline
-   access pour obtenir un refresh token (connexion persistante, comme Google
-   Business), séparée du flux d'identité et du flux Contacts. */
-const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+/* Google OAuth — connexion YouTube (stats de chaîne + publication de vidéos).
+   Offline access pour obtenir un refresh token (connexion persistante, comme
+   Google Business), séparée du flux d'identité et du flux Contacts. */
+const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload';
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
