@@ -7,8 +7,10 @@ import accounts from '../_h/google/accounts.js';
 import post from '../_h/google/post.js';
 import contactslogin from '../_h/google/contactslogin.js';
 import contactsfetch from '../_h/google/contactsfetch.js';
+import youtubelogin from '../_h/google/youtubelogin.js';
+import youtubechannel from '../_h/google/youtubechannel.js';
 
-const MAP = { login, authlogin, callback, refresh, accounts, post, contactslogin, contactsfetch };
+const MAP = { login, authlogin, callback, refresh, accounts, post, contactslogin, contactsfetch, youtubelogin, youtubechannel };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;

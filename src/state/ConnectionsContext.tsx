@@ -8,6 +8,8 @@ import {
 import {
   clearStoredGoogle, fetchGoogleAccounts, getStoredGoogleToken, getStoredGoogleRefresh,
   googleLogin, refreshGoogle, setStoredGoogle, type GoogleLocation,
+  clearStoredYoutube, fetchYoutubeChannel, getStoredYoutubeToken, getStoredYoutubeRefresh,
+  setStoredYoutube, youtubeLogin, type YoutubeChannel,
 } from '../lib/google';
 import {
   clearStoredLiToken, fetchLinkedInMe, getStoredLiToken, linkedinLogin, setStoredLiToken,
@@ -17,10 +19,11 @@ import {
 export type Phase = 'connecting' | 'loading' | null;
 const META_NETS = ['instagram', 'facebook'];
 
-/* Connexions réseaux (Meta / Google / LinkedIn) — état, OAuth, comptes & stats.
-   Extrait de EffContext (god-context) : ce domaine était lu par 10 écrans et
-   reliait artificiellement 10 communautés du graphe. Isolé ici, une mise à jour
-   d'un token/compte ne re-rend plus que les consommateurs de connexions. */
+/* Connexions réseaux (Meta / Google / LinkedIn / YouTube) — état, OAuth,
+   comptes & stats. Extrait de EffContext (god-context) : ce domaine était lu
+   par 10 écrans et reliait artificiellement 10 communautés du graphe. Isolé
+   ici, une mise à jour d'un token/compte ne re-rend plus que les
+   consommateurs de connexions. */
 interface ConnectionsCtx {
   connected: Record<string, boolean>;
   phase: Record<string, Phase>;
@@ -57,6 +60,14 @@ interface ConnectionsCtx {
   linkedinMe: LinkedInMe | null;
   connectLinkedin: () => void;
   disconnectLinkedin: () => void;
+  /* --- YouTube (stats de chaîne) --- */
+  youtubeConnected: boolean;
+  youtubeToken: string | null;
+  youtubeChannel: YoutubeChannel | null;
+  youtubeStatus: 'idle' | 'loading' | 'error';
+  youtubeReason: string | null;
+  connectYoutube: () => void;
+  disconnectYoutube: () => void;
 }
 
 const Ctx = createContext<ConnectionsCtx | null>(null);
@@ -79,20 +90,28 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const [linkedinToken, setLinkedinToken] = useState<string | null>(() => getStoredLiToken());
   const [linkedinMe, setLinkedinMe] = useState<LinkedInMe | null>(null);
 
-  // Capture the OAuth bounce (Meta + Google + LinkedIn tokens / errors in URL hash) once.
+  const [youtubeToken, setYoutubeToken] = useState<string | null>(() => getStoredYoutubeToken());
+  const [youtubeChannel, setYoutubeChannel] = useState<YoutubeChannel | null>(null);
+  const [youtubeStatus, setYoutubeStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [youtubeReason, setYoutubeReason] = useState<string | null>(null);
+
+  // Capture the OAuth bounce (Meta + Google + LinkedIn + YouTube tokens / errors in URL hash) once.
   useEffect(() => {
     if (!location.hash) return;
     const h = new URLSearchParams(location.hash.slice(1));
     const mt = h.get('meta_token'), me = h.get('meta_error');
     const gt = h.get('google_token'), gr = h.get('google_refresh'), ge = h.get('google_error');
     const lt = h.get('li_token'), le = h.get('li_error');
-    if (mt || me || gt || ge || lt || le) history.replaceState(null, '', location.pathname + location.search);
+    const yt = h.get('yt_token'), yr = h.get('yt_refresh'), ye = h.get('yt_error');
+    if (mt || me || gt || ge || lt || le || yt || ye) history.replaceState(null, '', location.pathname + location.search);
     if (mt) { setStoredMetaToken(mt); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
     else if (me) { setMetaError(me); showToast(UI.close, `Connexion Meta : ${me}`); }
     if (gt) { setStoredGoogle(gt, gr || undefined); setGoogleToken(gt); showToast(UI.check, 'Google Business connecté'); }
     else if (ge) { setGoogleReason(ge); showToast(UI.close, `Connexion Google : ${ge}`); }
     if (lt) { setStoredLiToken(lt); setLinkedinToken(lt); showToast(UI.check, 'LinkedIn connecté'); }
     else if (le) { showToast(UI.close, `Connexion LinkedIn : ${le}`); }
+    if (yt) { setStoredYoutube(yt, yr || undefined); setYoutubeToken(yt); showToast(UI.check, 'YouTube connecté'); }
+    else if (ye) { setYoutubeReason(ye); showToast(UI.close, `Connexion YouTube : ${ye}`); }
   }, []);
 
   // Load Google locations whenever we hold a token.
@@ -139,6 +158,17 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return () => { alive = false; };
   }, [metaToken]);
 
+  // Load YouTube channel stats whenever we hold a token.
+  useEffect(() => {
+    if (!youtubeToken) { setYoutubeChannel(null); return; }
+    let alive = true;
+    setYoutubeStatus('loading'); setYoutubeReason(null);
+    fetchYoutubeChannel(youtubeToken)
+      .then((d) => { if (!alive) return; setYoutubeChannel(d.channel || null); setYoutubeReason(d.available ? null : (d.reason || null)); setYoutubeStatus('idle'); })
+      .catch((e) => { if (!alive) return; setYoutubeReason(String(e.message || e)); setYoutubeStatus('error'); });
+    return () => { alive = false; };
+  }, [youtubeToken]);
+
   const refreshMetaStats = useCallback(() => {
     if (!metaToken) return;
     setMetaStatsStatus('loading'); setMetaStatsError(null);
@@ -148,7 +178,12 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   }, [metaToken]);
 
   const accountFor = useCallback((network: string) => metaAccounts.find((a) => a.network === network), [metaAccounts]);
-  const isConnected = useCallback((id: string) => (id === 'google' ? !!googleToken : id === 'linkedin' ? !!linkedinToken : metaAccounts.some((a) => a.network === id)), [metaAccounts, googleToken, linkedinToken]);
+  const isConnected = useCallback((id: string) => (
+    id === 'google' ? !!googleToken
+      : id === 'linkedin' ? !!linkedinToken
+      : id === 'youtube' ? !!youtubeToken
+      : metaAccounts.some((a) => a.network === id)
+  ), [metaAccounts, googleToken, linkedinToken, youtubeToken]);
 
   const connectMeta = useCallback(() => metaLogin(), []);
   const disconnectMeta = useCallback(() => {
@@ -168,18 +203,25 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const connectLinkedin = useCallback(() => linkedinLogin(), []);
   const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); setLinkedinToken(null); setLinkedinMe(null); }, []);
 
+  const connectYoutube = useCallback(() => youtubeLogin(), []);
+  const disconnectYoutube = useCallback(() => {
+    clearStoredYoutube(); setYoutubeToken(null); setYoutubeChannel(null); setYoutubeReason(null);
+  }, []);
+
   const connect = useCallback((id: string) => {
     if (META_NETS.includes(id)) connectMeta();
     else if (id === 'google') connectGoogle();
     else if (id === 'linkedin') connectLinkedin();
+    else if (id === 'youtube') connectYoutube();
     else showToast(UI.link, `Connexion ${id} — bientôt (nécessite l’app développeur de cette plateforme)`);
-  }, [connectMeta, connectGoogle, connectLinkedin]);
+  }, [connectMeta, connectGoogle, connectLinkedin, connectYoutube]);
 
   const disconnect = useCallback((id: string) => {
     if (META_NETS.includes(id)) disconnectMeta();
     else if (id === 'google') disconnectGoogle();
     else if (id === 'linkedin') disconnectLinkedin();
-  }, [disconnectMeta, disconnectGoogle, disconnectLinkedin]);
+    else if (id === 'youtube') disconnectYoutube();
+  }, [disconnectMeta, disconnectGoogle, disconnectLinkedin, disconnectYoutube]);
 
   const connectAll = useCallback(() => connectMeta(), [connectMeta]);
 
@@ -188,16 +230,17 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     metaAccounts.forEach((a) => { m[a.network] = true; });
     if (googleToken) m.google = true;
     if (linkedinToken) m.linkedin = true;
+    if (youtubeToken) m.youtube = true;
     return m;
-  }, [metaAccounts, googleToken, linkedinToken]);
+  }, [metaAccounts, googleToken, linkedinToken, youtubeToken]);
 
   const phase = useMemo<Record<string, Phase>>(() => {
     const loading: Record<string, Phase> = { instagram: 'loading', facebook: 'loading' };
     return metaToken && metaStatus === 'loading' ? loading : {};
   }, [metaToken, metaStatus]);
 
-  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size + (googleToken ? 1 : 0) + (linkedinToken ? 1 : 0), [metaAccounts, googleToken, linkedinToken]);
-  const totalReach = useMemo(() => metaAccounts.reduce((s, a) => s + (a.followers || 0), 0), [metaAccounts]);
+  const connectedCount = useMemo(() => new Set(metaAccounts.map((a) => a.network)).size + (googleToken ? 1 : 0) + (linkedinToken ? 1 : 0) + (youtubeToken ? 1 : 0), [metaAccounts, googleToken, linkedinToken, youtubeToken]);
+  const totalReach = useMemo(() => metaAccounts.reduce((s, a) => s + (a.followers || 0), 0) + (youtubeChannel?.subscribers || 0), [metaAccounts, youtubeChannel]);
 
   const value: ConnectionsCtx = {
     connected, phase, connect, disconnect, connectAll, isConnected, connectedCount, totalReach,
@@ -206,6 +249,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,
+    youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

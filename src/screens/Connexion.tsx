@@ -54,7 +54,10 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 
 function NetCard({ net }: { net: Network }) {
   const { show } = useEff();
-  const { phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe } = useConnections();
+  const {
+    phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe,
+    youtubeChannel, youtubeStatus, youtubeReason,
+  } = useConnections();
   const [liModal, setLiModal] = useState(false);
   const [metaModal, setMetaModal] = useState(false);
   const isConn = isConnected(net.id);
@@ -63,6 +66,7 @@ function NetCard({ net }: { net: Network }) {
   const meta = META_NETS.includes(net.id);
   const isGoogle = net.id === 'google';
   const isLinkedin = net.id === 'linkedin';
+  const isYoutube = net.id === 'youtube';
 
   let stateLbl: React.ReactNode, body: React.ReactNode, foot: React.ReactNode;
 
@@ -101,6 +105,24 @@ function NetCard({ net }: { net: Network }) {
       <button className="btn ghost sm grow" onClick={() => show('planning')}>Publier une actualité</button>
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('google')}><Icon name="unlink" /></button>
     </>;
+  } else if (isYoutube && isConn) {
+    stateLbl = <span className="nc-dot on"><i />Connecté</span>;
+    body = (
+      <div className="nc-profile">
+        <div className="ava-wrap">
+          {youtubeChannel?.thumbnail ? <img className="ava" src={youtubeChannel.thumbnail} alt="" style={{ width: 48, height: 48, objectFit: 'cover' }} /> : <div className="nc-logo" style={{ width: 48, height: 48 }}><Brand name="youtube" /></div>}
+        </div>
+        <div className="pi">
+          <div className="pn">{youtubeChannel?.title || (youtubeStatus === 'loading' ? 'Chargement…' : 'Chaîne YouTube')}<RawIcon svg={UI.check} className="vrf" /></div>
+          <div className="ph">{youtubeChannel ? `${fr(youtubeChannel.videos || 0)} vidéos` : (youtubeReason ? <span style={{ color: 'var(--warn)' }}>{youtubeReason}</span> : 'Compte connecté')}</div>
+          <div className="pf"><b>{youtubeChannel?.subscribers != null ? fr(youtubeChannel.subscribers) : '—'}</b> abonnés{youtubeChannel?.views != null ? ` · ${fr(youtubeChannel.views)} vues` : ''}</div>
+        </div>
+      </div>
+    );
+    foot = <>
+      <FlashButton className="btn ghost sm grow" label="Gérer la chaîne" flash="Ouvrez YouTube Studio" />
+      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('youtube')}><Icon name="unlink" /></button>
+    </>;
   } else if (ph === 'loading') {
     stateLbl = <span className="nc-dot on"><i />Import…</span>;
     body = <ProfileBlock net={net} loading />;
@@ -120,7 +142,7 @@ function NetCard({ net }: { net: Network }) {
       <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {
-    const integrated = meta || isGoogle || isLinkedin;
+    const integrated = meta || isGoogle || isLinkedin || isYoutube;
     stateLbl = <span className="nc-dot"><i />Non connecté</span>;
     body = <div className="nc-avail"><div className="nc-desc">{net.desc}{!integrated ? <><br /><span style={{ color: 'var(--tx-3)', fontSize: 12 }}>Disponible après validation de l’app {net.name}.</span></> : null}</div></div>;
     foot = integrated

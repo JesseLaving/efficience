@@ -3,14 +3,16 @@
    the URL hash (fragments are not sent to servers). Tokens live in the user's
    browser only — no shared server store.
 
-   Three flows share this callback (redirect URI computed per-request from
+   Four flows share this callback (redirect URI computed per-request from
    the Host header, so it matches whichever domain the app is served on —
    each such domain must be registered in Google Cloud Console):
    - Business Profile connect (default): bounce tokens to the URL hash.
    - Identity login (state.kind === 'auth'): upsert the user, set a signed
      session cookie, and redirect to the app.
    - Contacts import (state.kind === 'contacts'): bounce the access token as
-     gc_token (one-shot, no refresh — the client fetches People API once). */
+     gc_token (one-shot, no refresh — the client fetches People API once).
+   - YouTube connect (state.kind === 'youtube'): bounce tokens as
+     yt_token/yt_refresh (persistent, like Business Profile). */
 import { query, makeSession } from '../db.js';
 
 /* L'URI de redirection doit correspondre au domaine réellement visité (l'app
@@ -83,6 +85,23 @@ async function contactsCallback(res, ret, code, redirect_uri) {
   }
 }
 
+async function youtubeCallback(res, ret, code, redirect_uri) {
+  try {
+    const body = new URLSearchParams({
+      code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirect_uri, grant_type: 'authorization_code',
+    });
+    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const d = await r.json();
+    if (d.error || !d.access_token) return bounce(res, ret, { yt_error: d.error_description || d.error || 'token' });
+    const out = { yt_token: d.access_token };
+    if (d.refresh_token) out.yt_refresh = d.refresh_token;
+    return bounce(res, ret, out);
+  } catch (e) {
+    return bounce(res, ret, { yt_error: String(e && e.message || e) });
+  }
+}
+
 export default async function handler(req, res) {
   const redirect_uri = redirectUri(req);
   let ret = `https://${req.headers.host}/`;
@@ -93,11 +112,13 @@ export default async function handler(req, res) {
   const code = getParam(req, 'code');
   if (error || !code) {
     if (kind === 'contacts') return bounce(res, ret, { gc_error: error || 'Autorisation annulée' });
+    if (kind === 'youtube') return bounce(res, ret, { yt_error: error || 'Autorisation annulée' });
     return bounce(res, ret, { google_error: error || 'Autorisation annulée' });
   }
 
   if (kind === 'auth') return authCallback(res, ret, code, redirect_uri);
   if (kind === 'contacts') return contactsCallback(res, ret, code, redirect_uri);
+  if (kind === 'youtube') return youtubeCallback(res, ret, code, redirect_uri);
 
   try {
     const body = new URLSearchParams({

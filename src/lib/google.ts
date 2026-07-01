@@ -93,3 +93,29 @@ export function mapGoogleContacts(raw: RawGoogleContact[]): Contact[] {
     };
   });
 }
+
+/* ---------- YouTube (connexion persistante, stats de chaîne) ---------- */
+
+const YTLS = 'eff_yt_token', YRLS = 'eff_yt_refresh';
+export const getStoredYoutubeToken = () => localStorage.getItem(YTLS);
+export const getStoredYoutubeRefresh = () => localStorage.getItem(YRLS);
+export const setStoredYoutube = (t: string, r?: string) => { localStorage.setItem(YTLS, t); if (r) localStorage.setItem(YRLS, r); };
+export const clearStoredYoutube = () => { localStorage.removeItem(YTLS); localStorage.removeItem(YRLS); };
+
+export function youtubeLogin(): void {
+  const ret = location.origin + location.pathname;
+  window.location.href = `${API_BASE}/google/youtubelogin?return=${encodeURIComponent(ret)}`;
+}
+
+export interface YoutubeChannel {
+  id: string; title: string | null; thumbnail: string | null;
+  subscribers: number | null; views: number | null; videos: number | null;
+}
+export interface YoutubeChannelResponse { available: boolean; reason?: string | null; channel: YoutubeChannel | null; }
+
+export async function fetchYoutubeChannel(token: string): Promise<YoutubeChannelResponse> {
+  const r = await fetch(`${API_BASE}/google/youtubechannel?token=${encodeURIComponent(token)}`);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || d.detail || `HTTP ${r.status}`);
+  return d as YoutubeChannelResponse;
+}
