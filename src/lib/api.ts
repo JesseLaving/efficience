@@ -80,5 +80,5 @@ async function get<T>(path: string): Promise<T> {
   return data as T;
 }
 
-export const analyzeCompany = (q: string) => get<CompanyResponse>(`/company?q=${encodeURIComponent(q)}`);
-export const analyzeSite = (url: string) => get<SiteResponse>(`/site?url=${encodeURIComponent(url)}`);
+export const analyzeCompany = (q: string) => get<CompanyResponse>(`/analyze/company?q=${encodeURIComponent(q)}`);
+export const analyzeSite = (url: string) => get<SiteResponse>(`/analyze/site?url=${encodeURIComponent(url)}`);
