@@ -32,26 +32,40 @@ function family(p: string) {
   if (/(événement|evenement|ouverture|atelier|dégustation|degustation|fête|fete|noël|noel|pâques|paques|portes)/.test(p)) return 'evenement';
   return 'generic';
 }
-function generate(prompt: string, tone: string, segName: string): Generated {
+function serviceNoun(sector: string): string {
+  const s = sector.toLowerCase();
+  if (/(restau|food|traiteur|boulang|p[âa]tiss|caf[ée]|\bbar\b|pizz|brasserie)/.test(s)) return 'votre prochain repas';
+  if (/(sant[ée]|m[ée]decin|kin[ée]|ost[ée]o|dentaire|psy|th[ée]rap)/.test(s)) return 'votre prochain rendez-vous';
+  if (/(beaut[ée]|coiff|esth[ée]t|ongle|\bspa\b|barbier)/.test(s)) return 'votre prochain soin';
+  if (/(immobil|courtier)/.test(s)) return 'votre estimation gratuite';
+  if (/(artisan|btp|plomb|[ée]lectri|menuisi|peinture|couvreur)/.test(s)) return 'votre devis';
+  if (/(commerce|boutique|magasin|retail)/.test(s)) return 'votre prochain achat';
+  if (/(formation|conseil|coach|consult)/.test(s)) return 'votre prochaine session';
+  return 'votre prochaine prestation';
+}
+
+function generate(prompt: string, tone: string, segName: string, biz: { name: string; sector: string; city: string } = { name: '', sector: '', city: '' }): Generated {
   const pct = num(prompt);
+  const n = biz.name || 'Notre équipe';
+  const svc = serviceNoun(biz.sector);
   const flavor = ({ Direct: 'direct', 'Pédagogique': 'pédagogique', Expert: 'rigoureux', Chaleureux: 'chaleureux' } as Record<string, string>)[tone] || 'direct';
   const T: Record<string, Omit<Generated, 'segName' | 'pct'>> = {
-    promo: { subjects: [`−${pct}% sur votre prochaine formation`, `Votre tarif préférentiel : −${pct}%`, `Formation à −${pct}% — places limitées`], pre: 'Une offre claire, sans engagement, pour passer à l’action.', headline: `−${pct}% sur votre montée en compétence`, body: ['Bonjour {prenom},', `Vous suivez le travail d’Efficience Marketing : je vous réserve <b>−${pct}%</b> sur la prochaine session de formation, ce mois-ci uniquement.`, `Au programme : méthode, exemples concrets et outils que vous appliquez dès le lendemain. Une approche ${flavor}, sans théorie hors-sol.`], cta: 'Réserver ma place' },
-    nouveaute: { subjects: ['Nouveau programme : prospection multicanale', 'Une nouvelle formation rejoint le catalogue', 'Disponible : le module IA appliquée au travail'], pre: 'Un nouveau contenu, pensé pour le terrain.', headline: 'Un nouveau programme disponible', body: ['Bonjour {prenom},', 'Un nouveau programme rejoint le catalogue cette semaine, construit sur la même logique : théorie utile, exemples concrets, méthode applicable.', 'Vous faites partie des premiers informés. Je vous laisse regarder le déroulé et me dire s’il correspond à votre besoin.'], cta: 'Voir le programme' },
-    reactivation: { subjects: ['On reprend contact ?', 'Un point sur vos objectifs commerciaux ?', 'Toujours d’actualité, votre projet de formation ?'], pre: 'Quelques semaines sans échange — faisons le point.', headline: 'On refait le point, {prenom} ?', body: ['Bonjour {prenom},', 'Nous n’avons pas échangé depuis un moment. Si votre projet de formation ou d’accompagnement est toujours d’actualité, je peux vous proposer un créneau cette semaine.', 'Quinze minutes suffisent pour cadrer le besoin et voir si je peux vous être utile.'], cta: 'Prendre un créneau' },
-    fidelite: { subjects: ['Merci pour votre confiance', 'Un mot, et une proposition', 'Votre avis compte pour la suite'], pre: 'Un remerciement simple, et une porte ouverte.', headline: 'Merci pour votre confiance', body: ['Bonjour {prenom},', 'Votre confiance compte beaucoup pour le développement d’Efficience Marketing. Si la formation vous a été utile, une recommandation auprès d’un collègue aide énormément.', 'Et si un nouveau besoin se présente, vous savez où me trouver.'], cta: 'Recommander un contact' },
-    evenement: { subjects: ['Invitation : atelier en ligne', 'Save the date — webinaire pratique', 'Une heure pour repartir avec une méthode'], pre: 'Bloquez la date : un format court et concret.', headline: 'Vous êtes invité·e à l’atelier', body: ['Bonjour {prenom},', 'J’anime un atelier en ligne, format court et pratique, et votre place est réservée. Au programme : une méthode, des exemples et un temps de questions.', 'Les places sont limitées pour garder un cadre utile. Confirmez votre venue en un clic.'], cta: 'Je réserve ma place' },
-    generic: { subjects: ['Des nouvelles d’Efficience Marketing', 'Un point utile pour votre activité', 'Trois idées pour la semaine'], pre: 'Quelques lignes utiles, sans détour.', headline: 'Un mot d’Efficience Marketing', body: ['Bonjour {prenom},', `Voici quelques nouvelles, avec la même logique que d’habitude : du concret, des méthodes, et un ton ${flavor}.`, 'Si un sujet vous parle — stratégie commerciale, communication, formation — répondez à ce mail, on en parle.'], cta: 'Échanger avec moi' },
+    promo: { subjects: [`−${pct}% sur ${svc}`, `Votre offre exclusive : −${pct}%`, `−${pct}% pour vous — offre limitée`], pre: 'Une offre claire, sans engagement, pour passer à l’action.', headline: `−${pct}% rien que pour vous`, body: ['Bonjour {prenom},', `Parce que vous nous faites confiance, <b>${n}</b> vous réserve <b>−${pct}%</b> sur ${svc} — ce mois-ci uniquement.`, `Un accompagnement ${flavor}, concret, pensé pour vous.`], cta: 'J’en profite maintenant' },
+    nouveaute: { subjects: ['Découvrez notre dernière nouveauté', `${n} innove pour vous`, 'Une nouveauté à ne pas manquer'], pre: 'Une nouveauté pensée pour vous, disponible dès maintenant.', headline: 'Notre nouveauté du moment', body: ['Bonjour {prenom},', `Chez <b>${n}</b>, nous ne restons jamais immobiles. Voici ce que nous avons préparé pour vous.`, 'Vous faites partie des premiers informés — dites-nous ce que vous en pensez.'], cta: 'Découvrir la nouveauté' },
+    reactivation: { subjects: ['On reprend contact ?', 'Toujours là pour vous', 'Un point sur votre projet ?'], pre: 'Quelques semaines sans échange — reprenons le fil.', headline: 'On refait le point, {prenom} ?', body: ['Bonjour {prenom},', `Ça fait un moment que nous n’avons pas échangé. Chez <b>${n}</b>, votre projet nous tient toujours à cœur.`, `Si vous avez un besoin — ou simplement envie de faire le point — je suis disponible${biz.city ? ` à ${biz.city}` : ''} ou en ligne.`], cta: 'Reprendre contact' },
+    fidelite: { subjects: ['Merci pour votre confiance', 'Un mot sincère de notre part', 'Votre fidélité compte pour nous'], pre: 'Un remerciement sincère, et une porte toujours ouverte.', headline: 'Merci pour votre confiance', body: ['Bonjour {prenom},', `Votre fidélité est ce qui nous pousse chaque jour à faire mieux chez <b>${n}</b>. Un simple merci s’imposait.`, 'Si vous êtes satisfait·e, une recommandation à un proche nous aide énormément. Et pour tout nouveau besoin, vous savez où nous trouver.'], cta: 'Recommander un proche' },
+    evenement: { subjects: [`Invitation de ${n}`, 'Save the date — rejoignez-nous', 'Vous êtes invité·e'], pre: 'Un événement à ne pas manquer — bloquez la date.', headline: 'Vous êtes invité·e', body: ['Bonjour {prenom},', `<b>${n}</b> vous invite à un moment d’échange et de découverte. Les places sont limitées pour garder un cadre convivial.`, `Confirmez votre venue en un clic — nous serions ravis de vous accueillir${biz.city ? ` à ${biz.city}` : ''}.`], cta: 'Je réserve ma place' },
+    generic: { subjects: [`Des nouvelles de ${n}`, 'Un point utile pour vous', 'Trois idées pour avancer'], pre: 'Quelques lignes utiles, sans détour.', headline: `Un mot de ${n}`, body: ['Bonjour {prenom},', `Voici quelques nouvelles de la part de <b>${n}</b>, avec notre approche habituelle : du concret et un ton ${flavor}.`, 'Si un sujet vous parle, répondez à ce mail — on en parle avec plaisir.'], cta: 'Échanger avec nous' },
   };
   const f = T[family(prompt)];
   return { ...f, segName, pct };
 }
 
 const SUGGESTS: [string, string][] = [
-  ['Offre −20% formation', 'Proposer −20% sur la prochaine session de formation'],
-  ['Nouveau programme', 'Annoncer un nouveau programme de formation au catalogue'],
-  ['Relancer un prospect', 'Relancer un prospect resté sans réponse pour refaire le point'],
-  ['Inviter à un atelier', 'Inviter à un atelier en ligne court et pratique'],
+  ['Offre spéciale', 'Proposer une offre promotionnelle à mes contacts ce mois-ci'],
+  ['Nouveauté', 'Annoncer une nouveauté ou un nouveau service à ma base'],
+  ['Relance', 'Relancer des contacts inactifs pour reprendre le fil'],
+  ['Événement', 'Inviter mes contacts à un événement ou un atelier'],
 ];
 
 /* ---------- typed email body ---------- */
@@ -127,11 +141,11 @@ export function Campagnes() {
           pct: num(p),
         });
       } else {
-        setGen(generate(p, tone, seg.name));
+        setGen(generate(p, tone, seg.name, b));
         if (res.reason) showToast(UI.wand, `Modèle utilisé (IA indisponible : ${res.reason})`);
       }
     } catch {
-      setGen(generate(p, tone, seg.name));
+      setGen(generate(p, tone, seg.name, b));
     } finally {
       setGenerating(false);
       setSubject(0);
