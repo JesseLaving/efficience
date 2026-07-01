@@ -26,14 +26,14 @@ async function postJson(path, body) {
   } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
 }
 
-async function publishOne(post) {
+async function publishOne(spaceId, post) {
   const errs = [];
   let okCount = 0;
   const nets = post.networks || [];
   const metaTargets = nets.filter((n) => n === 'instagram' || n === 'facebook');
 
   if (metaTargets.length) {
-    const tok = await kvGetJson('tok:meta');
+    const tok = await kvGetJson(`tok:${spaceId}:meta`);
     if (tok && tok.token) {
       const r = await postJson('/api/meta/post', { token: tok.token, targets: metaTargets, message: post.text, photoUrl: post.photoUrl || undefined });
       for (const res of (r.results || [])) { if (res.ok) okCount++; else errs.push(`${res.network}: ${res.reason || 'échec'}`); }
@@ -42,7 +42,7 @@ async function publishOne(post) {
   }
 
   if (nets.includes('linkedin')) {
-    const tok = await kvGetJson('tok:linkedin');
+    const tok = await kvGetJson(`tok:${spaceId}:linkedin`);
     if (tok && tok.token) {
       const r = await postJson('/api/linkedin/post', { token: tok.token, text: post.text });
       if (r.ok) okCount++; else errs.push(`linkedin: ${r.reason || r.error || 'échec'}`);
@@ -50,11 +50,11 @@ async function publishOne(post) {
   }
 
   if (nets.includes('google')) {
-    const tok = await kvGetJson('tok:google');
+    const tok = await kvGetJson(`tok:${spaceId}:google`);
     if (tok && tok.token) {
       let gToken = tok.token;
       if (tok.refresh) {
-        try { const rr = await fetch(`${BASE}/api/google/refresh?refresh=${encodeURIComponent(tok.refresh)}`); const dd = await rr.json().catch(() => ({})); if (dd.token) { gToken = dd.token; await kvSet('tok:google', { ...tok, token: gToken }); } } catch { /* garde l'ancien */ }
+        try { const rr = await fetch(`${BASE}/api/google/refresh?refresh=${encodeURIComponent(tok.refresh)}`); const dd = await rr.json().catch(() => ({})); if (dd.token) { gToken = dd.token; await kvSet(`tok:${spaceId}:google`, { ...tok, token: gToken }); } } catch { /* garde l'ancien */ }
       }
       const paths = (tok.paths && tok.paths.length) ? tok.paths : [];
       if (!paths.length) errs.push('google: aucune fiche');
@@ -79,11 +79,15 @@ export default async function handler(req, res) {
   try {
     const keys = (await kvKeys('sched:*')) || [];
     for (const k of keys) {
+      // Format de clé : sched:{spaceId}:{postId} — les clés d'un ancien
+      // schéma sans espace (sched:{postId}) sont ignorées (spaceId absent).
+      const spaceId = (k.split(':')[1] || '').trim();
+      if (!spaceId) continue;
       const post = await kvGetJson(k);
       if (!post || post.status !== 'scheduled') continue;
       if ((post.whenMs || 0) > now) continue; // pas encore l'heure
       processed++;
-      const out = await publishOne(post);
+      const out = await publishOne(spaceId, post);
       const updated = { ...post, status: out.status, lastResult: out.lastResult, publishedAt: now };
       await kvSet(k, updated);
       if (out.status === 'published') published++; else failed++;
