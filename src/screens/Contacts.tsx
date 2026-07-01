@@ -1,29 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useContacts } from '../state/ContactsContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
 import { countUp } from '../lib/countup';
+import { showToast } from '../lib/toast';
 import {
-  POP, TOTAL, SEGMENTS, FIELDS, segCount, matchCriteria, avFor, initials,
+  SEGMENTS, fieldsFor, matchCriteria, initials, avFor,
   type Criterion, type Contact, type Segment,
 } from '../lib/population';
+import {
+  parseDelimited, detectMapping, rowsToContacts, contactsToCsv, downloadCsv,
+  type ColumnMapping, type ParsedTable, type TargetField,
+} from '../lib/contacts';
+import { googleContactsLogin, consumeGoogleContactsHash, fetchGoogleContacts, mapGoogleContacts } from '../lib/google';
 
-const COLUMNS = [
-  { src: 'prenom', to: 'Prénom', dt: '#2fd6a1' },
-  { src: 'nom', to: 'Nom', dt: '#2fd6a1' },
-  { src: 'email', to: 'E-mail', dt: '#6fb3ff' },
-  { src: 'ville', to: 'Ville', dt: '#e8a33d' },
-  { src: 'dernier_achat', to: 'Dernier achat', dt: '#c084fc' },
-  { src: 'panier_moyen', to: 'Panier moyen', dt: '#c084fc' },
-  { src: 'opt_in_email', to: 'Consentement', dt: '#00d992' },
-];
-const MATCH = [99, 98, 100, 96, 94, 97, 100];
+const FIELD_LABELS: Record<TargetField, string> = {
+  email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
+  phone: 'Téléphone', city: 'Ville', basket: 'Panier moyen', lastDays: 'Dernier achat',
+  consent: 'Consentement', tags: 'Tags',
+};
 
 type Flow = 'idle' | 'analyzing' | 'mapped' | 'confirming';
 
 export function Contacts() {
-  const { crmImported, setCrmImported, newCampaign } = useEff();
+  const { newCampaign } = useEff();
+  const { contacts, addContacts } = useContacts();
   const [flow, setFlow] = useState<Flow>('idle');
   const [seg, setSeg] = useState('all');
   const [custom, setCustom] = useState(false);
@@ -31,50 +34,105 @@ export function Contacts() {
   const [q, setQ] = useState('');
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
-  const subRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* ---------- import simulation ---------- */
-  const runImport = () => {
-    if (flow !== 'idle') return;
-    setFlow('analyzing');
-  };
-  useEffect(() => {
-    if (flow !== 'analyzing') return;
-    const bar = barRef.current;
-    if (bar) {
-      requestAnimationFrame(() => { bar.style.right = '0%'; });
-      setTimeout(() => { if (bar) bar.style.right = '38%'; }, 60);
-      setTimeout(() => { if (bar) bar.style.right = '8%'; }, 700);
+  const [fileName, setFileName] = useState('');
+  const [parsed, setParsed] = useState<ParsedTable | null>(null);
+  const [mapping, setMapping] = useState<ColumnMapping[]>([]);
+  const [gcBusy, setGcBusy] = useState(false);
+
+  const fields = useMemo(() => fieldsFor(contacts), [contacts]);
+
+  /* ---------- import fichier réel ---------- */
+  const openPicker = () => fileInputRef.current?.click();
+
+  const handleFile = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls') {
+      showToast(UI.close, 'Format Excel non pris en charge — exportez votre fichier en .csv (Enregistrer sous → CSV) puis réessayez.');
+      return;
     }
-    const t = setTimeout(() => setFlow('mapped'), 1250);
-    return () => clearTimeout(t);
-  }, [flow]);
+    setFileName(file.name);
+    setFlow('analyzing');
+    const text = await file.text();
+    setTimeout(() => {
+      const table = parseDelimited(text);
+      setParsed(table);
+      setMapping(detectMapping(table.headers));
+      setFlow(table.headers.length ? 'mapped' : 'idle');
+      if (!table.headers.length) showToast(UI.close, 'Fichier vide ou illisible.');
+    }, 500);
+  };
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleFile(f);
+    e.target.value = '';
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  };
+  const onDragOver = (e: React.DragEvent) => e.preventDefault();
+
+  const changeMapping = (field: TargetField, headerIndex: number | null) => {
+    setMapping((prev) => prev.map((m) => (m.field === field ? { ...m, headerIndex, confidence: headerIndex != null ? 100 : 0 } : m)));
+  };
+
+  const cancelImport = () => { setFlow('idle'); setParsed(null); setMapping([]); setFileName(''); };
 
   const confirmImport = () => {
+    if (!parsed) return;
     setFlow('confirming');
-    setTimeout(() => { setCrmImported(true); setFlow('idle'); }, 1100);
+    setTimeout(() => {
+      const built = rowsToContacts(parsed.headers, parsed.rows, mapping, 'file');
+      const stats = addContacts(built);
+      setFlow('idle'); setParsed(null); setMapping([]); setFileName('');
+      showToast(UI.check, `${fr(stats.imported)} ligne(s) traitée(s) — ${fr(stats.added)} nouveaux, ${fr(stats.updated)} mis à jour.`);
+    }, 700);
   };
 
-  useEffect(() => {
-    if (crmImported) countUp(totalRef.current, TOTAL);
-  }, [crmImported]);
+  /* ---------- import Google Contacts ---------- */
+  const connectGoogleContacts = () => googleContactsLogin();
 
-  /* ---------- filtering ---------- */
+  useEffect(() => {
+    const { token, error } = consumeGoogleContactsHash();
+    if (error) { showToast(UI.close, `Connexion Google Contacts : ${error}`); return; }
+    if (!token) return;
+    setGcBusy(true);
+    fetchGoogleContacts(token)
+      .then((d) => {
+        if (!d.available) { showToast(UI.close, `Google Contacts : ${d.reason || 'indisponible'}`); return; }
+        const built = mapGoogleContacts(d.contacts || []);
+        const stats = addContacts(built);
+        showToast(UI.check, `Google Contacts : ${fr(stats.added)} nouveaux, ${fr(stats.updated)} mis à jour.`);
+      })
+      .catch((e) => showToast(UI.close, `Google Contacts : ${String(e.message || e)}`))
+      .finally(() => setGcBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (contacts.length) countUp(totalRef.current, contacts.length);
+  }, [contacts.length]);
+
+  /* ---------- filtrage ---------- */
   const activeSeg: Segment = SEGMENTS.find((x) => x.id === seg) || SEGMENTS[0];
-  let list: Contact[] = custom ? POP.filter((c) => matchCriteria(c, criteria)) : POP.filter(activeSeg.pred);
+  let list: Contact[] = custom ? contacts.filter((c) => matchCriteria(c, criteria, fields)) : contacts.filter(activeSeg.pred);
   if (q) {
     const ql = q.toLowerCase();
-    list = list.filter((c) => c.name.toLowerCase().includes(ql) || c.email.includes(ql) || c.city.toLowerCase().includes(ql));
+    list = list.filter((c) => c.name.toLowerCase().includes(ql) || c.email.includes(ql) || (c.city || '').toLowerCase().includes(ql));
   }
   const rows = list.slice(0, 10);
-  const builderCount = custom || criteria.length ? POP.filter((c) => matchCriteria(c, criteria)).length : 0;
+  const builderCount = custom || criteria.length ? contacts.filter((c) => matchCriteria(c, criteria, fields)).length : 0;
 
   const pickSeg = (id: string) => { setCustom(false); setSeg(id); setQ(''); };
   const addCriterion = () => {
-    const keys = Object.keys(FIELDS);
+    const keys = Object.keys(fields);
     const used = criteria.map((c) => c.field);
     const field = keys.find((k) => !used.includes(k)) || 'basket';
-    const f = FIELDS[field];
+    const f = fields[field];
     setCriteria([...criteria, { field, op: f.ops[0], value: f.type === 'select' ? f.options![0] : (f.ph || '20') }]);
     setCustom(true);
   };
@@ -87,7 +145,7 @@ export function Contacts() {
     const next = criteria.map((cr, idx) => {
       if (idx !== i) return cr;
       if (key === 'field') {
-        const f = FIELDS[val];
+        const f = fields[val];
         return { field: val, op: f.ops[0], value: f.type === 'select' ? f.options![0] : (f.ph || '20') };
       }
       return { ...cr, [key]: val };
@@ -97,9 +155,9 @@ export function Contacts() {
   };
 
   const segName = custom ? 'Segment personnalisé' : activeSeg.name;
-  const optin = POP.filter((c) => c.consent).length;
-  const avg = POP.length ? POP.reduce((s, c) => s + c.basket, 0) / POP.length : 0;
-  const pctOfBase = (n: number) => (TOTAL ? Math.round((n / TOTAL) * 100) : 0);
+  const optin = contacts.filter((c) => c.consent === true).length;
+  const avg = contacts.length ? contacts.reduce((s, c) => s + (c.basket || 0), 0) / contacts.length : 0;
+  const pctOfBase = (n: number) => (contacts.length ? Math.round((n / contacts.length) * 100) : 0);
 
   return (
     <section className="screen show anim">
@@ -107,44 +165,50 @@ export function Contacts() {
         <div>
           <div className="eyebrow">CRM · Base clients</div>
           <h1>Vos contacts, prêts à être ciblés</h1>
-          <p>Importez votre base Excel ou CSV : Efficience détecte les colonnes, fusionne les doublons et la rend segmentable en un instant — sans quitter l’app.</p>
+          <p>Importez un fichier CSV ou connectez Google Contacts : Efficience détecte les colonnes, fusionne les doublons (par e-mail) et rend votre base segmentable — sans donnée inventée.</p>
         </div>
-        {crmImported && <ExportButton />}
+        {contacts.length > 0 && <ExportButton contacts={list} />}
       </div>
+
+      <input ref={fileInputRef} type="file" accept=".csv,.txt" hidden onChange={onPick} />
 
       {/* import host */}
       {flow === 'idle' ? (
-        crmImported ? (
-          <div className="imp-zone" style={{ padding: '18px 22px' }} onClick={runImport}>
-            <div className="iz-ic" style={{ width: 42, height: 42, borderRadius: 11 }}><Icon name="upload" style={{ width: 21, height: 21 }} /></div>
-            <div>
-              <div className="iz-t" style={{ fontSize: 14 }}>Mettre à jour votre base</div>
-              <div className="iz-s">Glissez un nouveau fichier pour ajouter ou actualiser des contacts.</div>
-            </div>
-            <div className="iz-cta"><button className="btn sm" onClick={(e) => { e.stopPropagation(); runImport(); }}>Importer un fichier</button></div>
+        <div className="imp-zone" onDrop={onDrop} onDragOver={onDragOver} onClick={contacts.length ? undefined : openPicker}>
+          <div className="iz-ic" style={contacts.length ? { width: 42, height: 42, borderRadius: 11 } : undefined}>
+            <Icon name="upload" style={contacts.length ? { width: 21, height: 21 } : undefined} />
           </div>
-        ) : (
-          <div className="imp-zone" onClick={runImport}>
-            <div className="iz-ic"><Icon name="upload" /></div>
-            <div>
-              <div className="iz-t">Importez votre base clients</div>
-              <div className="iz-s">Glissez-déposez votre fichier ou <b>parcourez vos fichiers</b>. Jusqu’à 50 000 contacts.</div>
-              <div className="iz-formats">
-                <span className="fmt-chip"><Icon name="sheet" />.xlsx</span>
-                <span className="fmt-chip"><Icon name="sheet" />.csv</span>
-                <span className="fmt-chip"><Icon name="sheet" />.xls</span>
-              </div>
+          <div>
+            <div className="iz-t" style={contacts.length ? { fontSize: 14 } : undefined}>
+              {contacts.length ? 'Mettre à jour votre base' : 'Importez votre base clients'}
             </div>
-            <div className="iz-cta"><button className="btn acc" onClick={(e) => { e.stopPropagation(); runImport(); }}><Icon name="upload" />Choisir un fichier</button></div>
+            <div className="iz-s">
+              {contacts.length
+                ? 'Glissez un nouveau fichier CSV pour ajouter ou actualiser des contacts.'
+                : <>Glissez-déposez un fichier <b>.csv</b> ou <b>parcourez vos fichiers</b>. Export Excel/Google Sheets en CSV supporté.</>}
+            </div>
+            {!contacts.length && (
+              <div className="iz-formats"><span className="fmt-chip"><Icon name="sheet" />.csv</span></div>
+            )}
           </div>
-        )
+          <div className="iz-cta" style={{ display: 'flex', gap: 8 }}>
+            <button className={contacts.length ? 'btn sm' : 'btn acc'} onClick={(e) => { e.stopPropagation(); openPicker(); }}>
+              <Icon name="upload" />{contacts.length ? 'Importer un fichier' : 'Choisir un fichier'}
+            </button>
+            <button className="btn outline sm" disabled={gcBusy} onClick={(e) => { e.stopPropagation(); connectGoogleContacts(); }}>
+              {gcBusy ? <span className="spin lt" /> : <Icon name="link" />}Google Contacts
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="imp-flow">
           <div className="if-head">
             <div className="if-file"><Icon name="sheet" /></div>
             <div>
-              <div className="if-name">base_clients_boulangerie.csv</div>
-              <div className="if-sub" ref={subRef}>{flow === 'analyzing' ? 'Lecture du fichier…' : '7 colonnes détectées'}</div>
+              <div className="if-name">{fileName}</div>
+              <div className="if-sub">
+                {flow === 'analyzing' ? 'Lecture du fichier…' : `${parsed?.headers.length || 0} colonnes détectées · ${parsed?.rows.length || 0} lignes`}
+              </div>
             </div>
             <div className="if-state">
               {flow === 'analyzing'
@@ -152,23 +216,28 @@ export function Contacts() {
                 : <><RawIcon svg={UI.check} style={{ width: 16, height: 16, color: 'var(--acc)' }} />Correspondance auto</>}
             </div>
           </div>
-          <div className="imp-bar"><i ref={barRef as React.RefObject<HTMLElement>} /></div>
-          {(flow === 'mapped' || flow === 'confirming') && (
+          <div className="imp-bar"><i ref={barRef as React.RefObject<HTMLElement>} style={{ right: flow === 'analyzing' ? '38%' : '0%' }} /></div>
+          {(flow === 'mapped' || flow === 'confirming') && parsed && (
             <div>
               <div className="map-grid">
                 <div className="map-head"><span>Colonne du fichier</span><span /><span>Champ Efficience</span><span style={{ textAlign: 'right' }}>Fiabilité</span></div>
-                {COLUMNS.map((c, i) => (
-                  <div className="map-row" style={{ animationDelay: i * 90 + 'ms' }} key={c.src}>
-                    <div className="map-col"><span className="dt" style={{ background: c.dt }} />{c.src}</div>
+                {mapping.map((m, i) => (
+                  <div className="map-row" style={{ animationDelay: i * 90 + 'ms' }} key={m.field}>
+                    <div className="map-col">
+                      <select className="inp" style={{ padding: '5px 8px', fontSize: 12.5 }} value={m.headerIndex ?? ''} onChange={(e) => changeMapping(m.field, e.target.value === '' ? null : +e.target.value)}>
+                        <option value="">— ignorer —</option>
+                        {parsed.headers.map((h, hi) => <option key={hi} value={hi}>{h}</option>)}
+                      </select>
+                    </div>
                     <div className="map-arrow"><Icon name="arrowright" /></div>
-                    <div className="map-col map-to"><Icon name="check" />{c.to}</div>
-                    <div className="map-match">{MATCH[i]} %</div>
+                    <div className="map-col map-to"><Icon name="check" />{FIELD_LABELS[m.field]}</div>
+                    <div className="map-match">{m.headerIndex != null ? `${m.confidence || 60} %` : '—'}</div>
                   </div>
                 ))}
               </div>
               <div className="imp-foot">
-                <div className="grow">Détection des colonnes — importez un fichier réel pour remplir votre base.</div>
-                <button className="btn outline" onClick={() => setFlow('idle')}>Annuler</button>
+                <div className="grow">Ajustez la correspondance si besoin, puis confirmez l’import.</div>
+                <button className="btn outline" onClick={cancelImport}>Annuler</button>
                 <button className="btn acc" disabled={flow === 'confirming'} style={flow === 'confirming' ? { opacity: 0.8 } : undefined} onClick={confirmImport}>
                   {flow === 'confirming' ? <><span className="spin" />Import en cours…</> : <><Icon name="check" />Importer le fichier</>}
                 </button>
@@ -179,7 +248,7 @@ export function Contacts() {
       )}
 
       {/* main CRM */}
-      {crmImported && flow === 'idle' && (
+      {contacts.length > 0 && flow === 'idle' && (
         <div className="fade-in">
           <div className="crm-stats">
             <div className="crm-stat"><div className="cs-l"><Icon name="users" />Contacts</div><div className="cs-v" ref={totalRef}>0</div><div className="cs-f">base importée · synchronisée</div></div>
@@ -197,7 +266,7 @@ export function Contacts() {
                     <div key={s.id} className={'seg-item' + (!custom && seg === s.id ? ' active' : '')} onClick={() => pickSeg(s.id)}>
                       <div className="si-ic"><RawIcon svg={UI[s.icon as keyof typeof UI] || UI.users} /></div>
                       <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">{s.desc}</div></div>
-                      <div className="si-c">{fr(segCount(s))}</div>
+                      <div className="si-c">{fr(contacts.filter(s.pred).length)}</div>
                     </div>
                   ))}
                 </div>
@@ -209,13 +278,13 @@ export function Contacts() {
                   <p className="bld-lead">Combinez des critères : Efficience recompte votre audience en temps réel.</p>
                   <div>
                     {criteria.map((cr, idx) => {
-                      const f = FIELDS[cr.field];
+                      const f = fields[cr.field];
                       return (
                         <div key={idx}>
                           <div className="crit-row" style={{ gridTemplateColumns: '1fr auto' }}>
                             <div className="crit-grid full" style={{ gridTemplateColumns: '1fr' }}>
                               <select className="inp" value={cr.field} onChange={(e) => changeCriterion(idx, 'field', e.target.value)}>
-                                {Object.entries(FIELDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                {Object.entries(fields).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                               </select>
                             </div>
                             <button className="crit-x" onClick={() => removeCriterion(idx)}><Icon name="trash" /></button>
@@ -267,12 +336,12 @@ export function Contacts() {
                   <tbody>
                     {rows.length ? rows.map((c) => (
                       <tr key={c.id}>
-                        <td><div className="ct-name"><div className="av" style={{ background: avFor(c) }}>{initials(c)}</div><div><div className="cn-t">{c.name}</div><div className="cn-e">{c.email}</div></div></div></td>
-                        <td><span className="ct-city"><Icon name="pin" />{c.city}</span></td>
-                        <td className="num">{c.basket.toFixed(1).replace('.', ',')} €</td>
-                        <td>{c.lastDays === 0 ? 'aujourd’hui' : 'il y a ' + c.lastDays + ' j'}</td>
-                        <td><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{c.tags.map((t) => <span key={t} className={'tag-chip ' + (t === 'VIP' ? 'vip' : t === 'Nouveau' ? 'new' : '')}>{t}</span>)}</div></td>
-                        <td style={{ textAlign: 'center' }}>{c.consent ? <span className="consent-y"><Icon name="check" /></span> : <span className="consent-n"><Icon name="close" /></span>}</td>
+                        <td><div className="ct-name"><div className="av" style={{ background: avFor(c) }}>{initials(c)}</div><div><div className="cn-t">{c.name}</div><div className="cn-e">{c.email || '—'}</div></div></div></td>
+                        <td><span className="ct-city"><Icon name="pin" />{c.city || '—'}</span></td>
+                        <td className="num">{c.basket != null ? c.basket.toFixed(1).replace('.', ',') + ' €' : '—'}</td>
+                        <td>{c.lastDays == null ? '—' : c.lastDays === 0 ? 'aujourd’hui' : 'il y a ' + c.lastDays + ' j'}</td>
+                        <td><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(c.tags || []).map((t) => <span key={t} className="tag-chip">{t}</span>)}</div></td>
+                        <td style={{ textAlign: 'center' }}>{c.consent === true ? <span className="consent-y"><Icon name="check" /></span> : c.consent === false ? <span className="consent-n"><Icon name="close" /></span> : <span style={{ color: 'var(--tx-3)' }}>—</span>}</td>
                       </tr>
                     )) : (
                       <tr><td colSpan={6}><div className="crm-empty" style={{ minHeight: 180 }}>
@@ -296,9 +365,14 @@ export function Contacts() {
   );
 }
 
-function ExportButton() {
+function ExportButton({ contacts }: { contacts: Contact[] }) {
   const [txt, setTxt] = useState<React.ReactNode>(<><Icon name="download" />Exporter le segment</>);
-  return <button className="btn outline" onClick={() => { setTxt('Export .csv généré'); setTimeout(() => setTxt(<><Icon name="download" />Exporter le segment</>), 1100); }}>{txt}</button>;
+  const doExport = () => {
+    downloadCsv('contacts_efficience.csv', contactsToCsv(contacts));
+    setTxt('Export .csv généré');
+    setTimeout(() => setTxt(<><Icon name="download" />Exporter le segment</>), 1100);
+  };
+  return <button className="btn outline" onClick={doExport}>{txt}</button>;
 }
 
 function SaveSegmentButton({ onSave }: { onSave: () => void }) {

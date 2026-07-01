@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useEff, type ScreenId } from './state/EffContext';
 import { useConnections } from './state/ConnectionsContext';
+import { useContacts } from './state/ContactsContext';
 import { Icon } from './lib/Icon';
 import { fr } from './lib/format';
-import { TOTAL } from './lib/population';
 import { Dashboard } from './screens/Dashboard';
 import { Connexion } from './screens/Connexion';
 import { Contacts } from './screens/Contacts';
@@ -43,8 +43,9 @@ const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }>
 };
 
 export function App() {
-  const { screen, show, crmImported, client } = useEff();
+  const { screen, show, client } = useEff();
   const { connectedCount } = useConnections();
+  const { contacts } = useContacts();
 
   // First connection: open the Configurateur so the real analysis runs.
   useEffect(() => {
@@ -73,7 +74,7 @@ export function App() {
                 <Icon name={it.icon} />
                 {it.label}
                 {it.screen === 'connexion' && <span className="count">{connectedCount}</span>}
-                {it.screen === 'contacts' && <span className="count">{crmImported ? fr(TOTAL) : '0'}</span>}
+                {it.screen === 'contacts' && <span className="count">{fr(contacts.length)}</span>}
                 {it.screen === 'campagnes' && <span className="badge" style={{ background: 'var(--acc-soft)', color: 'var(--acc)' }}>IA</span>}
               </div>
             ))}

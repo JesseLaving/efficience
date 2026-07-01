@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useContacts } from '../state/ContactsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -97,9 +98,10 @@ function StatusPill({ s }: { s: Campaign['status'] }) {
 
 export function Campagnes() {
   const { campaignSeed, clearCampaignSeed } = useEff();
+  const { contacts } = useContacts();
   const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL);
   const [view, setView] = useState<'list' | 'builder'>('list');
-  const segs = useRef<SegmentInfo[]>(segmentInfos()).current;
+  const segs = useMemo<SegmentInfo[]>(() => segmentInfos(contacts), [contacts]);
 
   // builder state
   const [seg, setSeg] = useState<SegmentInfo>(segs[0]);

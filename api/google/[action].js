@@ -5,8 +5,10 @@ import callback from '../_h/google/callback.js';
 import refresh from '../_h/google/refresh.js';
 import accounts from '../_h/google/accounts.js';
 import post from '../_h/google/post.js';
+import contactslogin from '../_h/google/contactslogin.js';
+import contactsfetch from '../_h/google/contactsfetch.js';
 
-const MAP = { login, authlogin, callback, refresh, accounts, post };
+const MAP = { login, authlogin, callback, refresh, accounts, post, contactslogin, contactsfetch };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;

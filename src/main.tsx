@@ -9,6 +9,7 @@ import { EffProvider } from './state/EffContext';
 import { ConnectionsProvider } from './state/ConnectionsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { BrandProvider } from './state/BrandContext';
+import { ContactsProvider } from './state/ContactsContext';
 import { AuthWrapper } from './components/AuthWrapper';
 
 createRoot(document.getElementById('root')!).render(
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
     <ConnectionsProvider>
       <CalendarProvider>
         <BrandProvider>
-          <AuthWrapper />
+          <ContactsProvider>
+            <AuthWrapper />
+          </ContactsProvider>
         </BrandProvider>
       </CalendarProvider>
     </ConnectionsProvider>

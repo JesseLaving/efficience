@@ -19,8 +19,6 @@ interface EffCtx {
   show: (id: ScreenId) => void;
   client: ClientProfile;
   setClient: (c: ClientProfile) => void;
-  crmImported: boolean;
-  setCrmImported: (v: boolean) => void;
   campaignSeed: { seg: string } | null;
   newCampaign: (seg: string) => void;
   clearCampaignSeed: () => void;
@@ -41,14 +39,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     return { name: b.name, initials: b.initials };
   });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
-  const [crmImported, setCrmImportedState] = useState<boolean>(() => localStorage.getItem('eff_crm_v2') === '1');
   const [studioSeed, setStudioSeed] = useState<string | null>(null);
-
-  const setCrmImported = useCallback((v: boolean) => {
-    setCrmImportedState(v);
-    if (v) localStorage.setItem('eff_crm_v2', '1');
-    else localStorage.removeItem('eff_crm_v2');
-  }, []);
 
   const show = useCallback((id: ScreenId) => {
     setScreen(id);
@@ -64,7 +55,6 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const value: EffCtx = {
     screen, show,
     client, setClient,
-    crmImported, setCrmImported,
     campaignSeed, newCampaign, clearCampaignSeed,
     studioSeed, seedStudio, clearStudioSeed,
   };

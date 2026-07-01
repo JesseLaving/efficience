@@ -3,10 +3,12 @@
    the URL hash (fragments are not sent to servers). Tokens live in the user's
    browser only — no shared server store.
 
-   Two flows share this callback (same registered redirect URI):
+   Three flows share this callback (same registered redirect URI):
    - Business Profile connect (default): bounce tokens to the URL hash.
    - Identity login (state.kind === 'auth'): upsert the user, set a signed
-     session cookie, and redirect to the app. */
+     session cookie, and redirect to the app.
+   - Contacts import (state.kind === 'contacts'): bounce the access token as
+     gc_token (one-shot, no refresh — the client fetches People API once). */
 import { query, makeSession } from '../db.js';
 
 const REDIRECT = 'https://efficience.vercel.app/api/google/callback';
@@ -59,6 +61,21 @@ async function authCallback(res, ret, code) {
   }
 }
 
+async function contactsCallback(res, ret, code) {
+  try {
+    const body = new URLSearchParams({
+      code, client_id: process.env.GOOGLE_OAUTH_CLIENT_ID, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirect_uri: REDIRECT, grant_type: 'authorization_code',
+    });
+    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const d = await r.json();
+    if (d.error || !d.access_token) return bounce(res, ret, { gc_error: d.error_description || d.error || 'token' });
+    return bounce(res, ret, { gc_token: d.access_token });
+  } catch (e) {
+    return bounce(res, ret, { gc_error: String(e && e.message || e) });
+  }
+}
+
 export default async function handler(req, res) {
   let ret = 'https://efficience.vercel.app/';
   let kind = null;
@@ -66,9 +83,13 @@ export default async function handler(req, res) {
 
   const error = getParam(req, 'error');
   const code = getParam(req, 'code');
-  if (error || !code) return bounce(res, ret, { google_error: error || 'Autorisation annulée' });
+  if (error || !code) {
+    if (kind === 'contacts') return bounce(res, ret, { gc_error: error || 'Autorisation annulée' });
+    return bounce(res, ret, { google_error: error || 'Autorisation annulée' });
+  }
 
   if (kind === 'auth') return authCallback(res, ret, code);
+  if (kind === 'contacts') return contactsCallback(res, ret, code);
 
   try {
     const body = new URLSearchParams({
