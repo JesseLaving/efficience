@@ -15,6 +15,10 @@ import { TiktokPostModal } from '../components/TiktokPostModal';
 import { TiktokVideosModal } from '../components/TiktokVideosModal';
 
 const META_NETS = ['instagram', 'facebook'];
+/* Réseaux avec une vraie intégration (connexion + publication). Les autres
+   (X, Pinterest) n'ont aucune action possible aujourd'hui — inutile de leur
+   donner la même carte pleine taille que les intégrations fonctionnelles. */
+const INTEGRATED_IDS = [...META_NETS, 'google', 'linkedin', 'youtube', 'tiktok'];
 
 function FlashButton({ className, label, flash, onClick }: { className: string; label: string; flash: string; onClick?: () => void }) {
   const [txt, setTxt] = useState(label);
@@ -168,7 +172,7 @@ function NetCard({ net }: { net: Network }) {
       <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {
-    const integrated = meta || isGoogle || isLinkedin || isYoutube || isTiktok;
+    const integrated = INTEGRATED_IDS.includes(net.id);
     stateLbl = <span className="nc-dot"><i />Non connecté</span>;
     body = <div className="nc-avail"><div className="nc-desc">{net.desc}{!integrated ? <><br /><span style={{ color: 'var(--tx-3)', fontSize: 12 }}>Disponible après validation de l’app {net.name}.</span></> : null}</div></div>;
     foot = integrated
@@ -245,8 +249,26 @@ export function Connexion() {
       </div>
 
       <div className="net-grid">
-        {NETWORKS.map((n) => <NetCard key={n.id} net={n} />)}
+        {NETWORKS.filter((n) => INTEGRATED_IDS.includes(n.id)).map((n) => <NetCard key={n.id} net={n} />)}
       </div>
+
+      {(() => {
+        const soon = NETWORKS.filter((n) => !INTEGRATED_IDS.includes(n.id));
+        if (!soon.length) return null;
+        return (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tx-3)', marginBottom: 10 }}>Bientôt disponibles</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {soon.map((n) => (
+                <span key={n.id} className="chip" title={`Disponible après validation de l’app ${n.name}.`}>
+                  <span style={{ width: 14, height: 14, display: 'inline-grid' }}><Brand name={n.id as BrandName} /></span>
+                  {n.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </section>
   );
 }

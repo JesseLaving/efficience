@@ -259,9 +259,7 @@ export function Studio() {
                 </div>
                 <div className="spec-grid">
                   <div className="spec-row"><Icon name="image" /><div><div className="sr-l">Dimensions conseillées</div><div className="sr-v">{spec?.rec || '—'}</div></div></div>
-                  <div className="spec-row"><Icon name="sheet" /><div><div className="sr-l">Image</div><div className="sr-v">{spec?.img || '—'}</div></div></div>
-                  <div className="spec-row"><Icon name="play" /><div><div className="sr-l">Vidéo</div><div className="sr-v">{spec?.video || '—'}</div></div></div>
-                  <div className="spec-row"><Icon name="filter" /><div><div className="sr-l">Ratio</div><div className="sr-v">{ratio}</div></div></div>
+                  <div className="spec-row"><Icon name="sheet" /><div><div className="sr-l">Image · Vidéo</div><div className="sr-v">{spec?.img || '—'} · {spec?.video || '—'}</div></div></div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                   <button className="btn outline sm" onClick={() => setVisualOpen(true)} title="Composer un visuel aux couleurs de votre marque">

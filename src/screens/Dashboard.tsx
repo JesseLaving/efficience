@@ -127,18 +127,6 @@ function Chart({ series }: { series: MetaSeries | null }) {
   );
 }
 
-/* ---------- progress bar ---------- */
-function Prog({ label, pct }: { label: string; pct: number }) {
-  const ref = useRef<HTMLElement>(null);
-  useEffect(() => { requestAnimationFrame(() => { if (ref.current) ref.current.style.width = pct + '%'; }); }, [pct]);
-  return (
-    <div className="prog-item">
-      <div className="pi-h"><span>{label}</span><span className="pct">{pct} %</span></div>
-      <div className="bar"><i ref={ref as React.RefObject<HTMLElement>} style={{ width: 0 }} /></div>
-    </div>
-  );
-}
-
 export function Dashboard() {
   const { show } = useEff();
   const { totalReach, metaStats } = useConnections();
@@ -246,7 +234,7 @@ export function Dashboard() {
 
         <div className="stack">
           <div className="card">
-            <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm">Tout voir</button></div>
+            <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm" onClick={() => show('calendar')}>Tout voir</button></div>
             <div>
               {POSTS.length === 0 ? (
                 <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13.5, textAlign: 'center', padding: '28px 24px' }}>
@@ -262,14 +250,6 @@ export function Dashboard() {
                   <span className={'tag ' + p.tag}>{p.tagL}</span>
                 </div>
               ))}
-            </div>
-          </div>
-          <div className="card">
-            <div className="card-h"><div><h3>Plan de com — juin</h3></div></div>
-            <div className="pad">
-              <Prog label="Calendrier éditorial" pct={0} />
-              <Prog label="Objectif abonnés" pct={0} />
-              <Prog label="Réponses aux avis Google" pct={0} />
             </div>
           </div>
         </div>
