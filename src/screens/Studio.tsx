@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
+import { useCalendar } from '../state/CalendarContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -46,6 +47,14 @@ const handleFor = (_id: string): string => getBusiness().name;
 const escapeHtml = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
 const escapeTags = (s: string) => escapeHtml(s).replace(/#([\wàâäéèêëîïôöùûüç-]+)/gi, '<span class="tags">#$1</span>');
 
+/* "2026-07-02T14:00" — l'heure pleine suivante, pour préremplir le champ de
+   programmation avec une valeur plausible plutôt qu'un champ vide. */
+function nextHourIso(): string {
+  const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+}
+
 interface Media { url: string; kind: 'image' | 'video'; name: string; size: number; }
 
 function ratioBox(r: string) {
@@ -62,6 +71,7 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
 export function Studio() {
   const { studioSeed, clearStudioSeed } = useEff();
   const { isConnected } = useConnections();
+  const { addToCalendar } = useCalendar();
   const [type, setType] = useState<ComposeType>('post');
   const [text, setText] = useState(studioSeed || '');
 
@@ -185,6 +195,17 @@ export function Studio() {
   const [visualOpen, setVisualOpen] = useState(false);
   const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
   const anyConnected = sel.some((id) => isConnected(id));
+
+  // Programmation au calendrier — même file que le Planning éditorial
+  // (src/state/CalendarContext.tsx), pour que "Publier" / "Auto-publier"
+  // fonctionnent à l'identique quelle que soit l'origine du post.
+  const [schedOpen, setSchedOpen] = useState(false);
+  const [schedAt, setSchedAt] = useState(() => nextHourIso());
+  const schedule = () => {
+    if (!text.trim() || !sel.length) return;
+    addToCalendar({ dateTime: schedAt, text, networks: sel, photoUrl: publicImageUrl, pillar: null });
+    setSchedOpen(false);
+  };
 
   return (
     <section className="screen show anim">
@@ -312,10 +333,20 @@ export function Studio() {
                 </div>
               </div>
 
-              <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {schedOpen && (
+                <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <label className="field-lbl" style={{ margin: 0, flexShrink: 0 }}>Programmer pour</label>
+                  <input type="datetime-local" className="inp" style={{ width: 220 }} value={schedAt} onChange={(e) => setSchedAt(e.target.value)} />
+                  <button className="btn acc sm" disabled={!text.trim() || !sel.length} onClick={schedule}><Icon name="check" />Confirmer</button>
+                  <button className="btn ghost sm" onClick={() => setSchedOpen(false)}>Annuler</button>
+                </div>
+              )}
+
+              <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <FlashBtn className="btn outline" label="Enregistrer le brouillon" flash="Brouillon enregistré" />
+                {!anyConnected && <span style={{ fontSize: 12, color: 'var(--tx-3)', whiteSpace: 'nowrap' }}>Reliez un réseau pour publier.</span>}
                 <span style={{ flex: 1 }} />
-                {!anyConnected && <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Reliez un réseau pour publier.</span>}
+                <button className="btn outline" disabled={!text.trim() || !sel.length} onClick={() => setSchedOpen((v) => !v)}><Icon name="clock" />Programmer</button>
                 <button className="btn acc" disabled={!text.trim() || !anyConnected} onClick={() => setPublishOpen(true)}><Icon name="send" />Publier maintenant</button>
               </div>
             </>
