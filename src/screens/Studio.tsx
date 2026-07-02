@@ -7,7 +7,7 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
 import { getBusiness } from '../lib/business';
-import { generatePost, improvePost } from '../lib/ai';
+import { generatePost, improvePost, generateHashtags } from '../lib/ai';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
 
@@ -129,18 +129,16 @@ export function Studio() {
     rd.readAsDataURL(f);
   };
 
-  const insert = (k: 'emoji' | 'hash') => {
-    const map = { emoji: ' ✦', hash: ' #formation #stratégiecommerciale' };
-    setText((t) => t + map[k]);
-  };
+  const insertEmoji = () => setText((t) => t + ' ✦');
 
-  // Rédaction / amélioration par IA (Claude), avec repli propre si la clé manque.
-  const [aiBusy, setAiBusy] = useState(false);
+  // Rédaction / amélioration / hashtags par IA (Gemini en priorité), avec
+  // repli propre si aucune clé n'est configurée.
+  const [aiBusy, setAiBusy] = useState<null | 'post' | 'improve' | 'hashtags'>(null);
   const runAi = async (mode: 'post' | 'improve') => {
     const b = getBusiness();
     const brief = text.trim();
     if (mode === 'improve' && !brief) { showToast(UI.close, 'Écrivez d’abord un texte à améliorer.'); return; }
-    setAiBusy(true);
+    setAiBusy(mode);
     try {
       const ctx = { name: b.name, sector: b.sector, city: b.city, network: active ? netName(active) : undefined };
       const res = mode === 'improve'
@@ -154,7 +152,26 @@ export function Studio() {
       }
     } catch (e) {
       showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
-    } finally { setAiBusy(false); }
+    } finally { setAiBusy(null); }
+  };
+
+  const runHashtags = async () => {
+    const brief = text.trim();
+    if (!brief) { showToast(UI.close, 'Écrivez d’abord un texte pour générer des hashtags pertinents.'); return; }
+    setAiBusy('hashtags');
+    try {
+      const b = getBusiness();
+      const ctx = { name: b.name, sector: b.sector, network: active ? netName(active) : undefined };
+      const res = await generateHashtags(brief, ctx);
+      if (res.available && res.text) {
+        setText((t) => t + ' ' + res.text!.trim());
+        showToast(UI.check, 'Hashtags ajoutés par IA');
+      } else {
+        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'}`);
+      }
+    } catch (e) {
+      showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
+    } finally { setAiBusy(null); }
   };
 
   const finish = (label: string) => {
@@ -224,10 +241,10 @@ export function Studio() {
                       </>;
                     })()}</div>
                     <div className="cmp-tools">
-                      <button title="Emoji" onClick={() => insert('emoji')}>😊</button>
-                      <button title="Hashtag" onClick={() => insert('hash')}><Icon name="tag" /></button>
-                      <button title="Rédiger par IA (Claude)" disabled={aiBusy} onClick={() => runAi('post')}>{aiBusy ? <span className="spin lt" /> : <Icon name="wand" />}</button>
-                      <button title="Améliorer le texte par IA" disabled={aiBusy} onClick={() => runAi('improve')}><Icon name="sparkles2" /></button>
+                      <button title="Emoji" onClick={insertEmoji}>😊</button>
+                      <button title="Générer des hashtags par IA" disabled={!!aiBusy} onClick={runHashtags}>{aiBusy === 'hashtags' ? <span className="spin lt" /> : <Icon name="tag" />}</button>
+                      <button title="Rédiger par IA" disabled={!!aiBusy} onClick={() => runAi('post')}>{aiBusy === 'post' ? <span className="spin lt" /> : <Icon name="wand" />}</button>
+                      <button title="Améliorer le texte par IA" disabled={!!aiBusy} onClick={() => runAi('improve')}>{aiBusy === 'improve' ? <span className="spin lt" /> : <Icon name="sparkles2" />}</button>
                     </div>
                   </div>
                 </div>

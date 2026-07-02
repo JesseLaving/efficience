@@ -1,5 +1,5 @@
 /* AI copywriting — provider-agnostic, free-tier friendly.
-   POST { kind: 'post'|'caption'|'email'|'improve', brief, context }
+   POST { kind: 'post'|'caption'|'email'|'improve'|'hashtags', brief, context }
    Picks the first provider whose key is set, in this order:
      1. Google Gemini   (GEMINI_API_KEY)   — free tier, recommended
      2. Groq            (GROQ_API_KEY)     — free tier, very fast (Llama 3.3)
@@ -8,17 +8,7 @@
    Degrades to { available:false, reason } when no key is set, so the client
    falls back to the built-in template engine. Hard rule (Jesse): never invent
    figures, stats, testimonials or specific facts — stay qualitative. */
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-function json(res, status, data) {
-  cors(res); res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.statusCode = status; res.end(JSON.stringify(data));
-}
-function readBody(req) {
-  return new Promise((r) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { try { r(JSON.parse(b || '{}')); } catch { r({}); } }); });
-}
+import { cors, json, readBody, geminiGenerate, extractText, SAFETY_SETTINGS } from './_shared.js';
 
 function systemPrompt(ctx) {
   const who = [
@@ -49,6 +39,9 @@ function userPrompt(kind, brief, ctx) {
   if (kind === 'improve') {
     return `Améliore et réécris ce texte de publication${net} pour le rendre plus percutant et engageant, en gardant l'intention.${tone}${pillar}\n\nTexte :\n« ${brief} »\n\nRéponds uniquement avec le texte amélioré, prêt à publier (avec hashtags pertinents si adapté au réseau).`;
   }
+  if (kind === 'hashtags') {
+    return `Propose 3 à 6 hashtags pertinents${net} pour cette publication, à partir du texte suivant :\n« ${brief} »\n\nRéponds UNIQUEMENT avec les hashtags séparés par un espace (ex : #motclé1 #motclé2), sans numérotation, sans autre texte.`;
+  }
   return `Rédige une publication${net} sur le sujet : « ${brief} ».${tone}${pillar}\n`
     + `Structure-la pour capter l'attention dès la première ligne, développer l'intérêt et finir par un appel à l'action clair. `
     + `Ajoute 3 à 6 hashtags pertinents en fin si le réseau s'y prête. Longueur adaptée au réseau. Réponds uniquement avec le texte prêt à publier.`;
@@ -56,24 +49,16 @@ function userPrompt(kind, brief, ctx) {
 
 // ---- providers: each returns the generated text or throws ----
 async function callGemini(system, user, maxTokens) {
-  const key = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
-      // Gemini 2.5 "thinking" consumes the output budget → disable it for copy,
-      // and keep a generous ceiling so the answer is never truncated.
-      generationConfig: { maxOutputTokens: Math.max(maxTokens, 1024), temperature: 0.8, thinkingConfig: { thinkingBudget: 0 } },
-    }),
+  const d = await geminiGenerate(model, {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: user }] }],
+    // Gemini 2.5 "thinking" consumes the output budget → disable it for copy,
+    // and keep a generous ceiling so the answer is never truncated.
+    generationConfig: { maxOutputTokens: Math.max(maxTokens, 1024), temperature: 0.8, thinkingConfig: { thinkingBudget: 0 } },
+    safetySettings: SAFETY_SETTINGS,
   });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((d && d.error && d.error.message) || `Gemini HTTP ${r.status}`);
-  const text = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts || [])
-    .map((p) => p.text || '').join('').trim();
-  if (!text) throw new Error('Réponse Gemini vide');
-  return text;
+  return extractText(d);
 }
 
 async function callOpenAICompat(url, key, model, system, user, maxTokens, extraHeaders) {

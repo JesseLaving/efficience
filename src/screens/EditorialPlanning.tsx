@@ -6,10 +6,13 @@ import { UI, type BrandName } from '../lib/icons';
 import { getBusiness } from '../lib/business';
 import { showToast } from '../lib/toast';
 import {
-  DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planToCsv, type PlanItem,
+  DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planScaffold, applyIdeas, planToCsv, type PlanItem,
 } from '../lib/editorial';
+import { generateAiPlanIdeas } from '../lib/ai';
 import { buildAidaPost } from '../lib/aida';
 import { defaultDateTime } from '../lib/calendar';
+
+const AI_MAX_SLOTS = 30;
 
 const netLabel: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', google: 'Google Business',
@@ -33,14 +36,46 @@ export function EditorialPlanning() {
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
+  const [aiMode, setAiMode] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   const weeks = DURATIONS.find((d) => d.key === durKey)?.weeks ?? 4;
 
-  const generate = () => {
+  const generate = async () => {
     const b = getBusiness();
-    const items = generatePlan({ sector: sector.trim() || b.sector, city: b.city, weeks, perWeek });
-    setPlan(items);
-    showToast(UI.check, `${items.length} publications proposées`);
+    const sec = sector.trim() || b.sector;
+    setAiNote(null);
+
+    if (!aiMode) {
+      const items = generatePlan({ sector: sec, city: b.city, weeks, perWeek });
+      setPlan(items);
+      showToast(UI.check, `${items.length} publications proposées`);
+      return;
+    }
+
+    const scaffold = planScaffold({ weeks, perWeek });
+    if (scaffold.length > AI_MAX_SLOTS) {
+      showToast(UI.close, `Génération IA limitée à ${AI_MAX_SLOTS} publications à la fois — réduisez la durée ou le rythme, ou désactivez l’IA pour ce volume.`);
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const slots = scaffold.map((s) => ({ pillar: s.pillar, format: s.format, network: s.network }));
+      const res = await generateAiPlanIdeas({ name: b.name, sector: sec, city: b.city }, slots);
+      if (res.available && res.ideas) {
+        setPlan(applyIdeas(scaffold, res.ideas, sec, b.city));
+        showToast(UI.check, `${scaffold.length} publications proposées par IA`);
+      } else {
+        setPlan(applyIdeas(scaffold, [], sec, b.city));
+        setAiNote(`Gemini indisponible (${res.reason || 'erreur'}) — sujets génériques utilisés en repli.`);
+        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'} — repli sur les sujets génériques.`);
+      }
+    } catch (e) {
+      setPlan(applyIdeas(scaffold, [], sec, b.city));
+      setAiNote('IA indisponible — sujets génériques utilisés en repli.');
+      showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
+    } finally { setAiBusy(false); }
   };
 
   // Regroupe le planning par mois pour l'affichage.
@@ -139,9 +174,26 @@ export function EditorialPlanning() {
             </div>
           </div>
 
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-2)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={aiMode} onChange={(e) => setAiMode(e.target.checked)} style={{ accentColor: 'var(--acc)' }} />
+            Sujets personnalisés par IA (Gemini)
+            <span style={{ color: 'var(--tx-3)' }}>· sinon banque de sujets locale, adaptée à votre secteur</span>
+          </label>
+          {aiMode && weeks * perWeek > AI_MAX_SLOTS && (
+            <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>
+              L’IA personnalise jusqu’à {AI_MAX_SLOTS} publications par génération — réduisez la durée ou le rythme pour ce volume ({weeks * perWeek}).
+            </div>
+          )}
+          {aiNote && <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{aiNote}</div>}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>Propositions générées localement, sans donnée inventée.</span>
-            <button className="btn acc" onClick={generate}><RawIcon svg={UI.sparkles2} />{plan ? 'Régénérer le planning' : 'Générer le planning'}</button>
+            <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
+              {aiMode ? 'Sujets rédigés par Gemini pour votre entreprise — dates et équilibre calculés localement.' : 'Propositions générées localement, sans donnée inventée.'}
+            </span>
+            <button className="btn acc" disabled={aiBusy} onClick={generate}>
+              {aiBusy ? <span className="spin" /> : <RawIcon svg={UI.sparkles2} />}
+              {plan ? 'Régénérer le planning' : 'Générer le planning'}
+            </button>
           </div>
         </div>
       </div>

@@ -287,7 +287,11 @@ function sectorShort(sector: string): string {
   return w || sector.toLowerCase();
 }
 
-export interface PlanItem {
+/* Un créneau du plan : date + pilier/format/réseau attribués, SANS le sujet
+   de contenu — le sujet est ajouté ensuite par applyIdeas() (banque locale
+   ou, en mode IA, sujets Gemini). Sépare la logique déterministe (dates,
+   équilibre des piliers) de la source des idées. */
+export interface PlanSlot {
   date: string;        // ISO yyyy-mm-dd
   label: string;       // "lun. 24 juin"
   monthLabel: string;  // "juin 2026"
@@ -296,6 +300,9 @@ export interface PlanItem {
   pillar: string;
   format: string;
   network: string;
+}
+
+export interface PlanItem extends PlanSlot {
   idea: string;
 }
 
@@ -304,42 +311,33 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 /* Jours de publication préférés, par ordre de priorité (getDay : 0=dim). */
 const PREF_DAYS = [2, 4, 1, 3, 5, 6, 0];
 
-export function generatePlan(opts: { sector: string; city?: string; weeks: number; perWeek: number }): PlanItem[] {
-  const { sector, city = '', weeks, perWeek } = opts;
-  const profile = profileFor(sector);
-  const secShort = sectorShort(sector);
-  const cityTxt = city || 'votre ville';
-
+/* Calcule les créneaux (dates réelles + rotation équilibrée des piliers),
+   sans idée de contenu — logique 100% déterministe, jamais déléguée à un LLM. */
+export function planScaffold(opts: { weeks: number; perWeek: number }): PlanSlot[] {
+  const { weeks, perWeek } = opts;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dow = today.getDay();
   const mondayOffset = dow === 0 ? -6 : 1 - dow;
   const monday = new Date(today); monday.setDate(today.getDate() + mondayOffset);
 
-  const items: PlanItem[] = [];
-  const ideaIdx: Record<string, number> = {};
+  const slots: PlanSlot[] = [];
   let pillarCounter = 0;
 
   for (let w = 0; w < weeks; w++) {
-    const slots: Date[] = [];
+    const days: Date[] = [];
     for (let i = 0; i < perWeek; i++) {
       const g = PREF_DAYS[i % 7];
       const off = g === 0 ? 6 : g - 1;
       const d = new Date(monday);
       d.setDate(monday.getDate() + w * 7 + off);
-      if (d >= today) slots.push(d);
+      if (d >= today) days.push(d);
     }
-    slots.sort((a, b) => a.getTime() - b.getTime());
+    days.sort((a, b) => a.getTime() - b.getTime());
 
-    for (const d of slots) {
+    for (const d of days) {
       const pillar = PILLARS[pillarCounter % PILLARS.length];
       pillarCounter++;
-      const bank = ideasFor(profile, pillar.key);
-      const k = pillar.key;
-      ideaIdx[k] = ideaIdx[k] ?? 0;
-      const raw = bank.length ? bank[ideaIdx[k] % bank.length] : '';
-      ideaIdx[k]++;
-      const idea = raw.replace(/\{secteur\}/g, secShort).replace(/\{ville\}/g, cityTxt);
-      items.push({
+      slots.push({
         date: iso(d),
         label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }),
         monthLabel: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
@@ -348,11 +346,39 @@ export function generatePlan(opts: { sector: string; city?: string; weeks: numbe
         pillar: pillar.label,
         format: pillar.format,
         network: pillar.network,
-        idea,
       });
     }
   }
-  return items;
+  return slots;
+}
+
+/* Complète un scaffold avec la banque d'idées locale (par profil de secteur). */
+function applyLocalIdeas(slots: PlanSlot[], sector: string, city?: string): PlanItem[] {
+  const profile = profileFor(sector);
+  const secShort = sectorShort(sector);
+  const cityTxt = city || 'votre ville';
+  const ideaIdx: Record<string, number> = {};
+  return slots.map((slot) => {
+    const bank = ideasFor(profile, slot.pillarKey);
+    const k = slot.pillarKey;
+    ideaIdx[k] = ideaIdx[k] ?? 0;
+    const raw = bank.length ? bank[ideaIdx[k] % bank.length] : '';
+    ideaIdx[k]++;
+    return { ...slot, idea: raw.replace(/\{secteur\}/g, secShort).replace(/\{ville\}/g, cityTxt) };
+  });
+}
+
+/* Complète un scaffold avec des sujets fournis en externe (ex. Gemini), un
+   par créneau, dans le même ordre. Une chaîne vide/manquante retombe sur la
+   banque locale pour ce créneau — jamais de carte sans sujet. */
+export function applyIdeas(slots: PlanSlot[], ideas: string[], sector: string, city?: string): PlanItem[] {
+  const fallback = applyLocalIdeas(slots, sector, city);
+  return slots.map((slot, i) => ({ ...slot, idea: (ideas[i] || '').trim() || fallback[i].idea }));
+}
+
+export function generatePlan(opts: { sector: string; city?: string; weeks: number; perWeek: number }): PlanItem[] {
+  const { sector, city, weeks, perWeek } = opts;
+  return applyLocalIdeas(planScaffold({ weeks, perWeek }), sector, city);
 }
 
 /* Construit un CSV téléchargeable du planning. */

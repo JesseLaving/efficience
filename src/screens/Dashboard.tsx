@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
@@ -139,6 +140,7 @@ function Prog({ label, pct }: { label: string; pct: number }) {
 }
 
 export function Dashboard() {
+  const { show } = useEff();
   const { totalReach, metaStats } = useConnections();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
   const [removing, setRemoving] = useState<Record<string, boolean>>({});
@@ -190,7 +192,7 @@ export function Dashboard() {
         </div>
         <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>
           <button className="btn outline" onClick={() => setModal(true)}><Icon name="plus" />Créer un KPI</button>
-          <button className="btn acc"><span className="ic">✦</span>Générer le mois avec l’IA</button>
+          <button className="btn acc" onClick={() => show('planning')}><span className="ic">✦</span>Générer le mois avec l’IA</button>
         </div>
       </div>
 

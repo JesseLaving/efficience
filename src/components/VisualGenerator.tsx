@@ -9,7 +9,7 @@ import { getBusiness } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
-import { aiImageUrl, aiImagePrompt } from '../lib/ai';
+import { aiImageUrl, aiImagePrompt, generateAiImage } from '../lib/ai';
 import { brandPhoto, uploadImage } from '../lib/upload';
 
 interface Props {
@@ -48,15 +48,28 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [preason, setPreason] = useState<string | null>(null);
   const [selPhoto, setSelPhoto] = useState<StockPhoto | null>(null);
   const [brandPhotoOn, setBrandPhotoOn] = useState(true);
-  // --- génération d'image par IA (Pollinations, gratuit) ---
+  // --- génération d'image par IA (Gemini en priorité, repli Pollinations) ---
   const [aiPrompt, setAiPrompt] = useState(() => aiImagePrompt(text, getBusiness().sector));
   const [aiUrl, setAiUrl] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'pollinations' | null>(null);
+  const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
 
-  const generateAi = () => {
-    if (!aiPrompt.trim()) return;
+  const generateAi = async () => {
+    const p = aiPrompt.trim();
+    if (!p) return;
     setAiLoading(true);
-    setAiUrl(aiImageUrl(aiPrompt.trim(), ratio));
+    setAiFallbackReason(null);
+    const res = await generateAiImage(p, ratio);
+    if (res.available && res.dataUrl) {
+      setAiProvider('gemini');
+      setAiUrl(res.dataUrl);
+    } else {
+      // Gemini indisponible (clé manquante, quota, blocage...) → repli gratuit.
+      setAiProvider('pollinations');
+      setAiFallbackReason(res.reason || null);
+      setAiUrl(aiImageUrl(p, ratio));
+    }
   };
   const switchToAi = () => { setMode('ai'); if (!aiUrl) generateAi(); };
 
@@ -113,20 +126,32 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const use = async () => {
     if (mode === 'ai') {
       if (!aiUrl) { showToast(UI.close, 'Générez d’abord une image'); return; }
+      // Une data-URL (Gemini) n'est PAS une URL publique : sans hébergement,
+      // elle ne peut pas être proposée telle quelle comme "publiable" — au
+      // contraire d'une URL Pollinations, déjà publique et déterministe.
+      const isDataUrl = aiUrl.startsWith('data:');
       setBusy(true);
       try {
         const dataUrl = brandPhotoOn
           ? await brandPhoto({ photoUrl: aiUrl, ratio, direct: true, logoData, brandName: kit.name || undefined, accent: kit.accent || undefined })
-          : await toDataUrl(aiUrl);
+          : (isDataUrl ? aiUrl : await toDataUrl(aiUrl));
         if (dataUrl) {
           const up = await uploadImage(dataUrl);
           if (up.ok && up.url) { setBusy(false); onUse(up.url, 0, true); showToast(UI.check, 'Image IA ajoutée (URL publique)'); onClose(); return; }
         }
-        // Repli : l'URL Pollinations est publique et déterministe → publiable.
         setBusy(false);
+        if (isDataUrl) {
+          showToast(UI.close, 'Hébergement d’image indisponible — impossible d’utiliser cette image IA pour l’instant.');
+          return;
+        }
+        // Repli : l'URL Pollinations est publique et déterministe → publiable.
         onUse(aiUrl, 0, true); showToast(UI.check, 'Image IA ajoutée'); onClose(); return;
       } catch {
         setBusy(false);
+        if (isDataUrl) {
+          showToast(UI.close, 'Compositing impossible pour cette image IA.');
+          return;
+        }
         onUse(aiUrl, 0, true); showToast(UI.close, 'Compositing impossible — image brute utilisée.'); onClose(); return;
       }
     }
@@ -166,7 +191,16 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
 
   const download = async () => {
     if (mode === 'ai') {
-      if (aiUrl) window.open(aiUrl, '_blank', 'noopener');
+      if (!aiUrl) return;
+      if (aiUrl.startsWith('data:')) {
+        // window.open('data:...') est bloqué par Chrome (navigation top-level
+        // vers une data-URL) : on force le téléchargement via un <a download>.
+        const a = document.createElement('a');
+        a.href = aiUrl; a.download = 'image-ia-efficience.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        window.open(aiUrl, '_blank', 'noopener');
+      }
       return;
     }
     if (mode === 'photo') {
@@ -325,7 +359,14 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                 ) : <div style={{ fontSize: 12.5, color: 'var(--tx-3)', padding: 20, textAlign: 'center' }}>Décrivez l’image puis générez.</div>}
                 {aiLoading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.25)' }}><span className="spin" /></div>}
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>Image générée par IA (Flux · gratuit). Aucune donnée chiffrée, illustration uniquement.</div>
+              <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
+                {aiProvider === 'gemini' ? 'Image générée par Gemini (Google) — haute qualité.'
+                  : aiProvider === 'pollinations' ? 'Image générée par IA (Flux · gratuit) — repli automatique.'
+                  : 'Image générée par IA. Aucune donnée chiffrée, illustration uniquement.'}
+              </div>
+              {aiFallbackReason && (
+                <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 4 }}>Gemini indisponible ({aiFallbackReason}) — repli sur le modèle gratuit.</div>
+              )}
             </div>
             {/* ---- prompt ---- */}
             <div style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
@@ -346,7 +387,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
         <div className="kmodal-foot">
           <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
             {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.'
-              : mode === 'ai' ? 'Image IA gratuite (Flux) — hébergée en URL publique, publiable.'
+              : mode === 'ai' ? (aiProvider === 'gemini' ? 'Image Gemini — hébergée puis publiable en un clic.' : 'Image IA gratuite (Flux) — hébergée en URL publique, publiable.')
               : 'Respecte vos couleurs, logo, police et nom de marque.'}
           </span>
           <button className="btn outline" onClick={download} disabled={(mode === 'photo' && !selPhoto) || (mode === 'ai' && !aiUrl)}><Icon name="download" />Télécharger</button>
