@@ -112,14 +112,14 @@ export function YoutubeUploadModal({ onClose }: Props) {
           )}
 
           {videoId && (
-            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid var(--acc-soft, rgba(16,185,129,.35))', background: 'var(--acc-soft, rgba(16,185,129,.08))' }}>
+            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid var(--acc-soft, rgba(91,117,80,.35))', background: 'var(--acc-soft, rgba(91,117,80,.08))' }}>
               Vidéo envoyée — en cours de traitement par YouTube.{' '}
               <a href={`https://studio.youtube.com/video/${videoId}/edit`} target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>Voir dans YouTube Studio</a>
             </div>
           )}
 
           {errorMsg && (
-            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>
+            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(179,69,59,.3)', background: 'rgba(179,69,59,.07)', color: 'var(--warn)' }}>
               {errorMsg}
             </div>
           )}

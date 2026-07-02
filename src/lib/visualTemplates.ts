@@ -51,9 +51,9 @@ export function buildVisual(opts: BuildOpts): string {
   const { w, h } = dimsFor(ratio);
   const font = (brand.fonts && brand.fonts[0]) || 'Inter';
   const fam = `'${font}', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
-  const accent = brand.accent || '#00d992';
-  const dark = brand.dark || '#0a0f0d';
-  const light = brand.light || '#f4fbf8';
+  const accent = brand.accent || '#5b7550';
+  const dark = brand.dark || '#3c5233';
+  const light = brand.light || '#f6f7f2';
   const name = (brand.name || 'Votre marque').toUpperCase();
   const text = (opts.text || '').trim();
   const pad = Math.round(w * 0.09);

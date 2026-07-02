@@ -117,8 +117,8 @@ function Chart({ series }: { series: MetaSeries | null }) {
     <svg className="chart-svg" viewBox="0 0 620 200" preserveAspectRatio="none">
       <defs>
         <linearGradient id="area-g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(0,217,146,.30)" />
-          <stop offset="100%" stopColor="rgba(0,217,146,0)" />
+          <stop offset="0%" stopColor="rgba(91,117,80,.30)" />
+          <stop offset="100%" stopColor="rgba(91,117,80,0)" />
         </linearGradient>
       </defs>
       <path ref={areaRef} d={area} fill="url(#area-g)" opacity="0" />

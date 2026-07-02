@@ -99,7 +99,7 @@ export function TiktokPostModal({ onClose }: Props) {
           {mode === 'direct' && loadingCreator ? (
             <div className="ai-thinking"><span className="spin lt" /><div>Récupération des options de publication…</div></div>
           ) : mode === 'direct' && creatorError ? (
-            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>
+            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(179,69,59,.3)', background: 'rgba(179,69,59,.07)', color: 'var(--warn)' }}>
               {creatorError} — vous pouvez utiliser le mode « Envoyer en brouillon » en attendant.
             </div>
           ) : (
@@ -148,7 +148,7 @@ export function TiktokPostModal({ onClose }: Props) {
               )}
 
               {done && (
-                <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid var(--acc-soft, rgba(16,185,129,.35))', background: 'var(--acc-soft, rgba(16,185,129,.08))' }}>
+                <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid var(--acc-soft, rgba(91,117,80,.35))', background: 'var(--acc-soft, rgba(91,117,80,.08))' }}>
                   {mode === 'direct'
                     ? 'Vidéo envoyée — en cours de traitement par TikTok. Elle apparaîtra sur votre profil sous quelques minutes.'
                     : 'Vidéo envoyée dans votre boîte de réception TikTok — ouvrez l’app pour la publier.'}
@@ -156,7 +156,7 @@ export function TiktokPostModal({ onClose }: Props) {
               )}
 
               {errorMsg && (
-                <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>
+                <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(179,69,59,.3)', background: 'rgba(179,69,59,.07)', color: 'var(--warn)' }}>
                   {errorMsg}
                 </div>
               )}

@@ -1,6 +1,6 @@
 /* ============================================================
    Efficience — Studio de création (composer) + Configurateur
-   Same Voltagent dark system · electric-green accent
+   Same light sage system
    ============================================================ */
 
 /* ============================ COMPOSER ============================ */
@@ -23,7 +23,7 @@
 .plat-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--tx-2);
   padding: 7px 13px 7px 9px; border-radius: var(--pill); border: 1px solid var(--line); background: var(--canvas); cursor: pointer; transition: all .15s; }
 .plat-chip svg { width: 18px; height: 18px; }
-.plat-chip:hover { border-color: #4a4746; color: var(--tx); }
+.plat-chip:hover { border-color: #c3c7b6; color: var(--tx); }
 .plat-chip.on { color: var(--tx-str); border-color: var(--acc-soft2); background: var(--acc-soft); }
 .plat-chip.disabled { opacity: .4; cursor: not-allowed; }
 .plat-chip .pc-x { width: 14px; height: 14px; opacity: 0; margin-left: -2px; transition: opacity .15s; }
@@ -98,10 +98,10 @@
 .cmp-prev .pv-bar .pvb-t { font-size: 12.5px; color: var(--tx-2); font-weight: 600; }
 .cmp-prev .pv-bar .pvb-net { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--tx-3); }
 .cmp-prev .pv-bar .pvb-net svg { width: 15px; height: 15px; }
-.pv-stage { padding: 22px 18px; background: #0a0a0a; min-height: 420px; display: grid; place-items: center; }
+.pv-stage { padding: 22px 18px; background: var(--canvas-soft); min-height: 420px; display: grid; place-items: center; }
 
 /* feed card (light, like IG/FB/LinkedIn) */
-.ig-card { width: 100%; max-width: 348px; background: #fff; border-radius: 10px; overflow: hidden; color: #1c1c1c; box-shadow: 0 14px 40px -16px rgba(0,0,0,.7); }
+.ig-card { width: 100%; max-width: 348px; background: #fff; border-radius: 10px; overflow: hidden; color: #1c1c1c; box-shadow: 0 14px 40px -16px rgba(20,21,15,.25); }
 .ig-head { display: flex; align-items: center; gap: 10px; padding: 11px 13px; }
 .ig-head .ava { width: 34px; height: 34px; border-radius: 50%; font-size: 12px; }
 .ig-head .ih-n { font-size: 13px; font-weight: 700; color: #111; }
@@ -122,7 +122,7 @@
 
 /* story (9:16 dark) */
 .story-card { width: 232px; aspect-ratio: 9/16; border-radius: 16px; overflow: hidden; position: relative; background: #15161a center/cover;
-  box-shadow: 0 14px 40px -16px rgba(0,0,0,.8); display: flex; flex-direction: column; }
+  box-shadow: 0 14px 40px -16px rgba(20,21,15,.4); display: flex; flex-direction: column; }
 .story-card .st-grad-top { position: absolute; inset: 0 0 auto 0; height: 90px; background: linear-gradient(180deg, rgba(0,0,0,.55), transparent); }
 .story-card .st-grad-bot { position: absolute; inset: auto 0 0 0; height: 130px; background: linear-gradient(0deg, rgba(0,0,0,.6), transparent); }
 .story-card .st-prog { position: relative; display: flex; gap: 4px; padding: 9px 11px 0; z-index: 2; }
@@ -146,13 +146,13 @@
 .onb { position: fixed; inset: 0; z-index: 90; background: rgba(8,8,8,.82); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
   display: grid; place-items: center; padding: 28px; animation: fadein .3s var(--ease); }
 .onb-card { width: min(900px, 100%); max-height: 92vh; overflow-y: auto; background: var(--canvas-2); border: 1px solid var(--line);
-  border-radius: 18px; box-shadow: 0 40px 100px -30px rgba(0,0,0,.8); }
+  border-radius: 18px; box-shadow: 0 40px 100px -30px rgba(20,21,15,.3); }
 .onb-top { display: flex; align-items: center; gap: 12px; padding: 20px 26px; border-bottom: 1px solid var(--line-2); }
 .onb-top img { height: 24px; }
 .onb-top .ot-step { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--tx-3); }
 .onb-x { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--r-btn); border: 1px solid var(--line);
   background: transparent; color: var(--tx-3); cursor: pointer; }
-.onb-x:hover { color: var(--tx); border-color: #4a4746; } .onb-x .ic { width: 16px; height: 16px; }
+.onb-x:hover { color: var(--tx); border-color: #c3c7b6; } .onb-x .ic { width: 16px; height: 16px; }
 .onb-body { padding: 30px 30px 28px; }
 .onb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--acc); }
 .onb-body h2 { font-size: 27px; font-weight: 500; letter-spacing: -.025em; margin: 12px 0 0; color: var(--tx-str); line-height: 1.12; }
@@ -189,7 +189,7 @@
 
 /* discovered results */
 .disc-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-.disc-head .dh-logo { width: 58px; height: 58px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 22px; font-weight: 700; color: #04231a; }
+.disc-head .dh-logo { width: 58px; height: 58px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 22px; font-weight: 700; color: var(--on-acc); }
 .disc-head .dh-n { font-size: 21px; font-weight: 600; color: var(--tx-str); letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
 .disc-head .dh-n .vrf { width: 18px; height: 18px; color: var(--acc); }
 .disc-head .dh-meta { font-size: 13px; color: var(--tx-3); margin-top: 4px; }

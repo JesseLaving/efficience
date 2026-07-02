@@ -103,7 +103,7 @@ export function MetaPostModal({ onClose, defaultTargets = ['facebook', 'instagra
           )}
 
           {errorMsg && (
-            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>
+            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(179,69,59,.3)', background: 'rgba(179,69,59,.07)', color: 'var(--warn)' }}>
               {errorMsg}
               {permIssue && (
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--tx-3)' }}>

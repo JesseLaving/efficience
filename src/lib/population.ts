@@ -7,11 +7,11 @@ import type { Contact } from './contacts';
 
 export type { Contact };
 
-/* avatar gradients — on-brand green→teal family */
+/* avatar gradients — on-brand sage→moss family */
 const AV_GRAD = [
-  'linear-gradient(150deg,#0e4a39,#10b981)', 'linear-gradient(150deg,#0d3b4a,#1bb0a6)',
-  'linear-gradient(150deg,#10463a,#2fd6a1)', 'linear-gradient(150deg,#143a2e,#3bbf86)',
-  'linear-gradient(150deg,#0c3f43,#14b8a6)',
+  'linear-gradient(150deg,#3c5233,#5b7550)', 'linear-gradient(150deg,#33473f,#4f7d6e)',
+  'linear-gradient(150deg,#4a5c33,#7c9a52)', 'linear-gradient(150deg,#3d4a2e,#6b8557)',
+  'linear-gradient(150deg,#35473d,#5a8570)',
 ];
 export const initials = (c: Contact): string => ((c.first[0] || c.name[0] || '?') + (c.last[0] || '')).toUpperCase();
 export const avFor = (c: Contact): string => AV_GRAD[((c.first.charCodeAt(0) || 0) + (c.last.charCodeAt(0) || 0)) % AV_GRAD.length];

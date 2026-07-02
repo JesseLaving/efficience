@@ -42,7 +42,7 @@ export function TiktokVideosModal({ onClose }: Props) {
           {videos === null ? (
             <div className="ai-thinking"><span className="spin lt" /><div>Récupération de vos vidéos…</div></div>
           ) : reason ? (
-            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(255,107,107,.3)', background: 'rgba(255,107,107,.07)', color: 'var(--warn)' }}>{reason}</div>
+            <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(179,69,59,.3)', background: 'rgba(179,69,59,.07)', color: 'var(--warn)' }}>{reason}</div>
           ) : videos.length === 0 ? (
             <div className="crm-empty" style={{ minHeight: 140 }}>
               <div className="ce-ic"><Icon name="play" /></div>

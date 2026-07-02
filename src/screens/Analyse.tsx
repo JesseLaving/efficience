@@ -170,7 +170,7 @@ export function Analyse() {
                     <Score label="Bonnes pratiques" value={ps.scores.bonnesPratiques} />
                   </div>
                 ) : (
-                  <div style={{ fontSize: 12.5, color: 'var(--warn)', marginBottom: 12, padding: '10px 12px', border: '1px solid rgba(232,163,61,.35)', borderRadius: 'var(--r-btn)', background: 'rgba(232,163,61,.08)' }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--warn)', marginBottom: 12, padding: '10px 12px', border: '1px solid rgba(143,100,35,.35)', borderRadius: 'var(--r-btn)', background: 'rgba(143,100,35,.08)' }}>
                     {siteRes.psiKeyConfigured ? `Lighthouse indisponible : ${ps?.error || 'erreur'}` : 'Scores Lighthouse désactivés — clé Google PageSpeed non configurée côté serveur.'}
                   </div>
                 )}

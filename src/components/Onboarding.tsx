@@ -97,7 +97,7 @@ export function Onboarding() {
 
   const stepLabel = step === 'form' ? 'Étape 1 / 3 · Domaine' : step === 'scan' ? 'Étape 2 / 3 · Analyse' : 'Étape 3 / 3 · Confirmation';
   const ps = site?.pagespeed;
-  const palette = (site?.brand?.palette && site.brand.palette.length ? site.brand.palette.slice(0, 4) : ['#00d992', '#10b981', '#0e4a39', '#101010']);
+  const palette = (site?.brand?.palette && site.brand.palette.length ? site.brand.palette.slice(0, 4) : ['#5b7550', '#3c5233', '#7c9a70', '#eef0e8']);
 
   return createPortal(
     <div className="onb">
@@ -160,7 +160,7 @@ export function Onboarding() {
             <div className="onb-body">
               <div className="onb-eyebrow" style={{ color: 'var(--acc)' }}>Confirmez votre profil — données réelles, modifiables</div>
               <div className="disc-head" style={{ marginTop: 14, alignItems: 'flex-start' }}>
-                <div className="dh-logo" style={{ background: `linear-gradient(150deg,#0e4a39,${editAccent || '#10b981'} 58%,${editAccent || '#00d992'})` }}>{initialsFrom(editName || domain || '—')}</div>
+                <div className="dh-logo" style={{ background: `linear-gradient(150deg,#3c5233,${editAccent || '#5b7550'} 58%,${editAccent || '#7c9a70'})` }}>{initialsFrom(editName || domain || '—')}</div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <input className="inp" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nom de l’entreprise" style={{ fontWeight: 600 }} />
                   <input className="inp" value={editSector} onChange={(e) => setEditSector(e.target.value)} placeholder="Secteur d’activité" style={{ fontSize: 13 }} />

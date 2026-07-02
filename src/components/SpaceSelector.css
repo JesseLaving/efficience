@@ -36,8 +36,8 @@
 }
 
 .space-selector-trigger[aria-expanded="true"] {
-  border-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 2px rgba(91,117,80,.1);
 }
 
 .space-name {
@@ -121,8 +121,8 @@
 }
 
 .space-item.active {
-  background: rgba(16, 185, 129, 0.08);
-  color: #10b981;
+  background: rgba(91,117,80,.08);
+  color: var(--acc);
   font-weight: 500;
 }
 
@@ -138,7 +138,7 @@
 }
 
 .space-checkmark {
-  color: #10b981;
+  color: var(--acc);
   flex-shrink: 0;
 }
 
@@ -159,7 +159,7 @@
   border: none;
   border-radius: 6px;
   font-size: 13px;
-  color: #10b981;
+  color: var(--acc);
   cursor: pointer;
   text-align: left;
   transition: transform 160ms ease-out, background-color 160ms ease-out;
@@ -167,7 +167,7 @@
 }
 
 .space-create-trigger:hover {
-  background: rgba(16, 185, 129, 0.05);
+  background: rgba(91,117,80,.05);
 }
 
 .space-create-trigger:active {
@@ -199,8 +199,8 @@
 
 .space-create-input:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 2px rgba(91,117,80,.1);
 }
 
 .space-create-input:disabled {
@@ -227,13 +227,13 @@
 }
 
 .space-create-submit {
-  background: #10b981;
+  background: var(--acc);
   color: white;
-  border-color: #10b981;
+  border-color: var(--acc);
 }
 
 .space-create-submit:hover:not(:disabled) {
-  background: #059669;
+  background: var(--acc-deep);
 }
 
 .space-create-submit:active:not(:disabled) {

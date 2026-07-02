@@ -92,7 +92,7 @@ export function Calendar() {
         <button className="btn outline" onClick={() => show('planning')}><Icon name="calendar" />Planning éditorial</button>
       </div>
 
-      <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(232,163,61,.3)', background: 'rgba(232,163,61,.07)', color: 'var(--tx-2)', fontSize: 12.5, marginBottom: 16 }}>
+      <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', color: 'var(--tx-2)', fontSize: 12.5, marginBottom: 16 }}>
         <b style={{ color: 'var(--acc)' }}>Auto-publier</b> = publication automatique à l’heure prévue, même app fermée (moteur serveur). <b>Publier</b> = diffusion immédiate en 1 clic. L’auto-publication nécessite l’activation du store serveur (Vercel KV) et du cron — voir la doc.
       </div>
 
@@ -126,7 +126,7 @@ export function Calendar() {
                         <StatusBadge s={p.status} />
                         {p.pillar && <span style={{ fontSize: 11, color: 'var(--acc)' }}>· {p.pillar}</span>}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--tx-1)', whiteSpace: 'pre-wrap', maxHeight: 96, overflow: 'hidden', lineHeight: 1.4 }}>{p.text}</div>
+                      <div style={{ fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', maxHeight: 96, overflow: 'hidden', lineHeight: 1.4 }}>{p.text}</div>
                       {p.lastResult && <div style={{ fontSize: 11.5, color: 'var(--warn)', marginTop: 6 }}>{p.lastResult}</div>}
                     </div>
                   </div>

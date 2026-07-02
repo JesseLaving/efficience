@@ -7,7 +7,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, var(--acc) 0%, var(--acc-deep) 100%);
   color: white;
   border: none;
   font-size: 13px;
@@ -78,7 +78,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, var(--acc) 0%, var(--acc-deep) 100%);
   color: white;
   font-size: 14px;
   font-weight: 600;

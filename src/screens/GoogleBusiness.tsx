@@ -58,7 +58,7 @@ export function GoogleBusiness() {
           {/* Locations / API access state */}
           {googleStatus === 'loading' && <div style={{ color: 'var(--tx-3)', fontSize: 13, marginBottom: 14 }}><span className="spin lt" style={{ display: 'inline-block', marginRight: 8 }} />Lecture de vos fiches…</div>}
           {googleReason && (
-            <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(232,163,61,.35)', background: 'rgba(232,163,61,.08)', color: 'var(--warn)', fontSize: 13, marginBottom: 16 }}>
+            <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(143,100,35,.35)', background: 'rgba(143,100,35,.08)', color: 'var(--warn)', fontSize: 13, marginBottom: 16 }}>
               Accès à l’API Google Business en attente : <b>{googleReason}</b><br />
               <span style={{ color: 'var(--tx-3)' }}>La publication s’activera dès que Google aura approuvé l’accès à la Business Profile API pour votre projet.</span>
             </div>

@@ -153,7 +153,7 @@ export function EditorialPlanning() {
                     fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 'var(--r-btn)', cursor: 'pointer',
                     border: '1px solid ' + (durKey === d.key ? 'var(--acc)' : 'var(--line)'),
                     background: durKey === d.key ? 'var(--acc)' : 'transparent',
-                    color: durKey === d.key ? '#04231a' : 'var(--tx-2)',
+                    color: durKey === d.key ? 'var(--on-acc)' : 'var(--tx-2)',
                   }}
                 >{d.label}</button>
               ))}
@@ -235,7 +235,7 @@ export function EditorialPlanning() {
                           · <span style={{ width: 14, height: 14, display: 'inline-grid' }}><Brand name={p.network as BrandName} /></span>{netLabel[p.network] || p.network}
                         </span>
                       </div>
-                      <div style={{ fontSize: 13.5, color: 'var(--tx-1)', lineHeight: 1.45 }}>{p.idea}</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45 }}>{p.idea}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                       <button className="btn acc sm" title="Rédiger un brouillon AIDA dans le Studio" onClick={() => compose(p)}>

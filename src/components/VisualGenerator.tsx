@@ -216,7 +216,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   };
 
   const switchToPhoto = () => { setMode('photo'); if (!photos.length && !ploading) searchPhotos(pquery); };
-  const modeBtn = (on: boolean): React.CSSProperties => ({ flex: 1, fontSize: 13, fontWeight: 600, padding: '9px 14px', borderRadius: 'var(--r-btn)', cursor: 'pointer', border: '1px solid ' + (on ? 'var(--acc)' : 'var(--line)'), background: on ? 'var(--acc)' : 'transparent', color: on ? '#04231a' : 'var(--tx-2)' });
+  const modeBtn = (on: boolean): React.CSSProperties => ({ flex: 1, fontSize: 13, fontWeight: 600, padding: '9px 14px', borderRadius: 'var(--r-btn)', cursor: 'pointer', border: '1px solid ' + (on ? 'var(--acc)' : 'var(--line)'), background: on ? 'var(--acc)' : 'transparent', color: on ? 'var(--on-acc)' : 'var(--tx-2)' });
 
   const fileRef = useRef<HTMLInputElement>(null);
   const onLogoFile = (f: File) => { const fr = new FileReader(); fr.onload = () => patch({ logo: fr.result as string }); fr.readAsDataURL(f); };
@@ -248,7 +248,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                   style={{ fontSize: 12.5, fontWeight: 600, padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
                     border: '1px solid ' + (template === t.key ? 'var(--acc)' : 'var(--line)'),
                     background: template === t.key ? 'var(--acc)' : 'transparent',
-                    color: template === t.key ? '#04231a' : 'var(--tx-2)' }}>{t.label}</button>
+                    color: template === t.key ? 'var(--on-acc)' : 'var(--tx-2)' }}>{t.label}</button>
               ))}
             </div>
             <div style={{ borderRadius: 'var(--r-card)', overflow: 'hidden', border: '1px solid var(--line)', maxWidth: 420, margin: '0 auto' }}
@@ -281,10 +281,10 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {kit.palette.map((c, i) => (
                   <button key={c + i} title={'Définir comme couleur d’accent : ' + c} onClick={() => patch({ accent: c })}
-                    style={{ width: 30, height: 30, borderRadius: 8, cursor: 'pointer', background: c, border: '2px solid ' + (kit.accent === c ? 'var(--tx-1)' : 'transparent'), boxShadow: '0 0 0 1px var(--line)' }} />
+                    style={{ width: 30, height: 30, borderRadius: 8, cursor: 'pointer', background: c, border: '2px solid ' + (kit.accent === c ? 'var(--tx-str)' : 'transparent'), boxShadow: '0 0 0 1px var(--line)' }} />
                 ))}
                 <label style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer', border: '1px dashed var(--line)' }} title="Couleur personnalisée">
-                  <input type="color" value={kit.accent || '#00d992'} onChange={(e) => patch({ accent: e.target.value })} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <input type="color" value={kit.accent || '#5b7550'} onChange={(e) => patch({ accent: e.target.value })} style={{ opacity: 0, width: 0, height: 0 }} />
                   <Icon name="plus" />
                 </label>
               </div>

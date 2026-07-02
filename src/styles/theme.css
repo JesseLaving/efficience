@@ -1,36 +1,36 @@
 /* ============================================================
-   Efficience — Voltagent-inspired dark system
-   Near-black canvas · single electric-green accent · hairlines
+   Efficience — sober light system
+   White canvas · off-white surfaces · muted sage-green accent
    ============================================================ */
 :root {
   /* surface */
-  --canvas:    #101010;
-  --canvas-2:  #0c0c0c;          /* sidebar / topbar slightly deeper */
-  --canvas-soft: #1a1a1a;        /* inputs, chips, code, elevated fills */
-  --s1:        #141414;          /* card body just above canvas */
-  --s2:        #1c1c1c;          /* hover */
+  --canvas:    #ffffff;
+  --canvas-2:  #f6f7f2;          /* sidebar / topbar — soft off-white */
+  --canvas-soft: #eef0e8;        /* inputs, chips, code, elevated fills — pale sage-gray */
+  --s1:        #fbfbf9;          /* card body just above canvas */
+  --s2:        #eceee6;          /* hover */
 
   /* hairlines — the brand's elevation system */
-  --line:      #3d3a39;          /* 1px card / button border */
-  --line-2:    #262524;          /* quieter separators */
-  --dash:      rgba(79,93,117,.4);
+  --line:      #e0e3d9;          /* 1px card / button border */
+  --line-2:    #eaece4;          /* quieter separators */
+  --dash:      rgba(91,117,80,.35);
 
   /* text */
-  --tx:        #f2f2f2;
-  --tx-str:    #ffffff;
-  --tx-2:      #bdbdbd;
-  --tx-3:      #8b949e;
+  --tx:        #292b25;
+  --tx-str:    #14150f;
+  --tx-2:      #5c6152;
+  --tx-3:      #71755f;
 
-  /* accent — electric green (reserved: CTA, status, brand) */
-  --acc:       #00d992;
-  --acc-soft-c:#2fd6a1;
-  --acc-deep:  #10b981;
-  --on-acc:    #101010;
-  --acc-soft:  rgba(0,217,146,.12);
-  --acc-soft2: rgba(0,217,146,.24);
+  /* accent — muted sage green (reserved: CTA, status, brand) */
+  --acc:       #5b7550;
+  --acc-soft-c:#4d6644;
+  --acc-deep:  #3c5233;
+  --on-acc:    #ffffff;
+  --acc-soft:  rgba(91,117,80,.10);
+  --acc-soft2: rgba(91,117,80,.22);
 
-  --warn:      #e8a33d;
-  --danger:    #ff6b6b;
+  --warn:      #8f6423;
+  --danger:    #b3453b;
 
   /* radius */
   --r-btn: 6px;
@@ -65,8 +65,8 @@ body {
 
 /* scrollbars */
 *::-webkit-scrollbar { width: 11px; height: 11px; }
-*::-webkit-scrollbar-thumb { background: #2a2928; border-radius: 9px; border: 3px solid transparent; background-clip: content-box; }
-*::-webkit-scrollbar-thumb:hover { background: #3d3a39; background-clip: content-box; }
+*::-webkit-scrollbar-thumb { background: #d4d7cb; border-radius: 9px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #bcc0b0; background-clip: content-box; }
 
 /* ============================ shell ============================ */
 .app { position: relative; display: grid; grid-template-columns: 256px 1fr; height: 100vh; }
@@ -140,7 +140,7 @@ body {
   background: var(--canvas-soft); color: var(--tx-3); font-size: 13.5px; cursor: text;
   transition: border-color .15s;
 }
-.search:hover { border-color: #4a4746; }
+.search:hover { border-color: #c3c7b6; }
 .search .ic { width: 16px; height: 16px; }
 .search kbd { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: var(--r-chip); border: 1px solid var(--line); color: var(--tx-3); }
 .top-r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
@@ -150,7 +150,7 @@ body {
   color: var(--tx-2); cursor: pointer; transition: color .15s, border-color .15s, transform .1s;
 }
 .icon-btn .ic { width: 18px; height: 18px; }
-.icon-btn:hover { color: var(--tx); border-color: #4a4746; }
+.icon-btn:hover { color: var(--tx); border-color: #c3c7b6; }
 .icon-btn:active { transform: scale(.94); }
 .icon-btn .dot { position: absolute; top: 11px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 2px var(--canvas-2); }
 .me { width: 38px; height: 38px; border-radius: var(--r-btn); cursor: pointer; }
@@ -179,7 +179,7 @@ body {
   transition: transform .1s, background .15s, border-color .15s, box-shadow .15s; white-space: nowrap; line-height: 1.4;
 }
 .btn .ic { width: 16px; height: 16px; }
-.btn:hover { border-color: #4a4746; background: var(--s1); }
+.btn:hover { border-color: #c3c7b6; background: var(--s1); }
 .btn:active { transform: scale(.97); }
 .btn.acc { background: var(--acc); color: var(--on-acc); border-color: transparent; }
 .btn.acc:hover { background: var(--acc-soft-c); }
@@ -200,7 +200,7 @@ body {
 .pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: var(--pill); border: 1px solid var(--line); }
 .pill .ic { width: 12px; height: 12px; }
 .pill.up   { color: var(--acc); border-color: var(--acc-soft2); }
-.pill.down { color: var(--warn); border-color: rgba(232,163,61,.35); }
+.pill.down { color: var(--warn); border-color: rgba(143,100,35,.35); }
 .pill.neutral { color: var(--tx-2); }
 
 .card { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-card); }
@@ -209,10 +209,10 @@ body {
 .card-h h3 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.01em; color: var(--tx-str); }
 .card-h .sub { font-size: 12.5px; color: var(--tx-3); margin-top: 3px; }
 
-/* avatar (page profile photo) — brand-green duotone monogram */
+/* avatar (page profile photo) — sage duotone monogram */
 .ava { display: inline-grid; place-items: center; flex: none; border-radius: 50%; overflow: hidden;
-  font-weight: 700; color: #04231a; letter-spacing: .01em;
-  background: linear-gradient(150deg, #0e4a39, #10b981 58%, #00d992); }
+  font-weight: 700; color: #ffffff; letter-spacing: .01em;
+  background: linear-gradient(150deg, #3c5233, #5b7550 58%, #7c9a70); }
 .ava-wrap { position: relative; display: inline-block; flex: none; }
 .ava-wrap .pbadge { position: absolute; right: -3px; bottom: -3px; width: 20px; height: 20px; border-radius: var(--r-chip);
   display: grid; place-items: center; background: var(--canvas); box-shadow: 0 0 0 2px var(--canvas); }
@@ -220,9 +220,9 @@ body {
 
 /* skeleton + spinner */
 .skel { position: relative; overflow: hidden; background: var(--canvas-soft); }
-.skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); transform: translateX(-100%); animation: shimmer 1.2s infinite; }
+.skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(20,21,15,.06), transparent); transform: translateX(-100%); animation: shimmer 1.2s infinite; }
 @keyframes shimmer { to { transform: translateX(100%); } }
-.spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(16,16,16,.3); border-top-color: var(--on-acc); animation: spin .7s linear infinite; }
+.spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--on-acc); animation: spin .7s linear infinite; }
 .spin.lt { border-color: var(--line); border-top-color: var(--acc); }
 @keyframes spin { to { transform: rotate(360deg); } }
 

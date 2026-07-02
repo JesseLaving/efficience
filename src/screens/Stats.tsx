@@ -184,7 +184,7 @@ export function Stats() {
         </div>
       )}
 
-      {error && <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(255,107,107,.35)', background: 'rgba(255,107,107,.08)', color: 'var(--danger)', fontSize: 13, marginBottom: 16 }}>Erreur : {error}</div>}
+      {error && <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(179,69,59,.35)', background: 'rgba(179,69,59,.08)', color: 'var(--danger)', fontSize: 13, marginBottom: 16 }}>Erreur : {error}</div>}
       {metaConnected && loading && !accounts && <div style={{ color: 'var(--tx-3)', fontSize: 13, padding: 24, textAlign: 'center' }}><span className="spin lt" style={{ display: 'inline-block', marginRight: 8 }} />Récupération de vos publications…</div>}
       {accounts && accounts.map((a) => <AccountBlock key={a.network + (a.name || '')} a={a} />)}
       {linkedinConnected && linkedinMe && <LinkedInBlock me={linkedinMe} />}

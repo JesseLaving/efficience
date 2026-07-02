@@ -1,5 +1,5 @@
 /* ============================================================
-   Efficience — Connexion + Dashboard (Voltagent system)
+   Efficience — Connexion + Dashboard (light sage system)
    ============================================================ */
 
 /* ---------- Connexion ---------- */
@@ -22,7 +22,7 @@
 
 .net-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); padding: 18px;
   transition: border-color .18s, box-shadow .18s; }
-.net-card:hover { border-color: #4a4746; }
+.net-card:hover { border-color: #c3c7b6; }
 .net-card.connected { border-color: var(--acc-soft2); }
 
 .nc-top { display: flex; align-items: center; gap: 12px; }
@@ -56,7 +56,7 @@
 .unlink-btn { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: var(--r-btn);
   border: 1px solid var(--line); background: transparent; color: var(--tx-3); cursor: pointer; transition: color .15s, border-color .15s; }
 .unlink-btn .ic { width: 15px; height: 15px; }
-.unlink-btn:hover { color: var(--danger); border-color: rgba(255,107,107,.35); }
+.unlink-btn:hover { color: var(--danger); border-color: rgba(179,69,59,.35); }
 
 /* ---------- Dashboard ---------- */
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
@@ -86,7 +86,7 @@
 .post .pmeta .pl svg { width: 13px; height: 13px; }
 .post .tag { font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: var(--pill); border: 1px solid var(--line); white-space: nowrap; }
 .post .tag.sched { color: var(--acc); border-color: var(--acc-soft2); }
-.post .tag.review { color: var(--warn); border-color: rgba(232,163,61,.35); }
+.post .tag.review { color: var(--warn); border-color: rgba(143,100,35,.35); }
 
 .prog-item + .prog-item { margin-top: 16px; }
 .prog-item .pi-h { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; color: var(--tx-2); }

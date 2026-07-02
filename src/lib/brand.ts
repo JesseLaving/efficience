@@ -15,13 +15,13 @@ export const setStoredSiteUrl = (u: string) => localStorage.setItem(URL_LS, u);
 export function fallbackBrand(): BrandKit {
   return {
     name: getBusiness().name,
-    themeColor: '#00d992',
+    themeColor: '#5b7550',
     logo: null,
     fonts: ['Inter'],
-    palette: ['#00d992', '#0b3b2e', '#0a0f0d'],
-    accent: '#00d992',
-    dark: '#0a0f0d',
-    light: '#f4fbf8',
+    palette: ['#5b7550', '#3c5233', '#eef0e8'],
+    accent: '#5b7550',
+    dark: '#3c5233',
+    light: '#f6f7f2',
     available: false,
   };
 }
