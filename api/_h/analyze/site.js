@@ -193,15 +193,32 @@ function extractBrandHints(audits) {
   return out;
 }
 
-async function pageSpeed(url, key) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* L'audit Lighthouse (via PSI) échoue de façon transitoire assez souvent sur
+   des sites réels (page lourde en JS, timeout interne au runner Google) —
+   ce n'est pas propre à un site en particulier, un simple nouvel essai
+   suffit la plupart du temps. Un seul essai supplémentaire, pas plus, pour
+   rester dans le temps d'exécution de la fonction serverless. */
+async function fetchPsi(url, key) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 60000);
+  const t = setTimeout(() => ctrl.abort(), 55000);
   try {
     const api = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}`
       + `&category=performance&category=seo&category=accessibility&category=best-practices&strategy=mobile`
       + (key ? `&key=${key}` : '');
     const r = await fetch(api, { signal: ctrl.signal });
-    const data = await r.json();
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+
+async function pageSpeed(url, key) {
+  try {
+    let data = await fetchPsi(url, key);
+    if (data.error && [500, 503].includes(data.error.code)) {
+      await sleep(1200);
+      data = await fetchPsi(url, key);
+    }
     if (data.error) return { available: false, error: `${data.error.code}: ${data.error.message}`.slice(0, 160) };
     const lr = data.lighthouseResult || {};
     const cat = lr.categories || {};
@@ -259,7 +276,7 @@ async function pageSpeed(url, key) {
     };
   } catch (e) {
     return { available: false, error: String(e && e.message || e) };
-  } finally { clearTimeout(t); }
+  }
 }
 
 export default async function handler(req, res) {
