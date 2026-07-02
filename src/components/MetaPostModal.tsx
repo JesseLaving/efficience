@@ -52,7 +52,7 @@ export function MetaPostModal({ onClose, defaultTargets = ['facebook', 'instagra
             {hasFB && <span style={{ width: 20, height: 20 }}><Brand name="facebook" /></span>}
           </div>
           <div><h3>Publier sur Meta</h3><div className="km-s">Instagram &amp; Facebook · diffusion en direct</div></div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
 
         <div className="kmodal-body">

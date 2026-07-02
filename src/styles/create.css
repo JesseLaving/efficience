@@ -50,7 +50,7 @@
 .counter-bar.warn > i { background: var(--warn); }
 .counter-bar.over > i { background: var(--danger); }
 .cmp-tools { display: flex; gap: 6px; }
-.cmp-tools button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--r-btn);
+.cmp-tools button { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--r-btn);
   border: 1px solid var(--line); background: var(--canvas); color: var(--tx-2); cursor: pointer; transition: all .15s; font-size: 14px; }
 .cmp-tools button:hover { color: var(--acc); border-color: var(--acc-soft2); }
 .cmp-tools button .ic { width: 15px; height: 15px; }

@@ -287,7 +287,7 @@ export function Contacts() {
                                 {Object.entries(fields).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                               </select>
                             </div>
-                            <button className="crit-x" onClick={() => removeCriterion(idx)}><Icon name="trash" /></button>
+                            <button className="crit-x" aria-label="Supprimer ce critère" onClick={() => removeCriterion(idx)}><Icon name="trash" /></button>
                           </div>
                           <div className="crit-row" style={{ marginTop: -2 }}>
                             <div className="crit-grid">

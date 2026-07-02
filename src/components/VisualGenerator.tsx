@@ -195,7 +195,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
             <RawIcon svg={UI.sparkles2} style={{ width: 18, height: 18, display: 'inline-grid', color: 'var(--acc)' }} />
             <b>Générateur de visuel de marque</b>
           </div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
 
         <div className="kmodal-body" style={{ display: 'block' }}>

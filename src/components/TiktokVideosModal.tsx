@@ -35,7 +35,7 @@ export function TiktokVideosModal({ onClose }: Props) {
         <div className="kmodal-top">
           <div className="km-ic" style={{ background: 'transparent', border: 'none', width: 20, height: 20 }}><Brand name="tiktok" /></div>
           <div><h3>Vos vidéos</h3><div className="km-s">{tiktokProfile?.name || 'Compte TikTok'}</div></div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
 
         <div className="kmodal-body">

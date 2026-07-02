@@ -36,7 +36,7 @@ function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef
 
   return (
     <div className={'kpi kpi-in' + (removing ? ' kpi-out' : '')} data-kpi={id}>
-      <button className="kpi-rm" title="Retirer" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
+      <button className="kpi-rm" title="Retirer" aria-label="Retirer cet indicateur" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
       <div className="kl"><RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />{def.label}</div>
       <div className="kv"><span className="kv-n" ref={valRef}>0</span>{unit}</div>
       <div className="kf">{pill}{tr.since && <span className="since">{tr.since}</span>}<span className="ksrc"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{s.label}</span></div>

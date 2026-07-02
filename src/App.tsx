@@ -66,9 +66,11 @@ export function App() {
           <div className="nav-grp" key={g.label}>
             <div className="nav-lbl">{g.label}</div>
             {g.items.map((it) => (
-              <div
+              <button
                 key={it.screen}
+                type="button"
                 className={'nav-i' + (screen === it.screen ? ' active' : '')}
+                aria-current={screen === it.screen ? 'page' : undefined}
                 onClick={() => show(it.screen)}
               >
                 <Icon name={it.icon} />
@@ -76,7 +78,7 @@ export function App() {
                 {it.screen === 'connexion' && <span className="count">{connectedCount}</span>}
                 {it.screen === 'contacts' && <span className="count">{fr(contacts.length)}</span>}
                 {it.screen === 'campagnes' && <span className="badge" style={{ background: 'var(--acc-soft)', color: 'var(--acc)' }}>IA</span>}
-              </div>
+              </button>
             ))}
           </div>
         ))}
@@ -90,36 +92,35 @@ export function App() {
         </div>
 
         <div className="nav-grp" style={{ marginTop: 8 }}>
-          <div className={'nav-i' + (screen === 'config' ? ' active' : '')} onClick={() => show('config')}>
+          <button type="button" className={'nav-i' + (screen === 'config' ? ' active' : '')} aria-current={screen === 'config' ? 'page' : undefined} onClick={() => show('config')}>
             <Icon name="rocket" />Configurateur
-          </div>
-          <div className={'nav-i' + (screen === 'settings' ? ' active' : '')} onClick={() => show('settings')}>
+          </button>
+          <button type="button" className={'nav-i' + (screen === 'settings' ? ' active' : '')} aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => show('settings')}>
             <Icon name="settings" />Réglages
-          </div>
-          <div className={'nav-i' + (screen === 'help' ? ' active' : '')} onClick={() => show('help')}>
+          </button>
+          <button type="button" className={'nav-i' + (screen === 'help' ? ' active' : '')} aria-current={screen === 'help' ? 'page' : undefined} onClick={() => show('help')}>
             <Icon name="help" />Aide
-          </div>
+          </button>
         </div>
       </aside>
 
       {/* ===================== MAIN ===================== */}
       <div className="main">
         <header className="topbar">
-          <div className="client-sw">
+          <button type="button" className="client-sw" title="Modifier le profil d’entreprise" onClick={() => show('config')}>
             <div className="ava" style={{ borderRadius: 6 }}>{client.initials}</div>
             <div>
               <div className="cs-t">{client.name}</div>
               <div className="cs-s">Client actif</div>
             </div>
             <Icon name="chevdown" />
-          </div>
+          </button>
           <div className="search">
             <Icon name="search" />Rechercher un post, un client, un mot-clé…<kbd>⌘K</kbd>
           </div>
           <div className="top-r">
             <button className="btn acc sm" onClick={() => show('studio')}><Icon name="plus" />Créer</button>
-            <button className="icon-btn"><Icon name="bell" /><span className="dot" /></button>
-            <div className="ava" style={{ borderRadius: 6, width: 38, height: 38, background: 'linear-gradient(150deg,#2fd6a1,#10b981)', color: '#04231a' }}>CM</div>
+            <button type="button" className="icon-btn" aria-label="Notifications"><Icon name="bell" /><span className="dot" /></button>
           </div>
         </header>
 

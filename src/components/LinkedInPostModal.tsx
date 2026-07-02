@@ -35,7 +35,7 @@ export function LinkedInPostModal({ onClose }: { onClose: () => void }) {
         <div className="kmodal-top">
           <div className="km-ic" style={{ background: 'transparent', border: 'none' }}><Brand name="linkedin" /></div>
           <div><h3>Publier sur LinkedIn</h3><div className="km-s">{linkedinMe?.name ? `Profil : ${linkedinMe.name}` : 'Votre profil'}</div></div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="kmodal-body">
           <div className="field">

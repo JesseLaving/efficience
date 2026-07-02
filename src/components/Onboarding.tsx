@@ -105,7 +105,7 @@ export function Onboarding() {
         <div className="onb-top">
           <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" />
           <span className="ot-step">{stepLabel}</span>
-          <button className="onb-x" onClick={close}><Icon name="close" /></button>
+          <button className="onb-x" aria-label="Fermer" onClick={close}><Icon name="close" /></button>
         </div>
 
         {step === 'form' && (

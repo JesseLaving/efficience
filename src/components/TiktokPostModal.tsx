@@ -83,7 +83,7 @@ export function TiktokPostModal({ onClose }: Props) {
         <div className="kmodal-top">
           <div className="km-ic" style={{ background: 'transparent', border: 'none', width: 20, height: 20 }}><Brand name="tiktok" /></div>
           <div><h3>Publier une vidéo</h3><div className="km-s">{tiktokProfile?.name || creator?.nickname || 'Compte TikTok'}</div></div>
-          <button className="km-x" onClick={onClose} disabled={busy}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose} disabled={busy}><Icon name="close" /></button>
         </div>
 
         <div className="kmodal-body">

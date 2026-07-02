@@ -258,7 +258,7 @@ export function Studio() {
                         {media.kind === 'video' && <Icon name="play" style={{ width: 20, height: 20 }} />}
                       </div>
                       <div className="mh-i"><div className="mh-n">{media.name}</div><div className="mh-m">{media.kind === 'video' ? 'Vidéo' : 'Image'} · format {ratio} · {netName(active || '')}</div></div>
-                      <button className="unlink-btn" title="Retirer" onClick={() => { setMedia(null); setPublicImageUrl(null); }}><Icon name="trash" /></button>
+                      <button className="unlink-btn" title="Retirer" aria-label="Retirer" onClick={() => { setMedia(null); setPublicImageUrl(null); }}><Icon name="trash" /></button>
                     </div>
                   ) : (
                     <div className={'media-drop' + (dragMedia ? ' drag' : '')}

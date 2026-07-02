@@ -85,7 +85,7 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
         <div className="kmodal-top">
           <div className="km-ic"><Icon name="send" /></div>
           <div><h3>Publier maintenant</h3><div className="km-s">Diffusion en direct sur vos réseaux connectés</div></div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
 
         <div className="kmodal-body">

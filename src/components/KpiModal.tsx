@@ -52,7 +52,7 @@ export function KpiModal({ onCreate, onClose }: { onCreate: (id: string, def: Kp
         <div className="kmodal-top">
           <div className="km-ic"><Icon name="sliders" /></div>
           <div><h3>Créer un indicateur</h3><div className="km-s">Composez un KPI sur mesure pour votre activité</div></div>
-          <button className="km-x" onClick={onClose}><Icon name="close" /></button>
+          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="kmodal-body">
           <div className="field">

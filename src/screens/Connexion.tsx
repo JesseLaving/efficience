@@ -93,7 +93,7 @@ function NetCard({ net }: { net: Network }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setLiModal(true)}>Publier un post</button>
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('linkedin')}><Icon name="unlink" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('linkedin')}><Icon name="unlink" /></button>
     </>;
   } else if (isGoogle && isConn) {
     const g = googleAccounts[0];
@@ -110,7 +110,7 @@ function NetCard({ net }: { net: Network }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => show('planning')}>Publier une actualité</button>
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('google')}><Icon name="unlink" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('google')}><Icon name="unlink" /></button>
     </>;
   } else if (isYoutube && isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
@@ -128,7 +128,7 @@ function NetCard({ net }: { net: Network }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setYtModal(true)}>Publier une vidéo</button>
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('youtube')}><Icon name="unlink" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('youtube')}><Icon name="unlink" /></button>
     </>;
   } else if (isTiktok && isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
@@ -146,8 +146,8 @@ function NetCard({ net }: { net: Network }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setTtModal(true)}>Publier une vidéo</button>
-      <button className="btn ghost sm" title="Voir mes vidéos" onClick={() => setTtVideos(true)}><Icon name="play" /></button>
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect('tiktok')}><Icon name="unlink" /></button>
+      <button className="btn ghost sm" title="Voir mes vidéos" aria-label="Voir mes vidéos" onClick={() => setTtVideos(true)}><Icon name="play" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('tiktok')}><Icon name="unlink" /></button>
     </>;
   } else if (ph === 'loading') {
     stateLbl = <span className="nc-dot on"><i />Import…</span>;
@@ -158,14 +158,14 @@ function NetCard({ net }: { net: Network }) {
     body = <ProfileBlock net={net} loading={false} acc={acc} />;
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setMetaModal(true)}>Publier</button>
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else if (isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
     body = <ProfileBlock net={net} loading={false} acc={acc} />;
     foot = <>
       <FlashButton className="btn ghost sm grow" label="Gérer la page" flash="Ouvrez votre app native" />
-      <button className="unlink-btn" title="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {
     const integrated = meta || isGoogle || isLinkedin || isYoutube || isTiktok;

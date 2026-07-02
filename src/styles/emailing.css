@@ -177,7 +177,7 @@ textarea.inp { resize: none; line-height: 1.55; }
 .camp-list { display: flex; flex-direction: column; gap: 12px; }
 .camp-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 18px 20px;
   border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); transition: border-color .18s, box-shadow .18s; cursor: pointer; }
-.camp-row:hover { border-color: #4a4746; box-shadow: var(--glow); }
+.camp-row:hover { border-color: #4a4746; }
 .camp-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .camp-ic { width: 42px; height: 42px; flex: none; border-radius: var(--r-btn); display: grid; place-items: center;
   color: var(--tx-2); background: var(--canvas-soft); border: 1px solid var(--line); }
