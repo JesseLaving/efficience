@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Space } from '../lib/auth';
-import { getSpaces, createSpace } from '../lib/auth';
+import { useSpaces } from '../state/SpaceContext';
 import './SpaceSelector.css';
 
 interface Props {
@@ -9,29 +8,16 @@ interface Props {
 }
 
 export function SpaceSelector({ selectedSpaceId, onSelect }: Props) {
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const { spaces, loading, createSpace } = useSpaces();
   const [showDropdown, setShowDropdown] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
-  const [loading, setLoading] = useState(true);
 
+  // Aucun espace actif mais des espaces existent (première visite après
+  // connexion, ou l'espace actif vient d'être supprimé) → activer le premier.
   useEffect(() => {
-    loadSpaces();
-  }, []);
-
-  async function loadSpaces() {
-    try {
-      const list = await getSpaces();
-      setSpaces(list);
-      if (!selectedSpaceId && list.length > 0) {
-        onSelect(list[0].id);
-      }
-    } catch (e) {
-      console.error('Failed to load spaces:', e);
-    } finally {
-      setLoading(false);
-    }
-  }
+    if (!loading && !selectedSpaceId && spaces.length > 0) onSelect(spaces[0].id);
+  }, [loading, selectedSpaceId, spaces, onSelect]);
 
   async function handleCreateSpace() {
     if (!newSpaceName.trim()) return;
@@ -39,7 +25,6 @@ export function SpaceSelector({ selectedSpaceId, onSelect }: Props) {
     try {
       setCreating(true);
       const space = await createSpace(newSpaceName.trim());
-      setSpaces([space, ...spaces]);
       onSelect(space.id);
       setNewSpaceName('');
       setShowDropdown(false);

@@ -13,6 +13,7 @@ import { Analyse } from './screens/Analyse';
 import { Stats } from './screens/Stats';
 import { EditorialPlanning } from './screens/EditorialPlanning';
 import { Calendar } from './screens/Calendar';
+import { Settings } from './screens/Settings';
 import { Placeholder } from './screens/Placeholder';
 import { Onboarding } from './components/Onboarding';
 import type { UIName } from './lib/icons';
@@ -38,7 +39,6 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }> = {
-  settings: { icon: 'settings', title: 'Réglages', sub: '' },
   help: { icon: 'help', title: 'Aide & support', sub: '' },
 };
 
@@ -137,6 +137,7 @@ export function App() {
           {screen === 'inbox' && <Stats />}
           {screen === 'planning' && <EditorialPlanning />}
           {screen === 'calendar' && <Calendar />}
+          {screen === 'settings' && <Settings />}
           {screen === 'config' && <section className="screen show" id="screen-config" />}
           {PLACEHOLDERS[screen] && (
             <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />

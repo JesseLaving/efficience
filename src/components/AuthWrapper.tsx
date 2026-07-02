@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getSpaceData, saveSpaceData } from '../lib/auth';
+import { SpaceProvider } from '../state/SpaceContext';
 import { LoginScreen } from './LoginScreen';
 import { SpaceSelector } from './SpaceSelector';
 import { ProfileMenu } from './ProfileMenu';
@@ -70,6 +71,15 @@ export function AuthWrapper() {
     }
   }, []);
 
+  // L'espace ACTUELLEMENT actif vient d'être supprimé (depuis Réglages) :
+  // ses données locales n'ont plus de raison d'être — on nettoie et on
+  // recharge, exactement comme après un changement d'espace normal.
+  const handleActiveSpaceDeleted = useCallback(() => {
+    localStorage.removeItem(ACTIVE_KEY);
+    Object.keys(snapshot()).forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  }, []);
+
   // Autosave: snapshot localStorage to the server when it changes.
   useEffect(() => {
     if (!activeSpaceId) return;
@@ -104,31 +114,33 @@ export function AuthWrapper() {
   }
 
   return (
-    <div className="auth-layout">
-      <header className="auth-header">
-        <div className="auth-header-left">
-          <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" style={{ width: 24, height: 24 }} />
-          <h1>Efficience</h1>
-        </div>
-        <div className="auth-header-center">
-          <SpaceSelector selectedSpaceId={activeSpaceId ?? undefined} onSelect={activateSpace} />
-        </div>
-        <div className="auth-header-right">
-          <ProfileMenu name={user?.name} email={user?.email} />
-        </div>
-      </header>
-
-      <div className="auth-content">
-        {activating ? (
-          <div className="auth-loading">Chargement de l'espace…</div>
-        ) : activeSpaceId ? (
-          <App />
-        ) : (
-          <div className="auth-empty">
-            <p>Sélectionnez ou créez un espace pour commencer.</p>
+    <SpaceProvider activeSpaceId={activeSpaceId} onActiveSpaceDeleted={handleActiveSpaceDeleted}>
+      <div className="auth-layout">
+        <header className="auth-header">
+          <div className="auth-header-left">
+            <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" style={{ height: 24, width: 'auto' }} />
+            <h1>Efficience</h1>
           </div>
-        )}
+          <div className="auth-header-center">
+            <SpaceSelector selectedSpaceId={activeSpaceId ?? undefined} onSelect={activateSpace} />
+          </div>
+          <div className="auth-header-right">
+            <ProfileMenu name={user?.name} email={user?.email} />
+          </div>
+        </header>
+
+        <div className="auth-content">
+          {activating ? (
+            <div className="auth-loading">Chargement de l'espace…</div>
+          ) : activeSpaceId ? (
+            <App />
+          ) : (
+            <div className="auth-empty">
+              <p>Sélectionnez ou créez un espace pour commencer.</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </SpaceProvider>
   );
 }

@@ -56,6 +56,25 @@ export async function createSpace(name: string): Promise<Space> {
   return r.json();
 }
 
+export async function renameSpace(spaceId: number, name: string): Promise<Space> {
+  const r = await fetch('/api/spaces/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ spaceId, name }),
+  });
+  if (!r.ok) throw new Error('Failed to rename space');
+  return r.json();
+}
+
+export async function deleteSpace(spaceId: number): Promise<void> {
+  const r = await fetch('/api/spaces/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ spaceId }),
+  });
+  if (!r.ok) throw new Error('Failed to delete space');
+}
+
 export async function getSpaceData(spaceId: number): Promise<Record<string, unknown>> {
   const r = await fetch(`/api/spaces/data?spaceId=${spaceId}`);
   if (!r.ok) throw new Error('Failed to fetch space data');
