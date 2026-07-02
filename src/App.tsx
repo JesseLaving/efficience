@@ -142,6 +142,12 @@ export function App() {
             <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />
           )}
         </div>
+
+        <footer className="app-foot">
+          <span>© {new Date().getFullYear()} Efficience Marketing</span>
+          <a href="https://app.efficienceconsulting.com/confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>
+          <a href="https://app.efficienceconsulting.com/conditions.html" target="_blank" rel="noopener">Conditions d’utilisation</a>
+        </footer>
       </div>
 
       {screen === 'config' && <Onboarding />}

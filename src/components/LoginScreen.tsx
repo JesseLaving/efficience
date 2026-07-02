@@ -51,6 +51,11 @@ export function LoginScreen() {
           <p className="login-footer">
             Données sécurisées • Sans publicités • Gratuit
           </p>
+          <p className="login-legal">
+            <a href="https://app.efficienceconsulting.com/confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a>
+            {' · '}
+            <a href="https://app.efficienceconsulting.com/conditions.html" target="_blank" rel="noopener">Conditions d’utilisation</a>
+          </p>
         </div>
       </div>
 

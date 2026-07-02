@@ -167,6 +167,23 @@
   letter-spacing: 0.3px;
 }
 
+.login-legal {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.login-legal a {
+  color: #9ca3af;
+  text-decoration: none;
+}
+
+.login-legal a:hover {
+  color: #6b7280;
+  text-decoration: underline;
+}
+
 /* Stagger animations for content */
 @media (prefers-reduced-motion: no-preference) {
   .login-card {
