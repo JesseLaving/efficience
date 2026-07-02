@@ -91,7 +91,13 @@ export function aiImageUrl(prompt: string, ratio = '1:1', seed?: number): string
   const H = rw && rh ? Math.round((base * rh) / rw) : base;
   const s = seed ?? Math.floor(Math.random() * 1e6);
   const p = encodeURIComponent(prompt.slice(0, 400));
-  return `https://image.pollinations.ai/prompt/${p}?width=${W}&height=${H}&nologo=true&model=flux&seed=${s}`;
+  // enhance=true : Pollinations réécrit/enrichit le prompt via un modèle avant
+  // génération — améliore nettement le rendu pour un prompt court/générique.
+  // referrer : identifie l'app (utile si un compte Pollinations est enregistré
+  // plus tard — sans ça, reste sans effet mais ne coûte rien).
+  // private=true : n'expose pas les visuels de marque du client dans le flux public.
+  return `https://image.pollinations.ai/prompt/${p}?width=${W}&height=${H}&nologo=true&model=flux&seed=${s}`
+    + `&enhance=true&private=true&referrer=efficienceconsulting.com`;
 }
 
 /* Prompt d'image par défaut, dérivé du sujet de la publication + du secteur. */
