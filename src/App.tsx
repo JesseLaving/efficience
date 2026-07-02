@@ -44,8 +44,9 @@ const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }>
 
 export function App() {
   const { screen, show, client } = useEff();
-  const { connectedCount } = useConnections();
+  const { connectedCount, accountFor } = useConnections();
   const { contacts } = useContacts();
+  const fbPicture = accountFor('facebook')?.picture;
 
   // First connection: open the Configurateur so the real analysis runs.
   useEffect(() => {
@@ -108,7 +109,9 @@ export function App() {
       <div className="main">
         <header className="topbar">
           <button type="button" className="client-sw" title="Modifier le profil d’entreprise" onClick={() => show('config')}>
-            <div className="ava" style={{ borderRadius: 6 }}>{client.initials}</div>
+            {fbPicture
+              ? <img className="ava" src={fbPicture} alt="" style={{ objectFit: 'cover' }} />
+              : <div className="ava" style={{ borderRadius: 6 }}>{client.initials}</div>}
             <div>
               <div className="cs-t">{client.name}</div>
               <div className="cs-s">Client actif</div>
