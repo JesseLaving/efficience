@@ -16,7 +16,7 @@ export interface GoogleLocation {
   account: string; location: string; path: string;
   title: string | null; address: string | null; website: string | null;
 }
-export interface GoogleAccountsResponse { available: boolean; reason?: string | null; accounts: GoogleLocation[]; }
+export interface GoogleAccountsResponse { available: boolean; reason?: string | null; authError?: boolean; accounts: GoogleLocation[]; }
 
 export async function fetchGoogleAccounts(token: string): Promise<GoogleAccountsResponse> {
   const r = await fetch(`${API_BASE}/google/accounts?token=${encodeURIComponent(token)}`);
@@ -111,7 +111,7 @@ export interface YoutubeChannel {
   id: string; title: string | null; thumbnail: string | null;
   subscribers: number | null; views: number | null; videos: number | null;
 }
-export interface YoutubeChannelResponse { available: boolean; reason?: string | null; channel: YoutubeChannel | null; }
+export interface YoutubeChannelResponse { available: boolean; reason?: string | null; authError?: boolean; channel: YoutubeChannel | null; }
 
 export async function fetchYoutubeChannel(token: string): Promise<YoutubeChannelResponse> {
   const r = await fetch(`${API_BASE}/google/youtubechannel?token=${encodeURIComponent(token)}`);
@@ -128,7 +128,7 @@ export async function fetchYoutubeChannel(token: string): Promise<YoutubeChannel
    limites d'une fonction serverless). */
 
 export interface YoutubeUploadMeta { title: string; description?: string; privacyStatus?: 'public' | 'unlisted' | 'private'; }
-export interface YoutubeInitResult { ok: boolean; uploadUrl?: string; reason?: string; }
+export interface YoutubeInitResult { ok: boolean; uploadUrl?: string; reason?: string; authError?: boolean; }
 
 export async function initYoutubeUpload(token: string, meta: YoutubeUploadMeta, file: File): Promise<YoutubeInitResult> {
   const r = await fetch(`${API_BASE}/google/youtubeupload`, {

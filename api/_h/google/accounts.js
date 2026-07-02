@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   try {
     const ar = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', auth);
     const ad = await ar.json();
-    if (ad.error) return json(res, 200, { available: false, reason: ad.error.message, accounts: [] });
+    if (ad.error) return json(res, 200, { available: false, reason: ad.error.message, authError: ar.status === 401, accounts: [] });
 
     const locations = [];
     for (const acc of (ad.accounts || [])) {

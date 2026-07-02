@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     });
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
-      return json(res, 200, { ok: false, reason: (d.error && d.error.message) || `HTTP ${r.status}` });
+      return json(res, 200, { ok: false, reason: (d.error && d.error.message) || `HTTP ${r.status}`, authError: r.status === 401 });
     }
     const uploadUrl = r.headers.get('location');
     if (!uploadUrl) return json(res, 200, { ok: false, reason: 'Session d’upload non renvoyée par YouTube.' });

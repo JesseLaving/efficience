@@ -72,6 +72,7 @@ interface ConnectionsCtx {
   youtubeReason: string | null;
   connectYoutube: () => void;
   disconnectYoutube: () => void;
+  refreshYoutubeToken: () => Promise<string | null>;
   /* --- TikTok --- */
   tiktokConnected: boolean;
   tiktokToken: string | null;
@@ -135,14 +136,31 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     else if (te) { setTiktokReason(te); showToast(UI.close, `Connexion TikTok : ${te}`); }
   }, []);
 
-  // Load Google locations whenever we hold a token.
+  // Load Google locations whenever we hold a token. The access token expires
+  // after ~1h — on a 401, refresh once with the stored refresh token and
+  // retry before surfacing an error (so a stale token never manifests to the
+  // user as a broken connection they have to manually reconnect).
   useEffect(() => {
     if (!googleToken) { setGoogleAccounts([]); return; }
     let alive = true;
     setGoogleStatus('loading'); setGoogleReason(null);
-    fetchGoogleAccounts(googleToken)
-      .then((d) => { if (!alive) return; setGoogleAccounts(d.accounts || []); setGoogleReason(d.available ? null : (d.reason || null)); setGoogleStatus('idle'); })
-      .catch((e) => { if (!alive) return; setGoogleReason(String(e.message || e)); setGoogleStatus('error'); });
+    const load = async (token: string, retried: boolean) => {
+      let d;
+      try { d = await fetchGoogleAccounts(token); } catch (e) { if (alive) { setGoogleReason(String((e as Error).message || e)); setGoogleStatus('error'); } return; }
+      if (!alive) return;
+      if (!d.available && d.authError && !retried) {
+        const r = getStoredGoogleRefresh();
+        if (r) {
+          try {
+            const fresh = await refreshGoogle(r);
+            setStoredGoogle(fresh); setGoogleToken(fresh);
+            return load(fresh, true);
+          } catch { /* refresh failed — fall through and surface the original error */ }
+        }
+      }
+      setGoogleAccounts(d.accounts || []); setGoogleReason(d.available ? null : (d.reason || null)); setGoogleStatus('idle');
+    };
+    load(googleToken, false);
     return () => { alive = false; };
   }, [googleToken]);
 
@@ -179,14 +197,30 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return () => { alive = false; };
   }, [metaToken]);
 
-  // Load YouTube channel stats whenever we hold a token.
+  // Load YouTube channel stats whenever we hold a token. Same refresh-and-
+  // retry-once-on-401 as Google Business — the access token expires after
+  // ~1h and YouTube shares the same OAuth refresh endpoint/token shape.
   useEffect(() => {
     if (!youtubeToken) { setYoutubeChannel(null); return; }
     let alive = true;
     setYoutubeStatus('loading'); setYoutubeReason(null);
-    fetchYoutubeChannel(youtubeToken)
-      .then((d) => { if (!alive) return; setYoutubeChannel(d.channel || null); setYoutubeReason(d.available ? null : (d.reason || null)); setYoutubeStatus('idle'); })
-      .catch((e) => { if (!alive) return; setYoutubeReason(String(e.message || e)); setYoutubeStatus('error'); });
+    const load = async (token: string, retried: boolean) => {
+      let d;
+      try { d = await fetchYoutubeChannel(token); } catch (e) { if (alive) { setYoutubeReason(String((e as Error).message || e)); setYoutubeStatus('error'); } return; }
+      if (!alive) return;
+      if (!d.available && d.authError && !retried) {
+        const r = getStoredYoutubeRefresh();
+        if (r) {
+          try {
+            const fresh = await refreshGoogle(r);
+            setStoredYoutube(fresh); setYoutubeToken(fresh);
+            return load(fresh, true);
+          } catch { /* refresh failed — fall through and surface the original error */ }
+        }
+      }
+      setYoutubeChannel(d.channel || null); setYoutubeReason(d.available ? null : (d.reason || null)); setYoutubeStatus('idle');
+    };
+    load(youtubeToken, false);
     return () => { alive = false; };
   }, [youtubeToken]);
 
@@ -239,6 +273,11 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const connectYoutube = useCallback(() => youtubeLogin(), []);
   const disconnectYoutube = useCallback(() => {
     clearStoredYoutube(); setYoutubeToken(null); setYoutubeChannel(null); setYoutubeReason(null);
+  }, []);
+  const refreshYoutubeToken = useCallback(async () => {
+    const r = getStoredYoutubeRefresh();
+    if (!r) return null;
+    try { const t = await refreshGoogle(r); setStoredYoutube(t); setYoutubeToken(t); return t; } catch { return null; }
   }, []);
 
   const connectTiktok = useCallback(() => tiktokLogin(), []);
@@ -298,7 +337,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,
-    youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube,
+    youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube, refreshYoutubeToken,
     tiktokConnected: !!tiktokToken, tiktokToken, tiktokProfile, tiktokStatus, tiktokReason, connectTiktok, disconnectTiktok, refreshTiktokToken,
   };
 

@@ -11,7 +11,7 @@ interface Props { onClose: () => void; }
 const MAX_MB = 2048; // garde-fou raisonnable côté UI — YouTube accepte bien plus, mais un envoi navigateur au-delà de quelques Go est peu réaliste.
 
 export function YoutubeUploadModal({ onClose }: Props) {
-  const { youtubeToken, youtubeChannel } = useConnections();
+  const { youtubeToken, youtubeChannel, refreshYoutubeToken } = useConnections();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -39,7 +39,13 @@ export function YoutubeUploadModal({ onClose }: Props) {
     if (!youtubeToken || !file || !title.trim()) return;
     setBusy(true); setErrorMsg(''); setProgress(0); setVideoId(null);
     try {
-      const init = await initYoutubeUpload(youtubeToken, { title: title.trim(), description: description.trim(), privacyStatus: privacy }, file);
+      let init = await initYoutubeUpload(youtubeToken, { title: title.trim(), description: description.trim(), privacyStatus: privacy }, file);
+      if (!init.ok && init.authError) {
+        // Token expiré (~1h) — un rafraîchissement silencieux puis un seul
+        // nouvel essai évite de faire échouer l'envoi pour une reconnexion.
+        const fresh = await refreshYoutubeToken();
+        if (fresh) init = await initYoutubeUpload(fresh, { title: title.trim(), description: description.trim(), privacyStatus: privacy }, file);
+      }
       if (!init.ok || !init.uploadUrl) { setErrorMsg(init.reason || 'Échec de l’initialisation de l’envoi.'); setBusy(false); return; }
       const res = await uploadYoutubeVideo(init.uploadUrl, file, setProgress);
       if (res.ok) {

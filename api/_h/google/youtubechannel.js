@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}` },
     });
     const d = await r.json();
-    if (d.error) return json(res, 200, { available: false, reason: d.error.message, channel: null });
+    if (d.error) return json(res, 200, { available: false, reason: d.error.message, authError: r.status === 401, channel: null });
     const ch = (d.items || [])[0];
     if (!ch) return json(res, 200, { available: false, reason: 'Aucune chaîne YouTube associée à ce compte.', channel: null });
     const stats = ch.statistics || {};
