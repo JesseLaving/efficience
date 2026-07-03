@@ -2,14 +2,30 @@
  *  Every call already marks a real, meaningful event (network connected,
  *  post published, import finished, error…) — so the same calls also feed
  *  a small rolling history, which the notification bell reads. No extra
- *  call sites needed to get a real (not decorative) notification center. */
+ *  call sites needed to get a real (not decorative) notification center.
+ *  Persisted in localStorage (synced per space like the rest of the app's
+ *  state) so the history survives a reload instead of resetting to empty. */
 
 export interface ToastEntry { id: number; icon: string; text: string; at: number; read: boolean; }
 
 const MAX_HISTORY = 30;
-let history: ToastEntry[] = [];
-let nextId = 1;
+const LS = 'eff_notifications_v1';
+
+function loadHistory(): ToastEntry[] {
+  try {
+    const raw = localStorage.getItem(LS);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+let history: ToastEntry[] = loadHistory();
+let nextId = history.reduce((max, h) => Math.max(max, h.id), 0) + 1;
 const listeners = new Set<() => void>();
+
+function persist(): void {
+  try { localStorage.setItem(LS, JSON.stringify(history)); } catch { /* ignore */ }
+}
 
 function notify(): void { listeners.forEach((l) => l()); }
 
@@ -30,6 +46,7 @@ export function showToast(iconSvg: string, html: string): void {
   }, 2600);
 
   history = [{ id: nextId++, icon: iconSvg, text: html, at: Date.now(), read: false }, ...history].slice(0, MAX_HISTORY);
+  persist();
   notify();
 }
 
@@ -43,6 +60,7 @@ export function subscribeToasts(cb: () => void): () => void {
 export function markToastsRead(): void {
   if (history.every((h) => h.read)) return;
   history = history.map((h) => ({ ...h, read: true }));
+  persist();
   notify();
 }
 
