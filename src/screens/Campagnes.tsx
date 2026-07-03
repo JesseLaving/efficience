@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useContacts } from '../state/ContactsContext';
+import { useCampaigns } from '../state/CampaignsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -8,18 +9,11 @@ import { showToast } from '../lib/toast';
 import { segmentInfos, type SegmentInfo } from '../lib/population';
 import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
+import type { Campaign } from '../lib/campaigns';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
 const TONES = ['Direct', 'Pédagogique', 'Expert', 'Chaleureux'];
-
-interface Campaign {
-  name: string; seg: string; status: 'sent' | 'sched' | 'draft';
-  recipients: number; open: number | null; click: number | null; when: string;
-}
-
-// No invented campaigns — the list starts empty.
-const INITIAL: Campaign[] = [];
 
 interface Generated { subjects: string[]; pre: string; headline: string; body: string[]; cta: string; segName: string; pct: number; }
 
@@ -99,7 +93,7 @@ function StatusPill({ s }: { s: Campaign['status'] }) {
 export function Campagnes() {
   const { campaignSeed, clearCampaignSeed } = useEff();
   const { contacts } = useContacts();
-  const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL);
+  const { campaigns, addCampaign } = useCampaigns();
   const [view, setView] = useState<'list' | 'builder'>('list');
   const segs = useMemo<SegmentInfo[]>(() => segmentInfos(contacts), [contacts]);
 
@@ -158,12 +152,12 @@ export function Campagnes() {
   const finish = (status: 'sent' | 'sched') => {
     const open = +(34 + Math.random() * 12).toFixed(1);
     const click = +(5 + Math.random() * 4).toFixed(1);
-    setCampaigns((prev) => [{
+    addCampaign({
       name: gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/g, '').trim(),
       seg: seg.name, status, recipients: seg.count,
       open: status === 'sent' ? open : null, click: status === 'sent' ? click : null,
       when: status === 'sent' ? 'Envoyée à l’instant' : 'Programmée sam. 09:00',
-    }, ...prev]);
+    });
     setView('list'); setGen(null); setPrompt('');
     showToast(status === 'sent' ? UI.rocket : UI.calendar, status === 'sent' ? `Campagne envoyée à ${fr(seg.count)} contacts` : 'Campagne programmée');
   };
