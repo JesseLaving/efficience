@@ -217,3 +217,12 @@
 
 @media (max-width: 1100px) { .cmp { grid-template-columns: 1fr; } .cmp-prev { position: static; } }
 @media (max-width: 720px) { .disc-grid { grid-template-columns: 1fr; } .onb-form .of-2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) {
+  .spec-grid { grid-template-columns: 1fr; }
+  .compl-row {
+    grid-template-columns: 1fr auto; grid-template-areas: "name status" "bar bar"; row-gap: 6px;
+  }
+  .compl-row .cr-name { grid-area: name; }
+  .compl-row .compl-st { grid-area: status; }
+  .compl-row .cr-bar { grid-area: bar; }
+}

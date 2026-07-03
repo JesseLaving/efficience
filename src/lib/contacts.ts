@@ -121,7 +121,8 @@ export function detectMapping(headers: string[]): ColumnMapping[] {
       else if (aliases.some((a) => h.includes(a) || a.includes(h))) score = 70;
       if (score && (!best || score > best.score)) best = { idx, score };
     });
-    if (best) { used.add(best.idx); out.push({ field, headerIndex: best.idx, confidence: best.score }); }
+    const match = best as { idx: number; score: number } | null;
+    if (match) { used.add(match.idx); out.push({ field, headerIndex: match.idx, confidence: match.score }); }
     else out.push({ field, headerIndex: null, confidence: 0 });
   }
   return out;
@@ -167,7 +168,7 @@ function makeId(email: string, name: string): string {
   return key ? `c_${key}_${idCounter}` : `c_${idCounter}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function rowsToContacts(headers: string[], rows: string[][], mapping: ColumnMapping[], source: Contact['source'] = 'file'): Contact[] {
+export function rowsToContacts(_headers: string[], rows: string[][], mapping: ColumnMapping[], source: Contact['source'] = 'file'): Contact[] {
   const idx = (f: TargetField) => mapping.find((m) => m.field === f)?.headerIndex ?? null;
   const iEmail = idx('email'), iFirst = idx('first'), iLast = idx('last'), iName = idx('name');
   const iPhone = idx('phone'), iCity = idx('city'), iBasket = idx('basket'), iLastDays = idx('lastDays');

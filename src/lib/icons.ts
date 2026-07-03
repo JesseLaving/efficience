@@ -7,6 +7,7 @@ const ui = (paths: string): string =>
 
 export const UI = {
   grid: ui('<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/>'),
+  menu: ui('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   link: ui('<path d="M9 15l6-6"/><path d="M11 6l1.5-1.5a4 4 0 0 1 5.7 5.7L16.5 12"/><path d="M13 18l-1.5 1.5a4 4 0 0 1-5.7-5.7L7.5 12"/>'),
   spark: ui('<path d="M12 3l1.6 4.8a3 3 0 0 0 1.9 1.9L20 11l-4.5 1.3a3 3 0 0 0-1.9 1.9L12 19l-1.6-4.8a3 3 0 0 0-1.9-1.9L4 11l4.5-1.3a3 3 0 0 0 1.9-1.9z"/><path d="M19 4v3M5 17v2"/>'),
   calendar: ui('<rect x="3.5" y="5" width="17" height="16" rx="2.4"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>'),

@@ -90,3 +90,4 @@
 .kmodal-foot .grow { flex: 1; }
 
 @media (max-width: 1080px) { .kpi-board { grid-template-columns: repeat(2, 1fr); } .ks-row { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .kpi-board { grid-template-columns: 1fr; } .kmodal-body .km-2 { grid-template-columns: 1fr; } }

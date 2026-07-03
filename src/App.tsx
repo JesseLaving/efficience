@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useEff, type ScreenId } from './state/EffContext';
 import { useConnections } from './state/ConnectionsContext';
 import { useContacts } from './state/ContactsContext';
@@ -47,6 +47,7 @@ export function App() {
   const { connectedCount, accountFor } = useConnections();
   const { contacts } = useContacts();
   const fbPicture = accountFor('facebook')?.picture;
+  const [navOpen, setNavOpen] = useState(false);
 
   // First connection: open the Configurateur so the real analysis runs.
   useEffect(() => {
@@ -54,10 +55,23 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Close the mobile drawer whenever the screen changes, and on Escape.
+  useEffect(() => { setNavOpen(false); }, [screen]);
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+
+  const go = (s: ScreenId) => { show(s); setNavOpen(false); };
+
   return (
     <div className="app">
+      <div className={'nav-scrim' + (navOpen ? ' show' : '')} onClick={() => setNavOpen(false)} aria-hidden="true" />
+
       {/* ===================== SIDEBAR ===================== */}
-      <aside className="side">
+      <aside className={'side' + (navOpen ? ' open' : '')}>
         <div className="brand">
           <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" />
           <span className="name">Efficience</span>
@@ -72,7 +86,7 @@ export function App() {
                 type="button"
                 className={'nav-i' + (screen === it.screen ? ' active' : '')}
                 aria-current={screen === it.screen ? 'page' : undefined}
-                onClick={() => show(it.screen)}
+                onClick={() => go(it.screen)}
               >
                 <Icon name={it.icon} />
                 {it.label}
@@ -93,13 +107,13 @@ export function App() {
         </div>
 
         <div className="nav-grp" style={{ marginTop: 8 }}>
-          <button type="button" className={'nav-i' + (screen === 'config' ? ' active' : '')} aria-current={screen === 'config' ? 'page' : undefined} onClick={() => show('config')}>
+          <button type="button" className={'nav-i' + (screen === 'config' ? ' active' : '')} aria-current={screen === 'config' ? 'page' : undefined} onClick={() => go('config')}>
             <Icon name="rocket" />Configurateur
           </button>
-          <button type="button" className={'nav-i' + (screen === 'settings' ? ' active' : '')} aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => show('settings')}>
+          <button type="button" className={'nav-i' + (screen === 'settings' ? ' active' : '')} aria-current={screen === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
             <Icon name="settings" />Réglages
           </button>
-          <button type="button" className={'nav-i' + (screen === 'help' ? ' active' : '')} aria-current={screen === 'help' ? 'page' : undefined} onClick={() => show('help')}>
+          <button type="button" className={'nav-i' + (screen === 'help' ? ' active' : '')} aria-current={screen === 'help' ? 'page' : undefined} onClick={() => go('help')}>
             <Icon name="help" />Aide
           </button>
         </div>
@@ -108,11 +122,14 @@ export function App() {
       {/* ===================== MAIN ===================== */}
       <div className="main">
         <header className="topbar">
+          <button type="button" className="nav-toggle" aria-label="Ouvrir le menu" onClick={() => setNavOpen((v) => !v)}>
+            <Icon name="menu" />
+          </button>
           <button type="button" className="client-sw" title="Modifier le profil d’entreprise" onClick={() => show('config')}>
             {fbPicture
               ? <img className="ava" src={fbPicture} alt="" style={{ objectFit: 'cover' }} />
               : <div className="ava" style={{ borderRadius: 6 }}>{client.initials}</div>}
-            <div>
+            <div className="cs-txt">
               <div className="cs-t">{client.name}</div>
               <div className="cs-s">Client actif</div>
             </div>

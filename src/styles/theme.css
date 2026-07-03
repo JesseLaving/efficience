@@ -237,5 +237,40 @@ body {
 .fade-in { animation: fadein .5s var(--ease) both; }
 @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
-@media (max-width: 920px) { .app { grid-template-columns: 1fr; } .side { display: none; } .screen { padding: 22px 18px 60px; } }
+/* ---------- mobile nav (hamburger + slide-in drawer) ---------- */
+.nav-toggle { display: none; }
+.nav-scrim {
+  display: none; position: fixed; inset: 0; z-index: 40;
+  background: rgba(20,21,15,.32);
+  opacity: 0; transition: opacity .2s var(--ease);
+}
+.nav-scrim.show { opacity: 1; }
+
+@media (max-width: 920px) {
+  .app { grid-template-columns: 1fr; }
+  .side {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: 272px; max-width: 84vw;
+    transform: translateX(-100%); transition: transform .28s var(--ease-drawer, cubic-bezier(.32,.72,0,1));
+    box-shadow: 0 0 0 1px var(--line-2);
+  }
+  .side.open { transform: translateX(0); }
+  .nav-toggle {
+    display: grid; place-items: center; width: 40px; height: 40px; flex: none;
+    border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--canvas);
+    color: var(--tx-2); cursor: pointer;
+  }
+  .nav-toggle .ic { width: 19px; height: 19px; }
+  .nav-scrim { display: block; }
+  .nav-scrim:not(.show) { pointer-events: none; }
+  .search { display: none; }
+  .screen { padding: 22px 18px 60px; }
+  /* 16px minimum prevents iOS Safari auto-zoom on input focus. */
+  .inp, select.inp, textarea.inp { font-size: 16px; }
+}
+@media (max-width: 560px) {
+  .client-sw .cs-txt { display: none; }
+  .client-sw .ic { display: none; }
+  .client-sw { padding: 6px; }
+  .app-foot { flex-wrap: wrap; gap: 6px 16px; padding: 10px 16px; text-align: center; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::after, *::before { animation-duration: .001ms !important; transition-duration: .001ms !important; } }

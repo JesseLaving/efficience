@@ -297,3 +297,19 @@ textarea.inp { resize: none; line-height: 1.55; }
   .crm-layout { grid-template-columns: 1fr; }
   .cb { grid-template-columns: 1fr; }
 }
+@media (max-width: 520px) {
+  .crm-stats { grid-template-columns: 1fr; }
+  .crit-row, .crit-row.three { grid-template-columns: 1fr; }
+  .crit-x { justify-self: end; }
+  .crit-grid, .crit-grid.full { grid-template-columns: 1fr; }
+  .map-head { display: none; }
+  .map-row {
+    grid-template-columns: 1fr; row-gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line-2);
+  }
+  .map-arrow { justify-content: flex-start; }
+  .map-match { text-align: left; }
+  .ct-head .ct-search { max-width: none; width: 100%; margin-left: 0; }
+  .camp-row { grid-template-columns: 1fr; }
+  .camp-stats { justify-content: flex-start; flex-wrap: wrap; gap: 16px; }
+  .crit-row select.inp, .crit-row .inp { font-size: 16px; }
+}
