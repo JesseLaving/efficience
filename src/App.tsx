@@ -1,24 +1,25 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useEff, type ScreenId } from './state/EffContext';
 import { useConnections } from './state/ConnectionsContext';
 import { useContacts } from './state/ContactsContext';
 import { Icon } from './lib/Icon';
 import { fr } from './lib/format';
-import { Dashboard } from './screens/Dashboard';
-import { Connexion } from './screens/Connexion';
-import { Contacts } from './screens/Contacts';
-import { Campagnes } from './screens/Campagnes';
-import { Studio } from './screens/Studio';
-import { Analyse } from './screens/Analyse';
-import { Stats } from './screens/Stats';
-import { EditorialPlanning } from './screens/EditorialPlanning';
-import { Calendar } from './screens/Calendar';
-import { Settings } from './screens/Settings';
 import { Placeholder } from './screens/Placeholder';
-import { Onboarding } from './components/Onboarding';
 import { NotificationBell } from './components/NotificationBell';
 import { GlobalSearch } from './components/GlobalSearch';
 import type { UIName } from './lib/icons';
+
+const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Connexion = lazy(() => import('./screens/Connexion').then((m) => ({ default: m.Connexion })));
+const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default: m.Contacts })));
+const Campagnes = lazy(() => import('./screens/Campagnes').then((m) => ({ default: m.Campagnes })));
+const Studio = lazy(() => import('./screens/Studio').then((m) => ({ default: m.Studio })));
+const Analyse = lazy(() => import('./screens/Analyse').then((m) => ({ default: m.Analyse })));
+const Stats = lazy(() => import('./screens/Stats').then((m) => ({ default: m.Stats })));
+const EditorialPlanning = lazy(() => import('./screens/EditorialPlanning').then((m) => ({ default: m.EditorialPlanning })));
+const Calendar = lazy(() => import('./screens/Calendar').then((m) => ({ default: m.Calendar })));
+const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })));
+const Onboarding = lazy(() => import('./components/Onboarding').then((m) => ({ default: m.Onboarding })));
 
 interface NavItem { screen: ScreenId; icon: UIName; label: string; }
 
@@ -139,20 +140,22 @@ export function App() {
         </header>
 
         <div className="canvas" key={screen}>
-          {screen === 'dashboard' && <Dashboard />}
-          {screen === 'connexion' && <Connexion />}
-          {screen === 'contacts' && <Contacts />}
-          {screen === 'campagnes' && <Campagnes />}
-          {screen === 'studio' && <Studio />}
-          {screen === 'stats' && <Analyse />}
-          {screen === 'inbox' && <Stats />}
-          {screen === 'planning' && <EditorialPlanning />}
-          {screen === 'calendar' && <Calendar />}
-          {screen === 'settings' && <Settings />}
-          {screen === 'config' && <section className="screen show" id="screen-config" />}
-          {PLACEHOLDERS[screen] && (
-            <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />
-          )}
+          <Suspense fallback={<div className="screen-load"><span className="spin lt" /></div>}>
+            {screen === 'dashboard' && <Dashboard />}
+            {screen === 'connexion' && <Connexion />}
+            {screen === 'contacts' && <Contacts />}
+            {screen === 'campagnes' && <Campagnes />}
+            {screen === 'studio' && <Studio />}
+            {screen === 'stats' && <Analyse />}
+            {screen === 'inbox' && <Stats />}
+            {screen === 'planning' && <EditorialPlanning />}
+            {screen === 'calendar' && <Calendar />}
+            {screen === 'settings' && <Settings />}
+            {screen === 'config' && <section className="screen show" id="screen-config" />}
+            {PLACEHOLDERS[screen] && (
+              <Placeholder icon={PLACEHOLDERS[screen].icon} title={PLACEHOLDERS[screen].title} sub={PLACEHOLDERS[screen].sub} />
+            )}
+          </Suspense>
         </div>
 
         <footer className="app-foot">
@@ -162,7 +165,11 @@ export function App() {
         </footer>
       </div>
 
-      {screen === 'config' && <Onboarding />}
+      {screen === 'config' && (
+        <Suspense fallback={null}>
+          <Onboarding />
+        </Suspense>
+      )}
     </div>
   );
 }

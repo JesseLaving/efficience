@@ -281,6 +281,8 @@ body {
 .spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--on-acc); animation: spin .7s linear infinite; }
 .spin.lt { border-color: var(--line); border-top-color: var(--acc); }
 @keyframes spin { to { transform: rotate(360deg); } }
+.screen-load { display: grid; place-items: center; min-height: 40vh; }
+.screen-load .spin { width: 24px; height: 24px; border-width: 3px; }
 
 .fade-in { animation: fadein .5s var(--ease) both; }
 @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
