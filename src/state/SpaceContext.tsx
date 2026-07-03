@@ -32,10 +32,25 @@ export function SpaceProvider({ children, activeSpaceId, onActiveSpaceDeleted }:
   useEffect(() => {
     let alive = true;
     getSpaces()
-      .then((list) => { if (alive) setSpaces(list); })
+      .then((list) => {
+        if (!alive) return;
+        // L'espace actif stocké en local (eff_active_space) n'appartient pas à
+        // l'utilisateur qui vient de s'authentifier : session précédente sur
+        // le même navigateur (cookie expiré sans clic "Se déconnecter"), ou
+        // espace supprimé depuis un autre appareil. Sans ce contrôle, on
+        // affiche instantanément les données résiduelles d'un autre compte
+        // au lieu d'une interface vierge. On nettoie exactement comme pour
+        // une suppression d'espace (même callback → localStorage + reload).
+        if (activeSpaceId != null && !list.some((s) => s.id === activeSpaceId)) {
+          onActiveSpaceDeleted();
+          return;
+        }
+        setSpaces(list);
+      })
       .catch((e) => console.error('Failed to load spaces:', e))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createSpace = useCallback(async (name: string) => {
