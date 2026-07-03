@@ -8,7 +8,7 @@
    Degrades to { available:false, reason } when no key is set, so the client
    falls back to the built-in template engine. Hard rule (Jesse): never invent
    figures, stats, testimonials or specific facts — stay qualitative. */
-import { cors, json, readBody, geminiGenerate, extractText, SAFETY_SETTINGS } from './_shared.js';
+import { cors, json, readBody, geminiGenerate, extractText, SAFETY_SETTINGS, requireAiQuota } from './_shared.js';
 
 const GOAL_LABELS = {
   notoriete: 'notoriété & visibilité', leads: 'génération de leads',
@@ -145,6 +145,7 @@ export default async function handler(req, res) {
   const brief = (body.brief || '').toString().trim();
   const ctx = body.context || {};
   if (!brief) return json(res, 400, { error: 'brief requis' });
+  if (!(await requireAiQuota(req, res))) return;
 
   try {
     const maxTokens = kind === 'email' ? 700 : kind === 'post' ? 1100 : 600;

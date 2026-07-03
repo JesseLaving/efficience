@@ -5,7 +5,7 @@
    SUJET de chaque publication, un par slot, dans l'ordre. Dégrade à
    { available:false, reason } : le client retombe alors sur la banque
    d'idées locale (src/lib/editorial.ts), jamais d'écran vide. */
-import { cors, json, readBody, geminiGenerate, extractText, parseJsonArray, SAFETY_SETTINGS } from './_shared.js';
+import { cors, json, readBody, geminiGenerate, extractText, parseJsonArray, SAFETY_SETTINGS, requireAiQuota } from './_shared.js';
 
 const MAX_SLOTS = 40;
 
@@ -52,6 +52,7 @@ export default async function handler(req, res) {
   const slots = Array.isArray(body.slots) ? body.slots : [];
   if (!slots.length) return json(res, 400, { error: 'slots requis' });
   if (slots.length > MAX_SLOTS) return json(res, 400, { error: `${MAX_SLOTS} publications maximum par génération IA.` });
+  if (!(await requireAiQuota(req, res))) return;
 
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   try {

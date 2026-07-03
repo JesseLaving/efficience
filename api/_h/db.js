@@ -48,6 +48,13 @@ export function ensureSchema() {
           data JSONB NOT NULL DEFAULT '{}',
           updated_at TIMESTAMPTZ DEFAULT NOW()
         )`);
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS app_ai_usage (
+          user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          day DATE NOT NULL DEFAULT CURRENT_DATE,
+          count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, day)
+        )`);
     })().catch((e) => { schemaReady = null; throw e; });
   }
   return schemaReady;
@@ -56,6 +63,24 @@ export function ensureSchema() {
 export async function query(text, params) {
   await ensureSchema();
   return getPool().query(text, params);
+}
+
+/* Atomically increments today's AI call count for a user and reports whether
+   they're still under the daily quota. Fails OPEN (quota "ok") on any DB
+   error — a Postgres hiccup should never block legitimate AI usage. */
+export async function checkAiQuota(userId, limit = parseInt(process.env.AI_DAILY_QUOTA || '', 10) || 60) {
+  try {
+    const { rows } = await query(
+      `INSERT INTO app_ai_usage (user_id, day, count) VALUES ($1, CURRENT_DATE, 1)
+       ON CONFLICT (user_id, day) DO UPDATE SET count = app_ai_usage.count + 1
+       RETURNING count`,
+      [userId]
+    );
+    const count = rows[0]?.count ?? 1;
+    return { ok: count <= limit, count, limit };
+  } catch {
+    return { ok: true, count: 0, limit };
+  }
 }
 
 /* Run schema creation without the ensureSchema guard re-entry (used by query). */

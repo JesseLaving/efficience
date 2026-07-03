@@ -3,7 +3,7 @@
    Dégrade proprement à { available:false, reason } quand la clé manque ou que
    l'appel échoue : le client retombe alors sur Pollinations (gratuit, sans
    clé), comme le texte retombe sur le moteur de templates. */
-import { cors, json, readBody, geminiGenerate, extractImage, SAFETY_SETTINGS } from './_shared.js';
+import { cors, json, readBody, geminiGenerate, extractImage, SAFETY_SETTINGS, requireAiQuota } from './_shared.js';
 
 const RATIO_HINT = {
   '1:1': 'format carré (1:1)',
@@ -22,6 +22,7 @@ export default async function handler(req, res) {
   const prompt = (body.prompt || '').toString().trim().slice(0, 800);
   const ratio = (body.ratio || '1:1').toString();
   if (!prompt) return json(res, 400, { error: 'prompt requis' });
+  if (!(await requireAiQuota(req, res))) return;
 
   const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
   const hint = RATIO_HINT[ratio] || `format ${ratio}`;

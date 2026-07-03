@@ -1,6 +1,7 @@
 /* Shared helpers for the Gemini-backed AI endpoints (generate.js, image.js,
    plan.js). Keeps the retry/safety/parsing logic in one place instead of
    duplicated across each action. */
+import { readSession, checkAiQuota } from '../db.js';
 
 export function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -77,6 +78,24 @@ export function extractImage(data) {
   if (img) return { mime: img.inlineData.mimeType || 'image/png', data: img.inlineData.data };
   const block = data && data.promptFeedback && data.promptFeedback.blockReason;
   throw new Error(block ? `Image bloquée par Gemini (${block})` : 'Aucune image renvoyée par Gemini');
+}
+
+/* Vérifie l'authentification + le quota IA quotidien avant tout appel Gemini
+   coûteux. Renvoie { userId } si l'appel peut continuer, ou écrit directement
+   une réponse { available:false, reason } (200, cohérent avec la dégradation
+   déjà en place pour Gemini indisponible) et renvoie null sinon. */
+export async function requireAiQuota(req, res) {
+  const session = readSession(req.headers.cookie);
+  if (!session || !session.userId) {
+    json(res, 200, { available: false, reason: 'Connectez-vous pour utiliser l’IA.' });
+    return null;
+  }
+  const quota = await checkAiQuota(session.userId);
+  if (!quota.ok) {
+    json(res, 200, { available: false, reason: `Quota IA quotidien atteint (${quota.limit} générations/jour). Réessayez demain.` });
+    return null;
+  }
+  return { userId: session.userId };
 }
 
 /* Parse un tableau JSON de chaînes depuis une réponse texte — tolère un
