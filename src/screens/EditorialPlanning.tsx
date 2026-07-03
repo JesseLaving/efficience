@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useCalendar } from '../state/CalendarContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { getBusiness } from '../lib/business';
@@ -8,7 +9,8 @@ import { showToast } from '../lib/toast';
 import {
   DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planScaffold, applyIdeas, planToCsv, type PlanItem,
 } from '../lib/editorial';
-import { generateAiPlanIdeas } from '../lib/ai';
+import { generateAiPlanIdeas, sampleRecentCaptions } from '../lib/ai';
+import { loadStrategy } from '../lib/strategy';
 import { buildAidaPost } from '../lib/aida';
 import { defaultDateTime } from '../lib/calendar';
 
@@ -17,6 +19,10 @@ const AI_MAX_SLOTS = 30;
 const netLabel: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', google: 'Google Business',
 };
+
+/* Réseaux proposés pour la multidiffusion d'une publication du planning —
+   ceux que les piliers éditoriaux peuvent assigner (voir PILLARS). */
+const PLAN_NETWORKS = ['instagram', 'facebook', 'linkedin', 'google'];
 
 function downloadCsv(items: PlanItem[]) {
   const csv = planToCsv(items);
@@ -32,6 +38,7 @@ function downloadCsv(items: PlanItem[]) {
 export function EditorialPlanning() {
   const { client, seedStudio } = useEff();
   const { addToCalendar } = useCalendar();
+  const { isConnected, metaStats, tiktokVideos } = useConnections();
   const [sector, setSector] = useState(() => getBusiness().sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
@@ -39,6 +46,11 @@ export function EditorialPlanning() {
   const [aiMode, setAiMode] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  // Réseaux sélectionnés pour la multidiffusion, par publication du planning
+  // (clé = date + index). Par défaut : tous les réseaux connectés parmi
+  // ceux que les piliers couvrent, sinon le réseau suggéré par le pilier.
+  const [netSel, setNetSel] = useState<Record<string, string[]>>({});
+  const connectedPlanNetworks = useMemo(() => PLAN_NETWORKS.filter(isConnected), [isConnected]);
 
   const weeks = DURATIONS.find((d) => d.key === durKey)?.weeks ?? 4;
 
@@ -62,7 +74,13 @@ export function EditorialPlanning() {
     setAiBusy(true);
     try {
       const slots = scaffold.map((s) => ({ pillar: s.pillar, format: s.format, network: s.network }));
-      const res = await generateAiPlanIdeas({ name: b.name, sector: sec, city: b.city }, slots);
+      const strat = loadStrategy();
+      const ctx = {
+        name: b.name, sector: sec, city: b.city,
+        audience: strat?.audience || undefined, products: strat?.products || undefined, goal: strat?.goal || undefined,
+        recentPosts: sampleRecentCaptions(metaStats, tiktokVideos),
+      };
+      const res = await generateAiPlanIdeas(ctx, slots);
       if (res.available && res.ideas) {
         setPlan(applyIdeas(scaffold, res.ideas, sec, b.city));
         showToast(UI.check, `${scaffold.length} publications proposées par IA`);
@@ -100,7 +118,21 @@ export function EditorialPlanning() {
   // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
   const aidaFor = (p: PlanItem) => { const b = getBusiness(); return buildAidaPost(p, { sector: sector.trim() || b.sector, name: b.name, city: b.city }); };
   const compose = (p: PlanItem) => seedStudio(aidaFor(p));
-  const schedule = (p: PlanItem) => addToCalendar({ dateTime: defaultDateTime(p.date, 9), text: aidaFor(p), networks: [p.network], photoUrl: null, pillar: p.pillar });
+
+  const keyFor = (p: PlanItem, i: number) => p.date + '-' + i;
+  // Réseaux effectivement sélectionnés pour une publication : ceux choisis
+  // manuellement, sinon tous les réseaux connectés couverts par le planning,
+  // sinon (rien de connecté) le réseau suggéré par le pilier — jamais vide.
+  const netsFor = (p: PlanItem, i: number): string[] => netSel[keyFor(p, i)] ?? (connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]);
+  const toggleNet = (p: PlanItem, i: number, id: string) => {
+    const k = keyFor(p, i);
+    const cur = netsFor(p, i);
+    const next = cur.includes(id) ? cur.filter((n) => n !== id) : [...cur, id];
+    if (!next.length) return; // toujours au moins un réseau sélectionné
+    setNetSel((s) => ({ ...s, [k]: next }));
+  };
+
+  const schedule = (p: PlanItem, i: number) => addToCalendar({ dateTime: defaultDateTime(p.date, 9), text: aidaFor(p), networks: netsFor(p, i), photoUrl: null, pillar: p.pillar });
   const copyIdea = (p: PlanItem) => {
     navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Sujet copié'), () => {});
   };
@@ -231,17 +263,27 @@ export function EditorialPlanning() {
                           <RawIcon svg={UI.dot} style={{ width: 12, height: 12, display: 'inline-grid' }} />{p.pillar}
                         </span>
                         <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>· {p.format}</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--tx-3)' }}>
-                          · <span style={{ width: 14, height: 14, display: 'inline-grid' }}><Brand name={p.network as BrandName} /></span>{netLabel[p.network] || p.network}
-                        </span>
                       </div>
-                      <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45 }}>{p.idea}</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45, marginBottom: 8 }}>{p.idea}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--tx-3)' }}>Diffuser sur :</span>
+                        {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
+                          <button
+                            key={id} type="button"
+                            className={'plat-chip sm' + (netsFor(p, i).includes(id) ? ' on' : '')}
+                            title={netLabel[id] || id}
+                            onClick={() => toggleNet(p, i, id)}
+                          >
+                            <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                       <button className="btn acc sm" title="Rédiger un brouillon AIDA dans le Studio" onClick={() => compose(p)}>
                         <Icon name="spark" />Composer (AIDA)
                       </button>
-                      <button className="btn outline sm" title="Ajouter au calendrier de programmation" onClick={() => schedule(p)}>
+                      <button className="btn outline sm" title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés" onClick={() => schedule(p, i)}>
                         <Icon name="clock" />Programmer
                       </button>
                       <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>

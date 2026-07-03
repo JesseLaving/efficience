@@ -1,16 +1,64 @@
 import { useEffect, useState } from 'react';
 import { useSpaces } from '../state/SpaceContext';
+import { useConnections } from '../state/ConnectionsContext';
 import { Icon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
+import { getBusiness } from '../lib/business';
+import { loadProfile } from '../lib/profile';
+import { loadStrategy } from '../lib/strategy';
+import { loadAuditSnapshot } from '../lib/auditSnapshot';
+import { loadKpiState, boardForGoal } from '../lib/kpi';
+import { netName } from '../lib/networks';
+import type { SocialSnapshot } from '../lib/auditReport';
 
 export function Settings() {
   const { spaces, activeSpaceId, renameSpace, deleteSpace } = useSpaces();
+  const { accountFor, metaStats, youtubeConnected, youtubeChannel, tiktokConnected, tiktokProfile } = useConnections();
   const active = spaces.find((s) => s.id === activeSpaceId);
   const [name, setName] = useState(active?.name || '');
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const downloadAuditReport = async () => {
+    setPdfBusy(true);
+    try {
+      const profile = loadProfile();
+      const b = getBusiness();
+      const strategy = loadStrategy();
+      const snapshot = loadAuditSnapshot();
+      const kpiState = loadKpiState();
+
+      const social: SocialSnapshot[] = [];
+      for (const net of ['instagram', 'facebook'] as const) {
+        const acc = accountFor(net);
+        if (acc) {
+          const stat = metaStats?.find((s) => s.network === net);
+          social.push({ network: net, label: netName(net), followers: acc.followers ?? null, engagementRate: stat?.summary.engagementRate ?? null });
+        }
+      }
+      if (youtubeConnected && youtubeChannel) social.push({ network: 'youtube', label: 'YouTube', followers: youtubeChannel.subscribers });
+      if (tiktokConnected && tiktokProfile) social.push({ network: 'tiktok', label: 'TikTok', followers: tiktokProfile.followers });
+
+      const { buildAuditReportPdf } = await import('../lib/auditReport');
+      await buildAuditReportPdf({
+        profile: { name: b.name, sector: b.sector, domain: profile?.domain || '' },
+        company: snapshot?.company || null,
+        site: snapshot?.site || null,
+        strategy: {
+          audience: strategy?.audience || '', products: strategy?.products || '', goal: strategy?.goal || '',
+          tone: strategy?.tone || '', frequency: strategy?.frequency || '',
+          competitors: strategy?.competitors || '', differentiators: strategy?.differentiators || '',
+        },
+        kpiIds: kpiState.board.length ? kpiState.board : (strategy?.goal ? boardForGoal(strategy.goal) : []),
+        social,
+      });
+    } catch (e) {
+      showToast(UI.close, `Échec de la génération du rapport : ${String((e as Error).message || e)}`);
+    } finally { setPdfBusy(false); }
+  };
 
   // Resynchronise le champ si l'espace actif change ou finit de charger.
   useEffect(() => { setName(active?.name || ''); }, [active?.name]);
@@ -78,6 +126,20 @@ export function Settings() {
           <div>
             <button className="btn acc" disabled={saving || !name.trim() || name.trim() === active.name} onClick={save}>
               {saving ? <span className="spin" /> : <Icon name="check" />}Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-h"><h3>Rapport d’audit</h3></div>
+        <div className="pad" style={{ display: 'grid', gap: 12 }}>
+          <p style={{ fontSize: 13, color: 'var(--tx-2)', margin: 0 }}>
+            Régénère le rapport d’audit complet (site, conformité, concurrents, stratégie, KPI et préconisations) — désormais enrichi de vos statistiques réseaux sociaux réelles si vous avez connecté des comptes.
+          </p>
+          <div>
+            <button className="btn outline" disabled={pdfBusy} onClick={downloadAuditReport}>
+              {pdfBusy ? <span className="spin lt" /> : <Icon name="download" />}Télécharger le rapport d’audit (PDF)
             </button>
           </div>
         </div>

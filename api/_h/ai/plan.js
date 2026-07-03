@@ -9,17 +9,30 @@ import { cors, json, readBody, geminiGenerate, extractText, parseJsonArray, SAFE
 
 const MAX_SLOTS = 40;
 
+const GOAL_LABELS = {
+  notoriete: 'notoriété & visibilité', leads: 'génération de leads',
+  ventes: 'ventes directes', fidelisation: 'fidélisation clients',
+};
+
 function systemPrompt(ctx) {
   const who = [
     ctx?.name && `Entreprise : ${ctx.name}.`,
     ctx?.sector && `Secteur : ${ctx.sector}.`,
     ctx?.city && `Zone : ${ctx.city}.`,
+    ctx?.audience && `Cible : ${ctx.audience}.`,
+    ctx?.products && `Produits/services phares : ${ctx.products}.`,
+    ctx?.goal && GOAL_LABELS[ctx.goal] && `Objectif prioritaire de la communication : ${GOAL_LABELS[ctx.goal]}.`,
   ].filter(Boolean).join(' ');
+  const styleRef = Array.isArray(ctx?.recentPosts) && ctx.recentPosts.length
+    ? '\nPublications déjà publiées par cette entreprise, à titre de référence de ton et de sujets déjà traités (ne recopie jamais le texte, propose des angles nouveaux dans le même registre) :\n'
+      + ctx.recentPosts.slice(0, 5).map((p) => `- « ${String(p).slice(0, 220)} »`).join('\n')
+    : '';
   return [
     "Tu es un stratège de contenu pour une PME française.",
     who && `Contexte : ${who}`,
     "Pour chaque publication demandée, propose un SUJET/ANGLE concret et spécifique à cette entreprise (une phrase, pas le texte complet du post), adapté au pilier éditorial, au format et au réseau indiqués.",
     "RÈGLE ABSOLUE : n'invente JAMAIS de chiffres, statistiques, pourcentages, témoignages, récompenses ou faits précis sur l'entreprise. Reste qualitatif et générique sur les faits, spécifique sur l'angle.",
+    styleRef,
   ].filter(Boolean).join('\n');
 }
 

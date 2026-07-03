@@ -16,8 +16,8 @@ import {
   type LinkedInMe,
 } from '../lib/linkedin';
 import {
-  clearStoredTiktok, fetchTiktokUserInfo, getStoredTiktokToken, getStoredTiktokRefresh,
-  refreshTiktok, setStoredTiktok, tiktokLogin, type TiktokProfile,
+  clearStoredTiktok, fetchTiktokUserInfo, fetchTiktokVideos, getStoredTiktokToken, getStoredTiktokRefresh,
+  refreshTiktok, setStoredTiktok, tiktokLogin, type TiktokProfile, type TiktokVideo,
 } from '../lib/tiktok';
 
 export type Phase = 'connecting' | 'loading' | null;
@@ -80,6 +80,7 @@ interface ConnectionsCtx {
   tiktokProfile: TiktokProfile | null;
   tiktokStatus: 'idle' | 'loading' | 'error';
   tiktokReason: string | null;
+  tiktokVideos: TiktokVideo[];
   connectTiktok: () => void;
   disconnectTiktok: () => void;
   refreshTiktokToken: () => Promise<string | null>;
@@ -115,6 +116,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const [tiktokProfile, setTiktokProfile] = useState<TiktokProfile | null>(null);
   const [tiktokStatus, setTiktokStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [tiktokReason, setTiktokReason] = useState<string | null>(null);
+  const [tiktokVideos, setTiktokVideos] = useState<TiktokVideo[]>([]);
 
   // Capture the OAuth bounce (Meta + Google + LinkedIn + YouTube + TikTok tokens / errors in URL hash) once.
   useEffect(() => {
@@ -243,6 +245,18 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return () => { alive = false; };
   }, [tiktokToken]);
 
+  // Historique des vidéos TikTok (descriptions) — sert uniquement de référence
+  // de style pour l'IA (Studio / Planning éditorial), jamais affiché tel quel
+  // ailleurs ; échec silencieux acceptable, ce n'est qu'un contexte optionnel.
+  useEffect(() => {
+    if (!tiktokToken) { setTiktokVideos([]); return; }
+    let alive = true;
+    fetchTiktokVideos(tiktokToken)
+      .then((d) => { if (alive) setTiktokVideos(d.videos || []); })
+      .catch(() => { if (alive) setTiktokVideos([]); });
+    return () => { alive = false; };
+  }, [tiktokToken]);
+
   const refreshMetaStats = useCallback(() => {
     if (!metaToken) return;
     setMetaStatsStatus('loading'); setMetaStatsError(null);
@@ -346,7 +360,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     connectGoogle, disconnectGoogle, refreshGoogleToken,
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, linkedinStatus, connectLinkedin, disconnectLinkedin,
     youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube, refreshYoutubeToken,
-    tiktokConnected: !!tiktokToken, tiktokToken, tiktokProfile, tiktokStatus, tiktokReason, connectTiktok, disconnectTiktok, refreshTiktokToken,
+    tiktokConnected: !!tiktokToken, tiktokToken, tiktokProfile, tiktokStatus, tiktokReason, tiktokVideos, connectTiktok, disconnectTiktok, refreshTiktokToken,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

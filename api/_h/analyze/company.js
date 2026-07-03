@@ -84,6 +84,7 @@ function normalize(r) {
     codePostal: siege.code_postal || null,
     adresse: siege.geo_adresse || siege.adresse || null,
     region: siege.region || null,
+    departement: siege.departement || null,
     enseigne: (siege.liste_enseignes && siege.liste_enseignes[0]) || siege.nom_commercial || null,
     nda: (c.liste_id_organisme_formation && c.liste_id_organisme_formation[0]) || null,
     badges: {

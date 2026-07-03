@@ -4,6 +4,31 @@
    { available:false, reason } and callers fall back to the local template
    engines (AIDA / editorial) or, for images, to Pollinations. */
 import { API_BASE } from './api';
+import type { MetaStatAccount } from './meta';
+import type { TiktokVideo } from './tiktok';
+
+/** Échantillon des légendes de publications RÉELLES les plus récentes,
+ *  tous réseaux connectés confondus (Meta expose déjà les légendes ; LinkedIn
+ *  et Google Business n'offrent aucune lecture d'historique de publication).
+ *  Sert de référence de style pour l'IA — jamais affiché tel quel, jamais
+ *  recopié mot pour mot par le prompt. */
+export function sampleRecentCaptions(
+  metaStats: MetaStatAccount[] | null | undefined,
+  tiktokVideos: TiktokVideo[] | null | undefined,
+  max = 6,
+): string[] {
+  const items: { text: string; at: number }[] = [];
+  for (const acc of metaStats || []) {
+    for (const p of acc.posts || []) {
+      if (p.caption && p.caption.trim()) items.push({ text: p.caption.trim(), at: p.date ? Date.parse(p.date) || 0 : 0 });
+    }
+  }
+  for (const v of tiktokVideos || []) {
+    if (v.description && v.description.trim()) items.push({ text: v.description.trim(), at: v.createdAt ? v.createdAt * 1000 : 0 });
+  }
+  items.sort((a, b) => b.at - a.at);
+  return items.slice(0, max).map((i) => i.text);
+}
 
 export interface AiContext {
   name?: string;
@@ -13,11 +38,24 @@ export interface AiContext {
   pillar?: string;
   tone?: string;
   audience?: string;
+  /** Limite réelle de caractères du réseau ciblé (ex. 280 pour X) — permet à
+      l'IA d'écrire une longueur réaliste plutôt que de deviner. */
+  maxLength?: number;
+  /** Objectif prioritaire déclaré au Configurateur (notoriété/leads/ventes/fidélisation). */
+  goal?: string;
+  /** Produits/services phares — du questionnaire de stratégie. */
+  products?: string;
+  /** Concurrents connus — du questionnaire de stratégie (optionnel). */
+  competitors?: string;
+  /** Échantillon de légendes de publications RÉELLES déjà publiées sur les
+      réseaux connectés (Meta/TikTok) — sert de référence de style pour que
+      l'IA imite le ton et les sujets déjà utilisés, jamais recopié tel quel. */
+  recentPosts?: string[];
 }
 
 export interface AiEmail { subject: string; preheader: string; body: string; cta: string; }
 
-interface PostResult { available: boolean; text?: string; reason?: string; }
+interface PostResult { available: boolean; text?: string; variants?: string[]; reason?: string; }
 interface EmailResult { available: boolean; email?: AiEmail; reason?: string; }
 
 async function post(kind: string, brief: string, context: AiContext): Promise<any> {

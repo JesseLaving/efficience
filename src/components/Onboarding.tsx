@@ -7,7 +7,15 @@ import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { setStoredSiteUrl } from '../lib/brand';
 import { loadProfile, saveProfile, profileFromAnalysis, initialsFrom } from '../lib/profile';
+import { saveStrategy, GOALS, TONES, FREQUENCIES, SECTOR_QUESTIONS, type Goal } from '../lib/strategy';
+import { profileFor } from '../lib/editorial';
+import { loadKpiState, saveKpiState, boardForGoal, isDefaultBoard } from '../lib/kpi';
 import { analyzeCompany, analyzeSite, type CompanyResult, type SiteResponse } from '../lib/api';
+import { saveAuditSnapshot } from '../lib/auditSnapshot';
+import { OnboardingContactImport } from './OnboardingContactImport';
+// jsPDF pèse plusieurs centaines de Ko — chargé à la demande (import() dans
+// downloadReport) pour ne pas alourdir le bundle principal de tout le monde
+// pour une action rare (télécharger le rapport d'audit).
 
 const ndaFmt = (s: string | null) => (s && s.length === 11 ? `${s.slice(0, 2)} ${s.slice(2, 5)} ${s.slice(5, 8)} ${s.slice(8)}` : s);
 const scoreColor = (n: number | null | undefined) =>
@@ -28,7 +36,7 @@ export function Onboarding() {
   const { show, setClient } = useEff();
   const { applySiteBrand, brandKit, setBrandKit } = useBrand();
   const prof0 = loadProfile();
-  const [step, setStep] = useState<'form' | 'scan' | 'result'>('form');
+  const [step, setStep] = useState<'form' | 'scan' | 'result' | 'questions' | 'import'>('form');
   const [siret, setSiret] = useState(prof0?.siret || prof0?.siren || '');
   const [domain, setDomain] = useState(prof0?.domain || '');
   const [stInsee, setStInsee] = useState<Status>('idle');
@@ -39,6 +47,19 @@ export function Onboarding() {
   const [editName, setEditName] = useState('');
   const [editSector, setEditSector] = useState('');
   const [editAccent, setEditAccent] = useState<string | null>(null);
+  // Étape « questions » : stratégie & audience — pilote la personnalisation
+  // de l'IA (ton, cible, objectif) et le choix des KPI initiaux.
+  const [audience, setAudience] = useState('');
+  const [products, setProducts] = useState('');
+  const [goal, setGoal] = useState<Goal | ''>('');
+  const [tone, setTone] = useState('');
+  const [frequency, setFrequency] = useState('');
+  const [competitors, setCompetitors] = useState('');
+  const [differentiators, setDifferentiators] = useState('');
+  const [sectorAnswerKpi, setSectorAnswerKpi] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const sectorQuestion = SECTOR_QUESTIONS[profileFor(editSector)] || SECTOR_QUESTIONS.default;
 
   const close = () => show('dashboard');
   useEffect(() => {
@@ -81,6 +102,8 @@ export function Onboarding() {
       });
   };
 
+  const goToQuestions = () => setStep('questions');
+
   const apply = () => {
     const base = profileFromAnalysis(domain.trim(), company, site);
     const name = editName.trim() || base.name;
@@ -89,13 +112,56 @@ export function Onboarding() {
     setStoredSiteUrl(domain.trim());
     if (editAccent && brandKit) setBrandKit({ ...brandKit, accent: editAccent });
     setClient({ name: prof.name, initials: prof.initials });
+
+    saveStrategy({
+      audience: audience.trim(), products: products.trim(), goal, tone,
+      frequency, competitors: competitors.trim(), differentiators: differentiators.trim(),
+      sectorAnswerKpi: sectorAnswerKpi || undefined,
+      capturedAt: new Date().toISOString(),
+    });
+
+    // Permet de régénérer le rapport d'audit plus tard (depuis Réglages),
+    // une fois les réseaux sociaux connectés.
+    saveAuditSnapshot({ company, site, capturedAt: new Date().toISOString() });
+
+    // Ne personnalise le tableau de bord que si l'utilisateur n'a pas déjà
+    // ajusté ses KPI à la main (ré-exécuter le Configurateur plus tard ne
+    // doit jamais écraser une personnalisation existante).
+    if (goal) {
+      const current = loadKpiState();
+      if (isDefaultBoard(current)) {
+        const board = boardForGoal(goal);
+        if (sectorAnswerKpi && !board.includes(sectorAnswerKpi)) board.push(sectorAnswerKpi);
+        saveKpiState({ board, custom: {}, suggestOpen: true });
+      }
+    }
+
     localStorage.setItem('eff_onboarded', '1');
     localStorage.setItem('eff_guide_connect', '1'); // bannière « connectez vos réseaux » sur l'écran Connexion
     show('connexion');
     showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b> — dernière étape : connectez vos réseaux`);
   };
 
-  const stepLabel = step === 'form' ? 'Étape 1 / 3 · Domaine' : step === 'scan' ? 'Étape 2 / 3 · Analyse' : 'Étape 3 / 3 · Confirmation';
+  const downloadReport = async () => {
+    setPdfBusy(true);
+    try {
+      const { buildAuditReportPdf } = await import('../lib/auditReport');
+      await buildAuditReportPdf({
+        profile: { name: editName.trim() || domain, sector: editSector.trim(), domain: domain.trim() },
+        company, site,
+        strategy: { audience, products, goal, tone, frequency, competitors, differentiators },
+        kpiIds: goal ? boardForGoal(goal) : [],
+      });
+    } catch (e) {
+      showToast(UI.close, `Échec de la génération du rapport : ${String((e as Error).message || e)}`);
+    } finally { setPdfBusy(false); }
+  };
+
+  const stepLabel = step === 'form' ? 'Étape 1 / 5 · Domaine'
+    : step === 'scan' ? 'Étape 2 / 5 · Analyse'
+    : step === 'result' ? 'Étape 3 / 5 · Confirmation'
+    : step === 'questions' ? 'Étape 4 / 5 · Stratégie & audience'
+    : 'Étape 5 / 5 · Import de contacts (facultatif)';
   const ps = site?.pagespeed;
   const palette = (site?.brand?.palette && site.brand.palette.length ? site.brand.palette.slice(0, 4) : ['#5b7550', '#3c5233', '#7c9a70', '#eef0e8']);
 
@@ -224,9 +290,138 @@ export function Onboarding() {
               </div>
             </div>
             <div className="onb-foot">
-              <span className="grow">Étape suivante : connecter vos réseaux sociaux pour publier.</span>
+              <span className="grow">Étape suivante : quelques questions sur votre stratégie.</span>
               <button className="btn outline" onClick={() => setStep('form')}>Recommencer</button>
-              <button className="btn acc" onClick={apply}><Icon name="rocket" />Personnaliser &amp; connecter mes réseaux</button>
+              <button className="btn acc" onClick={goToQuestions}><Icon name="arrowright" />Continuer</button>
+            </div>
+          </>
+        )}
+
+        {step === 'questions' && (
+          <>
+            <div className="onb-body">
+              <div className="onb-eyebrow">Stratégie &amp; audience</div>
+              <h2>Quelques questions pour calibrer votre outil</h2>
+              <p className="onb-lead">Vos réponses personnalisent les suggestions de l’IA (ton, sujets) et le tableau de bord (KPI proposés en priorité). Tout reste modifiable ensuite dans Réglages.</p>
+
+              <div className="onb-form" style={{ display: 'grid', gap: 16 }}>
+                <div className="field">
+                  <label className="field-lbl">Qui est votre cible principale ? <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <input className="inp" placeholder="Ex : particuliers à Avignon, dirigeants de PME, familles avec enfants…" value={audience} onChange={(e) => setAudience(e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label className="field-lbl">Vos produits ou services phares <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <input className="inp" placeholder="Ex : accompagnement commercial, formation vente, coaching dirigeants…" value={products} onChange={(e) => setProducts(e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label className="field-lbl">Objectif prioritaire <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {GOALS.map((g) => (
+                      <button
+                        key={g.key} type="button" onClick={() => setGoal(g.key)}
+                        style={{
+                          fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 'var(--r-btn)', cursor: 'pointer',
+                          border: '1px solid ' + (goal === g.key ? 'var(--acc)' : 'var(--line)'),
+                          background: goal === g.key ? 'var(--acc)' : 'transparent',
+                          color: goal === g.key ? 'var(--on-acc)' : 'var(--tx-2)',
+                        }}
+                      >{g.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="field-lbl">Ton de communication souhaité <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {TONES.map((t) => (
+                      <button
+                        key={t} type="button" onClick={() => setTone(t)}
+                        className={'chip-btn' + (tone === t ? ' on' : '')}
+                        style={{
+                          fontSize: 12.5, padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+                          border: '1px solid ' + (tone === t ? 'var(--acc)' : 'var(--line)'),
+                          background: tone === t ? 'var(--acc-soft)' : 'transparent',
+                          color: tone === t ? 'var(--acc)' : 'var(--tx-2)',
+                        }}
+                      >{t}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="field-lbl">Fréquence de publication souhaitée <span style={{ color: 'var(--acc)' }}>*</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {FREQUENCIES.map((f) => (
+                      <button
+                        key={f} type="button" onClick={() => setFrequency(f)}
+                        style={{
+                          fontSize: 12.5, padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+                          border: '1px solid ' + (frequency === f ? 'var(--acc)' : 'var(--line)'),
+                          background: frequency === f ? 'var(--acc-soft)' : 'transparent',
+                          color: frequency === f ? 'var(--acc)' : 'var(--tx-2)',
+                        }}
+                      >{f}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="field-lbl">{sectorQuestion.question} <span style={{ color: 'var(--tx-3)' }}>(optionnel — affine vos KPI)</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {sectorQuestion.options.map((o) => (
+                      <button
+                        key={o.label} type="button" onClick={() => setSectorAnswerKpi(o.kpi)}
+                        style={{
+                          fontSize: 12.5, padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+                          border: '1px solid ' + (sectorAnswerKpi === o.kpi ? 'var(--acc)' : 'var(--line)'),
+                          background: sectorAnswerKpi === o.kpi ? 'var(--acc-soft)' : 'transparent',
+                          color: sectorAnswerKpi === o.kpi ? 'var(--acc)' : 'var(--tx-2)',
+                        }}
+                      >{o.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="onb-form of-2">
+                  <div className="field">
+                    <label className="field-lbl">Concurrents connus <span style={{ color: 'var(--tx-3)' }}>(optionnel)</span></label>
+                    <input className="inp" placeholder="Noms ou zones de concurrence" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label className="field-lbl">Ce qui vous différencie <span style={{ color: 'var(--tx-3)' }}>(optionnel)</span></label>
+                    <input className="inp" placeholder="Votre atout principal face à la concurrence" value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="onb-foot">
+              <button className="btn outline" onClick={downloadReport} disabled={pdfBusy}>
+                {pdfBusy ? <span className="spin lt" /> : <Icon name="download" />}Télécharger le rapport d’audit (PDF)
+              </button>
+              <span className="grow" />
+              <button className="btn outline" onClick={() => setStep('result')}>Retour</button>
+              <button className="btn acc" disabled={!audience.trim() || !products.trim() || !goal || !tone || !frequency} onClick={() => setStep('import')}>
+                <Icon name="arrowright" />Continuer
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'import' && (
+          <>
+            <div className="onb-body">
+              <div className="onb-eyebrow">Import de contacts <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— facultatif</span></div>
+              <h2>Importez votre base clients dès maintenant</h2>
+              <p className="onb-lead">Cette étape est optionnelle : vous pourrez toujours importer vos contacts plus tard depuis l’écran « Base clients ». Autant le faire maintenant si vous avez le fichier sous la main.</p>
+              <OnboardingContactImport />
+            </div>
+            <div className="onb-foot">
+              <button className="btn outline" onClick={() => setStep('questions')}>Retour</button>
+              <span className="grow" />
+              <button className="btn outline" onClick={apply}>Passer cette étape</button>
+              <button className="btn acc" onClick={apply}><Icon name="rocket" />Terminer &amp; connecter mes réseaux</button>
             </div>
           </>
         )}

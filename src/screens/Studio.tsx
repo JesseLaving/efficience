@@ -8,7 +8,8 @@ import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
 import { netName } from '../lib/networks';
 import { getBusiness } from '../lib/business';
-import { generatePost, improvePost, generateHashtags } from '../lib/ai';
+import { generatePost, improvePost, generateHashtags, sampleRecentCaptions } from '../lib/ai';
+import { TONES, loadStrategy } from '../lib/strategy';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
 
@@ -70,7 +71,7 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
 
 export function Studio() {
   const { studioSeed, clearStudioSeed } = useEff();
-  const { isConnected } = useConnections();
+  const { isConnected, metaStats, tiktokVideos } = useConnections();
   const { addToCalendar } = useCalendar();
   const [type, setType] = useState<ComposeType>('post');
   const [text, setText] = useState(studioSeed || '');
@@ -144,19 +145,34 @@ export function Studio() {
   // Rédaction / amélioration / hashtags par IA (Gemini en priorité), avec
   // repli propre si aucune clé n'est configurée.
   const [aiBusy, setAiBusy] = useState<null | 'post' | 'improve' | 'hashtags'>(null);
+  const [tone, setTone] = useState<string | null>(() => loadStrategy()?.tone || null);
+  const [variants, setVariants] = useState<string[] | null>(null);
   const runAi = async (mode: 'post' | 'improve') => {
     const b = getBusiness();
     const brief = text.trim();
     if (mode === 'improve' && !brief) { showToast(UI.close, 'Écrivez d’abord un texte à améliorer.'); return; }
     setAiBusy(mode);
+    setVariants(null);
     try {
-      const ctx = { name: b.name, sector: b.sector, city: b.city, network: active ? netName(active) : undefined };
+      const strat = loadStrategy();
+      const ctx = {
+        name: b.name, sector: b.sector, city: b.city, network: active ? netName(active) : undefined,
+        tone: tone || undefined, maxLength: curLimit() || undefined,
+        audience: strat?.audience || undefined, products: strat?.products || undefined,
+        goal: strat?.goal || undefined, competitors: strat?.competitors || undefined,
+        recentPosts: sampleRecentCaptions(metaStats, tiktokVideos),
+      };
       const res = mode === 'improve'
         ? await improvePost(brief, ctx)
         : await generatePost(brief || `Une publication pour ${b.name} — secteur ${b.sector}`, ctx);
       if (res.available && res.text) {
-        setText(res.text);
-        showToast(UI.check, mode === 'improve' ? 'Texte amélioré par IA' : 'Texte rédigé par IA');
+        if (mode === 'post' && res.variants && res.variants.length > 1) {
+          setVariants(res.variants);
+          showToast(UI.check, `${res.variants.length} versions proposées par IA`);
+        } else {
+          setText(res.text);
+          showToast(UI.check, mode === 'improve' ? 'Texte amélioré par IA' : 'Texte rédigé par IA');
+        }
       } else {
         showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'}`);
       }
@@ -164,6 +180,7 @@ export function Studio() {
       showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
     } finally { setAiBusy(null); }
   };
+  const pickVariant = (v: string) => { setText(v); setVariants(null); };
 
   const runHashtags = async () => {
     const brief = text.trim();
@@ -249,6 +266,15 @@ export function Studio() {
                   )) : <span style={{ fontSize: 12.5, color: 'var(--tx-3)' }}>Sélectionnez au moins une plateforme.</span>}
                 </div>
                 <div className="cmp-text">
+                  <div className="ai-tone-row">
+                    <span className="ai-tone-lbl">Ton IA :</span>
+                    {TONES.map((t) => (
+                      <button
+                        key={t} type="button" className={'ai-tone-chip' + (tone === t ? ' on' : '')}
+                        onClick={() => setTone(tone === t ? null : t)}
+                      >{t}</button>
+                    ))}
+                  </div>
                   <textarea className="inp" placeholder="Écrivez votre message…" value={text} onChange={(e) => setText(e.target.value)} />
                   <div className="counter-row">
                     <div>{(() => {
@@ -268,6 +294,18 @@ export function Studio() {
                       <button title="Améliorer le texte par IA" disabled={!!aiBusy} onClick={() => runAi('improve')}>{aiBusy === 'improve' ? <span className="spin lt" /> : <Icon name="sparkles2" />}</button>
                     </div>
                   </div>
+                  {variants && (
+                    <div className="ai-variants">
+                      <div className="ai-variants-lbl"><RawIcon svg={UI.sparkles2} style={{ width: 13, height: 13, display: 'inline-grid' }} />Choisissez une version</div>
+                      {variants.map((v, i) => (
+                        <div className="ai-variant" key={i}>
+                          <div className="ai-variant-txt">{v}</div>
+                          <button className="btn outline sm" onClick={() => pickVariant(v)}><Icon name="check" />Utiliser</button>
+                        </div>
+                      ))}
+                      <button className="btn ghost sm" onClick={() => setVariants(null)}>Ignorer</button>
+                    </div>
+                  )}
                 </div>
               </div>
 

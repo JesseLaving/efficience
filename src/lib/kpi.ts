@@ -59,14 +59,37 @@ export const CATALOG: Record<string, KpiDef> = {
 
 export interface KpiState { board: string[]; custom: Record<string, KpiDef>; suggestOpen: boolean; }
 
+const DEFAULT_BOARD = ['subs', 'engagement', 'posts', 'review'];
+
 const LS = 'eff_kpis_v2';
 export function loadKpiState(): KpiState {
   try {
     const s = JSON.parse(localStorage.getItem(LS) || 'null');
     if (s && s.board) return s;
   } catch { /* ignore */ }
-  return { board: ['subs', 'engagement', 'posts', 'review'], custom: {}, suggestOpen: true };
+  return { board: DEFAULT_BOARD.slice(), custom: {}, suggestOpen: true };
 }
 export function saveKpiState(s: KpiState): void {
   localStorage.setItem(LS, JSON.stringify(s));
+}
+
+/** True when the KPI board is still the untouched, generic default — i.e. the
+ *  user hasn't customised it yet, so a goal-based board can safely replace it
+ *  (see boardForGoal). Never overwrite a board the user has actually edited. */
+export function isDefaultBoard(s: KpiState): boolean {
+  return Object.keys(s.custom || {}).length === 0
+    && s.board.length === DEFAULT_BOARD.length
+    && DEFAULT_BOARD.every((id) => s.board.includes(id));
+}
+
+/** Initial KPI selection tailored to the questionnaire's priority goal —
+ *  4 KPI already present in CATALOG, no invented metric. */
+export function boardForGoal(goal: string): string[] {
+  switch (goal) {
+    case 'notoriete': return ['reach', 'subs', 'engagementTotal', 'storyViews'];
+    case 'leads': return ['orders', 'messages', 'siteClicks', 'crmContacts'];
+    case 'ventes': return ['orders', 'basket', 'emailRevenue', 'engagementTotal'];
+    case 'fidelisation': return ['emailOpen', 'newSubs', 'crmContacts', 'engagement'];
+    default: return DEFAULT_BOARD.slice();
+  }
 }

@@ -106,6 +106,54 @@ function extractBrand(html, baseUrl, seo) {
   };
 }
 
+// Mots vides français courants — filtrés pour ne garder que des mots-clés
+// significatifs dans l'extraction de fréquence (jamais une liste inventée,
+// seulement dérivée du texte réel de la page).
+const STOPWORDS = new Set([
+  'les', 'des', 'une', 'un', 'le', 'la', 'de', 'du', 'et', 'en', 'est', 'pour', 'sur', 'avec', 'dans', 'plus',
+  'que', 'qui', 'vos', 'nos', 'nous', 'vous', 'ce', 'ces', 'son', 'sa', 'ses', 'aux', 'au', 'par', 'ou', 'à',
+  'être', 'avoir', 'sont', 'ont', 'pas', 'tout', 'tous', 'toute', 'toutes', 'votre', 'notre', 'leur', 'leurs',
+  'ne', 'se', 'il', 'elle', 'ils', 'elles', 'je', 'tu', 'on', 'mais', 'si', 'comme', 'sans', 'entre', 'sous',
+  'the', 'and', 'for', 'you', 'your', 'with', 'from', 'this', 'that', 'are', 'our',
+]);
+
+/* Extrait les mots-clés dominants du texte RÉELLEMENT visible de la page
+   (fréquence brute, mots vides filtrés) — jamais une liste inventée, un
+   indicateur dérivé du contenu réel, comme la charte graphique. */
+function extractKeywords(html, max = 10) {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;|&#\d+;/gi, ' ');
+  const words = (text.toLowerCase().match(/[a-zàâäéèêëîïôöùûüçœæ]{4,}/g) || []);
+  const counts = {};
+  for (const w of words) { if (!STOPWORDS.has(w)) counts[w] = (counts[w] || 0) + 1; }
+  return Object.entries(counts)
+    .filter(([, n]) => n >= 3)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([word, count]) => ({ word, count }));
+}
+
+/* Détecte la présence de liens vers les pages légales obligatoires (mentions
+   légales, CGV/CGU, politique de confidentialité, cookies) — simple
+   présence/absence réelle constatée dans le HTML, pas une évaluation de
+   conformité juridique complète. */
+function detectLegalLinks(html) {
+  // Capture le lien ENTIER (attributs + texte visible) — un lien peut être
+  // reconnaissable par son href (« /confidentialite.html ») ou par son texte
+  // (« Politique de confidentialité »), les deux doivent compter.
+  const links = (html.match(/<a[^>]*>[\s\S]*?<\/a>/gi) || []).join(' ').toLowerCase();
+  const has = (re) => re.test(links);
+  return {
+    mentionsLegales: has(/mentions[\s-]?l[ée]gales/),
+    cgvCgu: has(/\bcgv\b|\bcgu\b|conditions[\s-]g[ée]n[ée]rales/),
+    politiqueConfidentialite: has(/politique[\s-]de[\s-]confidentialit[ée]|privacy[\s-]policy/),
+    cookies: has(/cookies?/),
+  };
+}
+
 async function basicFetch(url) {
   {
     let r;
@@ -136,6 +184,8 @@ async function basicFetch(url) {
       imgCount: count(/<img[\s>]/gi),
       linkCount: count(/<a[\s>]/gi),
       jsRendered: !/<title[^>]*>[\s\S]*?<\/title>/i.test(head) && body.length > 50000,
+      keywords: extractKeywords(body.slice(0, 400000)),
+      legal: detectLegalLinks(body.slice(0, 400000)),
     };
     seo.brand = extractBrand(body, r.url, seo);
     return seo;

@@ -28,7 +28,7 @@ export interface CompanyResult {
   formeJuridique: string | null; formeJuridiqueLabel: string | null; categorie: string | null;
   dateCreation: string | null; dateMaj: string | null; etatAdministratif: string | null;
   effectif: string | null; effectifAnnee: number | string | null; employeur: boolean | null;
-  commune: string | null; codePostal: string | null; adresse: string | null; region: string | null; enseigne: string | null;
+  commune: string | null; codePostal: string | null; adresse: string | null; region: string | null; departement: string | null; enseigne: string | null;
   nda: string | null;
   badges: {
     organismeFormation: boolean; qualiopi: boolean; ess: boolean; rge: boolean;
@@ -60,6 +60,8 @@ export interface SiteResponse {
     sizeKB?: number; lang?: string | null; title?: string | null; metaDescription?: string | null;
     ogTitle?: string | null; ogImage?: string | null; canonical?: string | null; viewport?: boolean;
     h1Count?: number; imgCount?: number; linkCount?: number; jsRendered?: boolean; error?: string;
+    keywords?: { word: string; count: number }[];
+    legal?: { mentionsLegales: boolean; cgvCgu: boolean; politiqueConfidentialite: boolean; cookies: boolean };
   };
   pagespeed: {
     available: boolean; error?: string; strategy?: string;
@@ -73,6 +75,9 @@ export interface SiteResponse {
 }
 export interface Audit { id: string; title: string; score: number; displayValue: string | null; }
 
+export interface CompetitorEntry { nom: string | null; siren: string | null; commune: string | null; departement: string | null; categorie: string | null; effectif: string | null; }
+export interface CompetitorsResponse { naf: string; departement: string | null; local: CompetitorEntry[]; national: CompetitorEntry[]; }
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);
   const data = await r.json().catch(() => ({}));
@@ -82,3 +87,5 @@ async function get<T>(path: string): Promise<T> {
 
 export const analyzeCompany = (q: string) => get<CompanyResponse>(`/analyze/company?q=${encodeURIComponent(q)}`);
 export const analyzeSite = (url: string) => get<SiteResponse>(`/analyze/site?url=${encodeURIComponent(url)}`);
+export const analyzeCompetitors = (naf: string, departement?: string | null, excludeSiren?: string | null) =>
+  get<CompetitorsResponse>(`/analyze/competitors?naf=${encodeURIComponent(naf)}${departement ? `&departement=${encodeURIComponent(departement)}` : ''}${excludeSiren ? `&excludeSiren=${encodeURIComponent(excludeSiren)}` : ''}`);
