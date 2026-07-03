@@ -11,17 +11,20 @@ import { CalendarProvider } from './state/CalendarContext';
 import { BrandProvider } from './state/BrandContext';
 import { ContactsProvider } from './state/ContactsContext';
 import { AuthWrapper } from './components/AuthWrapper';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 createRoot(document.getElementById('root')!).render(
-  <EffProvider>
-    <ConnectionsProvider>
-      <CalendarProvider>
-        <BrandProvider>
-          <ContactsProvider>
-            <AuthWrapper />
-          </ContactsProvider>
-        </BrandProvider>
-      </CalendarProvider>
-    </ConnectionsProvider>
-  </EffProvider>
+  <ErrorBoundary>
+    <EffProvider>
+      <ConnectionsProvider>
+        <CalendarProvider>
+          <BrandProvider>
+            <ContactsProvider>
+              <AuthWrapper />
+            </ContactsProvider>
+          </BrandProvider>
+        </CalendarProvider>
+      </ConnectionsProvider>
+    </EffProvider>
+  </ErrorBoundary>
 );

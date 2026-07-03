@@ -29,7 +29,12 @@ export function GoogleBusiness() {
       const r = await publishGooglePost({ token: googleToken, path, summary: summary.trim(), actionType: actionType || undefined, url: url.trim() || undefined, photoUrl: photoUrl.trim() || undefined });
       setResult(r);
       if (r.ok) { showToast(UI.check, 'Actualité publiée sur Google Business'); setSummary(''); setUrl(''); setPhotoUrl(''); }
-    } catch (e) { setResult({ error: String((e as Error).message || e) }); }
+      else showToast(UI.close, `Publication échouée : ${r.reason || r.error || 'erreur inconnue'}`);
+    } catch (e) {
+      const msg = String((e as Error).message || e);
+      setResult({ error: msg });
+      showToast(UI.close, `Publication échouée : ${msg}`);
+    }
     setPublishing(false);
   };
 

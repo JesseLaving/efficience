@@ -11,6 +11,8 @@ import {
 interface SpaceCtx {
   spaces: Space[];
   loading: boolean;
+  error: string | null;
+  retry: () => void;
   activeSpaceId: number | null;
   createSpace: (name: string) => Promise<Space>;
   renameSpace: (id: number, name: string) => Promise<Space>;
@@ -28,9 +30,13 @@ export function SpaceProvider({ children, activeSpaceId, onActiveSpaceDeleted }:
 }) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setError(null);
     getSpaces()
       .then((list) => {
         if (!alive) return;
@@ -47,11 +53,16 @@ export function SpaceProvider({ children, activeSpaceId, onActiveSpaceDeleted }:
         }
         setSpaces(list);
       })
-      .catch((e) => console.error('Failed to load spaces:', e))
+      .catch((e) => {
+        console.error('Failed to load spaces:', e);
+        if (alive) setError('Impossible de charger vos espaces. Vérifiez votre connexion.');
+      })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   const createSpace = useCallback(async (name: string) => {
     const space = await apiCreateSpace(name);
@@ -71,7 +82,7 @@ export function SpaceProvider({ children, activeSpaceId, onActiveSpaceDeleted }:
     if (id === activeSpaceId) onActiveSpaceDeleted();
   }, [activeSpaceId, onActiveSpaceDeleted]);
 
-  const value: SpaceCtx = { spaces, loading, activeSpaceId, createSpace, renameSpace, deleteSpace };
+  const value: SpaceCtx = { spaces, loading, error, retry, activeSpaceId, createSpace, renameSpace, deleteSpace };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

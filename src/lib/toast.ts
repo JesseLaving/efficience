@@ -1,4 +1,18 @@
-/** Bottom-center toast, ported verbatim from the prototype's inline toasts. */
+/** Bottom-center toast, ported verbatim from the prototype's inline toasts.
+ *  Every call already marks a real, meaningful event (network connected,
+ *  post published, import finished, error…) — so the same calls also feed
+ *  a small rolling history, which the notification bell reads. No extra
+ *  call sites needed to get a real (not decorative) notification center. */
+
+export interface ToastEntry { id: number; icon: string; text: string; at: number; read: boolean; }
+
+const MAX_HISTORY = 30;
+let history: ToastEntry[] = [];
+let nextId = 1;
+const listeners = new Set<() => void>();
+
+function notify(): void { listeners.forEach((l) => l()); }
+
 export function showToast(iconSvg: string, html: string): void {
   const toast = document.createElement('div');
   toast.style.cssText =
@@ -14,4 +28,24 @@ export function showToast(iconSvg: string, html: string): void {
     toast.style.transform = 'translateX(-50%) translateY(20px)';
     setTimeout(() => toast.remove(), 400);
   }, 2600);
+
+  history = [{ id: nextId++, icon: iconSvg, text: html, at: Date.now(), read: false }, ...history].slice(0, MAX_HISTORY);
+  notify();
+}
+
+export function getToastHistory(): ToastEntry[] { return history; }
+
+export function subscribeToasts(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+export function markToastsRead(): void {
+  if (history.every((h) => h.read)) return;
+  history = history.map((h) => ({ ...h, read: true }));
+  notify();
+}
+
+export function unreadToastCount(): number {
+  return history.filter((h) => !h.read).length;
 }

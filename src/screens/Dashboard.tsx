@@ -184,17 +184,26 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="kpi-board">
-        {state.board.map((id) => {
-          const d = def(id);
-          if (!d) return null;
-          return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} />;
-        })}
-        <div className="kpi add-tile" onClick={() => setModal(true)}>
-          <div className="at-ic"><Icon name="plus" /></div>
-          <div className="at-t">Ajouter un KPI</div>
+      {state.board.length === 0 ? (
+        <div className="crm-empty" style={{ marginBottom: 16 }}>
+          <div className="ce-ic"><Icon name="grid" /></div>
+          <div className="ce-t">Aucun indicateur sur votre tableau de bord</div>
+          <p>Ajoutez vos premiers KPI, ou piochez parmi les suggestions basées sur votre activité ci-dessous.</p>
+          <button className="btn acc" style={{ marginTop: 14 }} onClick={() => setModal(true)}><Icon name="plus" />Ajouter un KPI</button>
         </div>
-      </div>
+      ) : (
+        <div className="kpi-board">
+          {state.board.map((id) => {
+            const d = def(id);
+            if (!d) return null;
+            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} />;
+          })}
+          <div className="kpi add-tile" onClick={() => setModal(true)}>
+            <div className="at-ic"><Icon name="plus" /></div>
+            <div className="at-t">Ajouter un KPI</div>
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="kpi-suggest">

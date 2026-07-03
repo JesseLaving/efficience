@@ -62,7 +62,7 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
 function NetCard({ net }: { net: Network }) {
   const { show } = useEff();
   const {
-    phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe,
+    phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe, linkedinStatus,
     youtubeChannel, youtubeStatus, youtubeReason, tiktokProfile, tiktokStatus, tiktokReason,
   } = useConnections();
   const [liModal, setLiModal] = useState(false);
@@ -90,7 +90,12 @@ function NetCard({ net }: { net: Network }) {
         </div>
         <div className="pi">
           <div className="pn">{linkedinMe?.name || 'Profil LinkedIn'}<RawIcon svg={UI.check} className="vrf" /></div>
-          <div className="ph">Profil membre · publication activée</div>
+          <div className="ph">
+            {linkedinMe ? 'Profil membre · publication activée'
+              : linkedinStatus === 'loading' ? 'Chargement…'
+              : linkedinStatus === 'error' ? <span style={{ color: 'var(--warn)' }}>Profil indisponible — reconnectez-vous</span>
+              : 'Profil membre · publication activée'}
+          </div>
           <div className="pf" style={{ color: 'var(--tx-3)' }}>Page entreprise : sur validation LinkedIn</div>
         </div>
       </div>

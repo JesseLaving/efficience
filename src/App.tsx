@@ -16,6 +16,8 @@ import { Calendar } from './screens/Calendar';
 import { Settings } from './screens/Settings';
 import { Placeholder } from './screens/Placeholder';
 import { Onboarding } from './components/Onboarding';
+import { NotificationBell } from './components/NotificationBell';
+import { GlobalSearch } from './components/GlobalSearch';
 import type { UIName } from './lib/icons';
 
 interface NavItem { screen: ScreenId; icon: UIName; label: string; }
@@ -100,12 +102,6 @@ export function App() {
 
         <div className="spacer" />
 
-        <div className="plan-card">
-          <div className="pc-t">Plan Studio</div>
-          <div className="pc-s">14 jours d’essai — 8 restants</div>
-          <button className="btn acc sm block">Passer à Pro</button>
-        </div>
-
         <div className="nav-grp" style={{ marginTop: 8 }}>
           <button type="button" className={'nav-i' + (screen === 'config' ? ' active' : '')} aria-current={screen === 'config' ? 'page' : undefined} onClick={() => go('config')}>
             <Icon name="rocket" />Configurateur
@@ -135,12 +131,10 @@ export function App() {
             </div>
             <Icon name="chevdown" />
           </button>
-          <div className="search">
-            <Icon name="search" />Rechercher un post, un client, un mot-clé…<kbd>⌘K</kbd>
-          </div>
+          <GlobalSearch />
           <div className="top-r">
             <button className="btn acc sm" onClick={() => show('studio')}><Icon name="plus" />Créer</button>
-            <button type="button" className="icon-btn" aria-label="Notifications"><Icon name="bell" /><span className="dot" /></button>
+            <NotificationBell />
           </div>
         </header>
 

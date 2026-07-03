@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function SpaceSelector({ selectedSpaceId, onSelect }: Props) {
-  const { spaces, loading, createSpace } = useSpaces();
+  const { spaces, loading, error, retry, createSpace } = useSpaces();
   const [showDropdown, setShowDropdown] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -39,6 +39,15 @@ export function SpaceSelector({ selectedSpaceId, onSelect }: Props) {
 
   if (loading) {
     return <div className="space-selector loading">Chargement...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="space-selector error" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 13, color: 'var(--danger)' }}>{error}</span>
+        <button className="btn outline sm" onClick={retry}>Réessayer</button>
+      </div>
+    );
   }
 
   return (

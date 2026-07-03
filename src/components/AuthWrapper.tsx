@@ -1,12 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getSpaceData, saveSpaceData } from '../lib/auth';
-import { SpaceProvider } from '../state/SpaceContext';
+import { SpaceProvider, useSpaces } from '../state/SpaceContext';
 import { LoginScreen } from './LoginScreen';
 import { SpaceSelector } from './SpaceSelector';
 import { ProfileMenu } from './ProfileMenu';
 import { App } from '../App';
 import '../styles/AuthWrapper.css';
+
+// Contenu de la zone principale quand aucun espace n'est actif — distingue un
+// vrai échec réseau (avec bouton Réessayer) d'une absence d'espace normale
+// (première connexion), au lieu d'afficher le même message dans les deux cas.
+function NoActiveSpace() {
+  const { loading, error, retry } = useSpaces();
+  if (loading) return <div className="auth-loading">Chargement de vos espaces…</div>;
+  if (error) {
+    return (
+      <div className="auth-empty">
+        <p style={{ color: 'var(--danger)' }}>{error}</p>
+        <button className="btn acc" onClick={retry}>Réessayer</button>
+      </div>
+    );
+  }
+  return (
+    <div className="auth-empty">
+      <p>Sélectionnez ou créez un espace pour commencer.</p>
+    </div>
+  );
+}
 
 // localStorage key that records which space's data is currently loaded into
 // localStorage. Excluded from the synced snapshot.
@@ -135,9 +156,7 @@ export function AuthWrapper() {
           ) : activeSpaceId ? (
             <App />
           ) : (
-            <div className="auth-empty">
-              <p>Sélectionnez ou créez un espace pour commencer.</p>
-            </div>
+            <NoActiveSpace />
           )}
         </div>
       </div>

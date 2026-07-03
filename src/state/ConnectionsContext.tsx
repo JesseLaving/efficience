@@ -62,6 +62,7 @@ interface ConnectionsCtx {
   linkedinConnected: boolean;
   linkedinToken: string | null;
   linkedinMe: LinkedInMe | null;
+  linkedinStatus: 'idle' | 'loading' | 'error';
   connectLinkedin: () => void;
   disconnectLinkedin: () => void;
   /* --- YouTube (stats de chaîne) --- */
@@ -103,6 +104,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   const [linkedinToken, setLinkedinToken] = useState<string | null>(() => getStoredLiToken());
   const [linkedinMe, setLinkedinMe] = useState<LinkedInMe | null>(null);
+  const [linkedinStatus, setLinkedinStatus] = useState<'idle' | 'loading' | 'error'>('idle');
 
   const [youtubeToken, setYoutubeToken] = useState<string | null>(() => getStoredYoutubeToken());
   const [youtubeChannel, setYoutubeChannel] = useState<YoutubeChannel | null>(null);
@@ -166,11 +168,17 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   // Load LinkedIn member profile when a token is held.
   useEffect(() => {
-    if (!linkedinToken) { setLinkedinMe(null); return; }
+    if (!linkedinToken) { setLinkedinMe(null); setLinkedinStatus('idle'); return; }
     let alive = true;
+    setLinkedinStatus('loading');
     fetchLinkedInMe(linkedinToken)
-      .then((d) => { if (alive) setLinkedinMe(d); })
-      .catch(() => { if (alive) setLinkedinMe(null); });
+      .then((d) => { if (alive) { setLinkedinMe(d); setLinkedinStatus('idle'); } })
+      .catch((e) => {
+        if (!alive) return;
+        setLinkedinMe(null);
+        setLinkedinStatus('error');
+        showToast(UI.close, `Profil LinkedIn indisponible : ${String((e as Error).message || e)}`);
+      });
     return () => { alive = false; };
   }, [linkedinToken]);
 
@@ -268,7 +276,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const connectLinkedin = useCallback(() => linkedinLogin(), []);
-  const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); setLinkedinToken(null); setLinkedinMe(null); }, []);
+  const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); setLinkedinToken(null); setLinkedinMe(null); setLinkedinStatus('idle'); }, []);
 
   const connectYoutube = useCallback(() => youtubeLogin(), []);
   const disconnectYoutube = useCallback(() => {
@@ -336,7 +344,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     metaStats, metaStatsStatus, metaStatsError, refreshMetaStats,
     googleConnected: !!googleToken, googleToken, googleAccounts, googleStatus, googleReason,
     connectGoogle, disconnectGoogle, refreshGoogleToken,
-    linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, connectLinkedin, disconnectLinkedin,
+    linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, linkedinStatus, connectLinkedin, disconnectLinkedin,
     youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube, refreshYoutubeToken,
     tiktokConnected: !!tiktokToken, tiktokToken, tiktokProfile, tiktokStatus, tiktokReason, connectTiktok, disconnectTiktok, refreshTiktokToken,
   };
