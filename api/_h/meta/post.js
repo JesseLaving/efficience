@@ -4,6 +4,7 @@
    surface verbatim (no invented data). POST body:
    { token, targets: ['facebook'|'instagram'], message, photoUrl? } */
 import crypto from 'node:crypto';
+import { requireSession } from '../requireSession.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,6 +21,7 @@ async function readBody(req) {
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
   if (req.method !== 'POST') return json(res, 405, { error: 'POST requis' });
+  if (!requireSession(req, res, json)) return;
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
   const { token, targets = [], message, photoUrl } = body || {};
   if (!token || !message || !message.trim()) return json(res, 400, { error: 'token et message requis.' });

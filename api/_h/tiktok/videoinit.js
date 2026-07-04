@@ -11,6 +11,8 @@
    - mode 'inbox' (video.upload scope): sends the video to the account's
      TikTok inbox for the user to review and publish manually from the app
      — no post_info needed, fallback if Direct Post isn't approved yet. */
+import { requireSession } from '../requireSession.js';
+
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -27,6 +29,7 @@ async function readBody(req) {
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
   if (req.method !== 'POST') return json(res, 405, { ok: false, reason: 'POST requis' });
+  if (!requireSession(req, res, (r, s, d) => json(r, s, { ok: false, reason: d.error }))) return;
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
   const { token, title, privacyLevel, fileSize, disableComment, disableDuet, disableStitch, mode } = body || {};
   if (!token || !fileSize) return json(res, 400, { ok: false, reason: 'token et fileSize requis.' });

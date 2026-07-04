@@ -1,6 +1,8 @@
 /* LinkedIn — publish a text post on the connected member's profile.
    Uses the UGC Posts API (works with w_member_social, no version header).
    POST body: { token, text, photoUrl? }. If photoUrl is present, uploads the image and attaches it. */
+import { requireSession } from '../requireSession.js';
+
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -16,6 +18,7 @@ async function readBody(req) {
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
   if (req.method !== 'POST') return json(res, 405, { error: 'POST requis' });
+  if (!requireSession(req, res, json)) return;
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
   const { token, text, photoUrl } = body || {};
   if (!token || !text || !text.trim()) return json(res, 400, { error: 'token et text requis.' });

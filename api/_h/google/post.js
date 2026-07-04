@@ -3,6 +3,8 @@
    (still the route for local posts). Gated behind Business Profile API access:
    returns the API error verbatim if access isn't granted yet. POST body:
    { token, path, summary, actionType?, url?, photoUrl? } */
+import { requireSession } from '../requireSession.js';
+
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,6 +22,7 @@ async function readBody(req) {
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
   if (req.method !== 'POST') return json(res, 405, { error: 'POST requis' });
+  if (!requireSession(req, res, json)) return;
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
   const { token, path, summary, actionType, url, photoUrl } = body || {};
   if (!token || !path || !summary) return json(res, 400, { error: 'token, path et summary requis.' });
