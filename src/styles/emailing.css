@@ -98,6 +98,12 @@ textarea.inp { resize: none; line-height: 1.55; }
 .seg-item .si-d { font-size: 11px; color: var(--tx-3); margin-top: 1px; }
 .seg-item .si-c { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--tx-3); }
 .seg-item.active .si-c { color: var(--acc); }
+.seg-item .si-del { width: 26px; height: 26px; flex: none; display: none; align-items: center; justify-content: center;
+  border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--tx-3); cursor: pointer; transition: color .15s, border-color .15s; }
+.seg-item:hover .si-del { display: grid; }
+.seg-item .si-del:hover { color: var(--danger); border-color: rgba(179,69,59,.35); }
+.seg-item .si-del .ic { width: 13px; height: 13px; }
+.seg-empty { font-size: 12px; color: var(--tx-3); padding: 10px 11px; line-height: 1.5; }
 
 /* segment builder */
 .builder { padding: 14px 16px; }
@@ -132,9 +138,15 @@ textarea.inp { resize: none; line-height: 1.55; }
 .ct-head .ct-title .seg-pill { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: var(--pill);
   color: var(--acc); border: 1px solid var(--acc-soft2); background: var(--acc-soft); }
 .ct-head .ct-search { margin-left: auto; max-width: 230px; }
+.bulk-bar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line-2);
+  background: var(--acc-soft); font-size: 12.5px; color: var(--tx-2); flex-wrap: wrap; }
+.bulk-bar .grow { flex: 1; }
+.bulk-bar select.inp { max-width: 220px; }
 .ct-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ct-table th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
   color: var(--tx-3); padding: 11px 16px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+.ct-table th.chk, .ct-table td.chk { width: 34px; padding-right: 0; }
+.ct-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--acc); }
 .ct-table th.num, .ct-table td.num { text-align: right; font-family: var(--mono); }
 .ct-table td { padding: 11px 16px; border-bottom: 1px solid var(--line-2); color: var(--tx-2); vertical-align: middle; }
 .ct-table tr:last-child td { border-bottom: none; }

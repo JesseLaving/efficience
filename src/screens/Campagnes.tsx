@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useContacts } from '../state/ContactsContext';
+import { useSegments } from '../state/SegmentsContext';
 import { useCampaigns } from '../state/CampaignsContext';
 import { useSpaces } from '../state/SpaceContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
-import { segmentInfos, SEGMENTS, type SegmentInfo } from '../lib/population';
+import { segmentInfos, SEGMENTS, fieldsFor, matchCriteria, type SegmentInfo, type Contact } from '../lib/population';
 import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
 import { sendCampaignEmail } from '../lib/email';
@@ -97,11 +98,37 @@ function StatusPill({ s }: { s: Campaign['status'] }) {
 export function Campagnes() {
   const { campaignSeed, clearCampaignSeed } = useEff();
   const { contacts } = useContacts();
+  const { savedSegments, groups } = useSegments();
   const { campaigns, addCampaign } = useCampaigns();
   const { activeSpaceId } = useSpaces();
   const [view, setView] = useState<'list' | 'builder'>('list');
   const [sending, setSending] = useState(false);
-  const segs = useMemo<SegmentInfo[]>(() => segmentInfos(contacts), [contacts]);
+  const fields = useMemo(() => fieldsFor(contacts), [contacts]);
+
+  // Résout un identifiant de segment (fixe, ou préfixé saved:/group: pour un
+  // segment enregistré / groupe créé dans Contacts.tsx) vers un prédicat.
+  // null = audience introuvable (segment/groupe supprimé depuis) → traité
+  // comme "tous les contacts" par les appelants, jamais comme "personne".
+  const resolvePred = useMemo(() => {
+    const map = new Map<string, (c: Contact) => boolean>();
+    for (const s of SEGMENTS) map.set(s.id, s.pred);
+    for (const s of savedSegments) map.set(`saved:${s.id}`, (c) => matchCriteria(c, s.criteria, fields));
+    for (const g of groups) { const ids = new Set(g.contactIds); map.set(`group:${g.id}`, (c) => ids.has(c.id)); }
+    return (id: string) => map.get(id) || null;
+  }, [savedSegments, groups, fields]);
+
+  const segs = useMemo<SegmentInfo[]>(() => {
+    const fixed = segmentInfos(contacts);
+    const saved = savedSegments.map((s) => ({
+      id: `saved:${s.id}`, name: s.name, desc: 'Segment enregistré', icon: 'sliders',
+      count: contacts.filter((c) => matchCriteria(c, s.criteria, fields)).length,
+    }));
+    const grp = groups.map((g) => {
+      const ids = new Set(g.contactIds);
+      return { id: `group:${g.id}`, name: g.name, desc: 'Groupe', icon: 'users', count: contacts.filter((c) => ids.has(c.id)).length };
+    });
+    return [...fixed, ...saved, ...grp];
+  }, [contacts, savedSegments, groups, fields]);
 
   // builder state
   const [seg, setSeg] = useState<SegmentInfo>(segs[0]);
@@ -116,9 +143,9 @@ export function Campagnes() {
   // consentement pas explicitement refusé, pas juste "membre du segment"
   // (c'est ce compte, pas seg.count, que l'envoi utilisera vraiment).
   const sendableCount = useMemo(() => {
-    const segment = SEGMENTS.find((s) => s.id === seg.id);
-    return contacts.filter((c) => c.email && c.consent !== false && (!segment || segment.pred(c))).length;
-  }, [contacts, seg]);
+    const pred = resolvePred(seg.id);
+    return contacts.filter((c) => c.email && c.consent !== false && (!pred || pred(c))).length;
+  }, [contacts, seg, resolvePred]);
 
   const openBuilder = (segId?: string) => {
     setSeg(segs.find((s) => s.id === segId) || segs[0]);
@@ -180,8 +207,8 @@ export function Campagnes() {
       return;
     }
 
-    const segment = SEGMENTS.find((s) => s.id === seg.id);
-    const recipients = contacts.filter((c) => c.email && c.consent !== false && (!segment || segment.pred(c)));
+    const pred = resolvePred(seg.id);
+    const recipients = contacts.filter((c) => c.email && c.consent !== false && (!pred || pred(c)));
     if (!recipients.length) { showToast(UI.close, 'Aucun destinataire avec une adresse e-mail valide dans ce segment.'); return; }
     if (activeSpaceId == null) { showToast(UI.close, 'Espace introuvable — reconnectez-vous.'); return; }
 

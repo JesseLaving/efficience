@@ -10,6 +10,7 @@ import { ConnectionsProvider } from './state/ConnectionsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { BrandProvider } from './state/BrandContext';
 import { ContactsProvider } from './state/ContactsContext';
+import { SegmentsProvider } from './state/SegmentsContext';
 import { CampaignsProvider } from './state/CampaignsContext';
 import { DraftsProvider } from './state/DraftsContext';
 import { AuthWrapper } from './components/AuthWrapper';
@@ -22,11 +23,13 @@ createRoot(document.getElementById('root')!).render(
         <CalendarProvider>
           <BrandProvider>
             <ContactsProvider>
-              <CampaignsProvider>
-                <DraftsProvider>
-                  <AuthWrapper />
-                </DraftsProvider>
-              </CampaignsProvider>
+              <SegmentsProvider>
+                <CampaignsProvider>
+                  <DraftsProvider>
+                    <AuthWrapper />
+                  </DraftsProvider>
+                </CampaignsProvider>
+              </SegmentsProvider>
             </ContactsProvider>
           </BrandProvider>
         </CalendarProvider>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useContacts } from '../state/ContactsContext';
+import { useSegments } from '../state/SegmentsContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -15,6 +16,7 @@ import {
   type ColumnMapping, type ParsedTable, type TargetField,
 } from '../lib/contacts';
 import { googleContactsLogin, consumeGoogleContactsHash, fetchGoogleContacts, mapGoogleContacts } from '../lib/google';
+import { NameModal } from '../components/NameModal';
 
 const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
@@ -23,15 +25,21 @@ const FIELD_LABELS: Record<TargetField, string> = {
 };
 
 type Flow = 'idle' | 'analyzing' | 'mapped' | 'confirming';
+type Audience = { kind: 'fixed' | 'custom' | 'saved' | 'group'; id: string };
 
 export function Contacts() {
   const { newCampaign } = useEff();
   const { contacts, addContacts } = useContacts();
+  const {
+    savedSegments, groups, createSegment, deleteSegment,
+    createGroup, deleteGroup, addToGroup, removeFromGroup,
+  } = useSegments();
   const [flow, setFlow] = useState<Flow>('idle');
-  const [seg, setSeg] = useState('all');
-  const [custom, setCustom] = useState(false);
+  const [audience, setAudience] = useState<Audience>({ kind: 'fixed', id: 'all' });
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [q, setQ] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [modal, setModal] = useState<null | 'saveSegment' | 'createGroup'>(null);
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,28 +126,39 @@ export function Contacts() {
   }, [contacts.length]);
 
   /* ---------- filtrage ---------- */
-  const activeSeg: Segment = SEGMENTS.find((x) => x.id === seg) || SEGMENTS[0];
-  let list: Contact[] = custom ? contacts.filter((c) => matchCriteria(c, criteria, fields)) : contacts.filter(activeSeg.pred);
+  const activeSeg: Segment = SEGMENTS.find((x) => x.id === audience.id) || SEGMENTS[0];
+  const activeSavedSeg = savedSegments.find((s) => s.id === audience.id);
+  const activeGroup = groups.find((g) => g.id === audience.id);
+
+  let list: Contact[];
+  if (audience.kind === 'custom') list = contacts.filter((c) => matchCriteria(c, criteria, fields));
+  else if (audience.kind === 'saved' && activeSavedSeg) list = contacts.filter((c) => matchCriteria(c, activeSavedSeg.criteria, fields));
+  else if (audience.kind === 'group' && activeGroup) { const ids = new Set(activeGroup.contactIds); list = contacts.filter((c) => ids.has(c.id)); }
+  else list = contacts.filter(activeSeg.pred);
+
   if (q) {
     const ql = q.toLowerCase();
     list = list.filter((c) => c.name.toLowerCase().includes(ql) || c.email.includes(ql) || (c.city || '').toLowerCase().includes(ql));
   }
   const rows = list.slice(0, 10);
-  const builderCount = custom || criteria.length ? contacts.filter((c) => matchCriteria(c, criteria, fields)).length : 0;
+  const builderCount = audience.kind === 'custom' || criteria.length ? contacts.filter((c) => matchCriteria(c, criteria, fields)).length : 0;
 
-  const pickSeg = (id: string) => { setCustom(false); setSeg(id); setQ(''); };
+  const pickSeg = (id: string) => { setAudience({ kind: 'fixed', id }); setQ(''); setSelected(new Set()); };
+  const pickSaved = (id: string) => { setAudience({ kind: 'saved', id }); setQ(''); setSelected(new Set()); };
+  const pickGroup = (id: string) => { setAudience({ kind: 'group', id }); setQ(''); setSelected(new Set()); };
+
   const addCriterion = () => {
     const keys = Object.keys(fields);
     const used = criteria.map((c) => c.field);
     const field = keys.find((k) => !used.includes(k)) || 'basket';
     const f = fields[field];
     setCriteria([...criteria, { field, op: f.ops[0], value: f.type === 'select' ? f.options![0] : (f.ph || '20') }]);
-    setCustom(true);
+    setAudience({ kind: 'custom', id: '' });
   };
   const removeCriterion = (i: number) => {
     const next = criteria.filter((_, idx) => idx !== i);
     setCriteria(next);
-    setCustom(next.length > 0);
+    setAudience(next.length > 0 ? { kind: 'custom', id: '' } : { kind: 'fixed', id: 'all' });
   };
   const changeCriterion = (i: number, key: 'field' | 'op' | 'value', val: string) => {
     const next = criteria.map((cr, idx) => {
@@ -151,13 +170,39 @@ export function Contacts() {
       return { ...cr, [key]: val };
     });
     setCriteria(next);
-    setCustom(next.length > 0);
+    setAudience(next.length > 0 ? { kind: 'custom', id: '' } : { kind: 'fixed', id: 'all' });
   };
 
-  const segName = custom ? 'Segment personnalisé' : activeSeg.name;
+  const segName = audience.kind === 'custom' ? 'Segment personnalisé'
+    : audience.kind === 'saved' ? (activeSavedSeg?.name || 'Segment enregistré')
+      : audience.kind === 'group' ? (activeGroup?.name || 'Groupe')
+        : activeSeg.name;
   const optin = contacts.filter((c) => c.consent === true).length;
   const avg = contacts.length ? contacts.reduce((s, c) => s + (c.basket || 0), 0) / contacts.length : 0;
   const pctOfBase = (n: number) => (contacts.length ? Math.round((n / contacts.length) * 100) : 0);
+
+  /* ---------- sélection & groupes ---------- */
+  const toggleOne = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected((prev) => (
+    rows.length && rows.every((c) => prev.has(c.id)) ? new Set() : new Set(rows.map((c) => c.id))
+  ));
+
+  const handleGroupPick = (value: string) => {
+    if (!value) return;
+    if (value === '__new__') { setModal('createGroup'); return; }
+    addToGroup(value, [...selected]);
+    showToast(UI.check, `${fr(selected.size)} contact(s) ajouté(s) au groupe.`);
+    setSelected(new Set());
+  };
+
+  const campaignAudienceId = audience.kind === 'fixed' ? audience.id
+    : audience.kind === 'saved' ? `saved:${audience.id}`
+      : audience.kind === 'group' ? `group:${audience.id}`
+        : null;
 
   return (
     <section className="screen show anim">
@@ -254,7 +299,7 @@ export function Contacts() {
             <div className="crm-stat"><div className="cs-l"><Icon name="users" />Contacts</div><div className="cs-v" ref={totalRef}>0</div><div className="cs-f">base importée · synchronisée</div></div>
             <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Opt-in marketing</div><div className="cs-v">{fr(optin)}</div><div className="cs-f"><span className="acc">{pctOfBase(optin)} %</span> · conforme RGPD</div></div>
             <div className="crm-stat"><div className="cs-l"><Icon name="euro" />Panier moyen</div><div className="cs-v">{avg.toFixed(1).replace('.', ',')} €</div><div className="cs-f">tous clients confondus</div></div>
-            <div className="crm-stat"><div className="cs-l"><Icon name="filter" />Segments actifs</div><div className="cs-v">{SEGMENTS.length}</div><div className="cs-f">prêts pour le ciblage</div></div>
+            <div className="crm-stat"><div className="cs-l"><Icon name="filter" />Segments actifs</div><div className="cs-v">{SEGMENTS.length + savedSegments.length + groups.length}</div><div className="cs-f">prêts pour le ciblage</div></div>
           </div>
 
           <div className="crm-layout">
@@ -263,10 +308,56 @@ export function Contacts() {
                 <div className="sc-h"><h3>Segments</h3><Icon name="filter" style={{ width: 15, height: 15, color: 'var(--tx-3)' }} /></div>
                 <div className="seg-list">
                   {SEGMENTS.map((s) => (
-                    <div key={s.id} className={'seg-item' + (!custom && seg === s.id ? ' active' : '')} onClick={() => pickSeg(s.id)}>
+                    <div key={s.id} className={'seg-item' + (audience.kind === 'fixed' && audience.id === s.id ? ' active' : '')} onClick={() => pickSeg(s.id)}>
                       <div className="si-ic"><RawIcon svg={UI[s.icon as keyof typeof UI] || UI.users} /></div>
                       <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">{s.desc}</div></div>
                       <div className="si-c">{fr(contacts.filter(s.pred).length)}</div>
+                    </div>
+                  ))}
+                  {savedSegments.map((s) => (
+                    <div key={s.id} className={'seg-item' + (audience.kind === 'saved' && audience.id === s.id ? ' active' : '')} onClick={() => pickSaved(s.id)}>
+                      <div className="si-ic"><RawIcon svg={UI.sliders} /></div>
+                      <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">Segment enregistré</div></div>
+                      <div className="si-c">{fr(contacts.filter((c) => matchCriteria(c, s.criteria, fields)).length)}</div>
+                      <button
+                        className="si-del" aria-label={`Supprimer le segment ${s.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSegment(s.id);
+                          if (audience.kind === 'saved' && audience.id === s.id) setAudience({ kind: 'fixed', id: 'all' });
+                        }}
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="seg-card">
+                <div className="sc-h">
+                  <h3>Groupes</h3>
+                  <button className="btn ghost sm" onClick={() => setModal('createGroup')}><Icon name="plus" />Nouveau</button>
+                </div>
+                <div className="seg-list">
+                  {groups.length === 0 && (
+                    <p className="seg-empty">Cochez des contacts dans le tableau pour créer votre premier groupe.</p>
+                  )}
+                  {groups.map((g) => (
+                    <div key={g.id} className={'seg-item' + (audience.kind === 'group' && audience.id === g.id ? ' active' : '')} onClick={() => pickGroup(g.id)}>
+                      <div className="si-ic"><RawIcon svg={UI.users} /></div>
+                      <div className="si-t"><div className="si-n">{g.name}</div><div className="si-d">Groupe manuel</div></div>
+                      <div className="si-c">{fr(g.contactIds.length)}</div>
+                      <button
+                        className="si-del" aria-label={`Supprimer le groupe ${g.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteGroup(g.id);
+                          if (audience.kind === 'group' && audience.id === g.id) setAudience({ kind: 'fixed', id: 'all' });
+                        }}
+                      >
+                        <Icon name="trash" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -318,7 +409,9 @@ export function Contacts() {
                         <div className="br-v">{fr(builderCount)}</div>
                         <div className="br-t">contacts correspondent.<br /><b>{pctOfBase(builderCount)} %</b> de votre base ciblée.</div>
                       </div>
-                      <SaveSegmentButton onSave={() => setCustom(true)} />
+                      <button className="btn acc block" style={{ marginTop: 12 }} onClick={() => setModal('saveSegment')}>
+                        <Icon name="filter" />Enregistrer ce segment
+                      </button>
                     </>
                   )}
                 </div>
@@ -330,12 +423,42 @@ export function Contacts() {
                 <div className="ct-title">{segName}<span className="seg-pill">{fr(list.length)} contacts</span></div>
                 <div className="ct-search"><input className="inp" placeholder="Rechercher un contact…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
               </div>
+              {selected.size > 0 && (
+                <div className="bulk-bar">
+                  <span>{fr(selected.size)} contact{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}</span>
+                  <span className="grow" />
+                  <select className="inp sm" value="" onChange={(e) => { handleGroupPick(e.target.value); e.target.value = ''; }}>
+                    <option value="" disabled>Ajouter au groupe…</option>
+                    {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    <option value="__new__">+ Nouveau groupe…</option>
+                  </select>
+                  {audience.kind === 'group' && (
+                    <button
+                      className="btn outline sm"
+                      onClick={() => {
+                        selected.forEach((id) => removeFromGroup(audience.id, id));
+                        showToast(UI.check, 'Contact(s) retiré(s) du groupe.');
+                        setSelected(new Set());
+                      }}
+                    >
+                      Retirer du groupe
+                    </button>
+                  )}
+                  <button className="btn ghost sm" onClick={() => setSelected(new Set())}>Annuler</button>
+                </div>
+              )}
               <div style={{ overflowX: 'auto' }}>
                 <table className="ct-table">
-                  <thead><tr><th>Contact</th><th>Ville</th><th className="num">Panier moy.</th><th>Dernier achat</th><th>Tags</th><th style={{ textAlign: 'center' }}>Opt-in</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th className="chk"><input type="checkbox" aria-label="Tout sélectionner" checked={rows.length > 0 && rows.every((c) => selected.has(c.id))} onChange={toggleAll} /></th>
+                      <th>Contact</th><th>Ville</th><th className="num">Panier moy.</th><th>Dernier achat</th><th>Tags</th><th style={{ textAlign: 'center' }}>Opt-in</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {rows.length ? rows.map((c) => (
                       <tr key={c.id}>
+                        <td className="chk"><input type="checkbox" aria-label={`Sélectionner ${c.name}`} checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} /></td>
                         <td><div className="ct-name"><div className="av" style={{ background: avFor(c) }}>{initials(c)}</div><div><div className="cn-t">{c.name}</div><div className="cn-e">{c.email || '—'}</div></div></div></td>
                         <td><span className="ct-city"><Icon name="pin" />{c.city || '—'}</span></td>
                         <td className="num">{c.basket != null ? c.basket.toFixed(1).replace('.', ',') + ' €' : '—'}</td>
@@ -344,7 +467,7 @@ export function Contacts() {
                         <td style={{ textAlign: 'center' }}>{c.consent === true ? <span className="consent-y"><Icon name="check" /></span> : c.consent === false ? <span className="consent-n"><Icon name="close" /></span> : <span style={{ color: 'var(--tx-3)' }}>—</span>}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={6}><div className="crm-empty" style={{ minHeight: 180 }}>
+                      <tr><td colSpan={7}><div className="crm-empty" style={{ minHeight: 180 }}>
                         <div className="ce-ic"><Icon name="filter" /></div>
                         <div className="ce-t">Aucun contact dans ce segment</div>
                         <p>Ajustez vos critères pour élargir l’audience.</p>
@@ -355,11 +478,44 @@ export function Contacts() {
               </div>
               <div className="ct-foot">
                 <span>Affichage de <span className="mono">{rows.length}</span> sur <span className="mono">{fr(list.length)}</span> contacts</span>
-                <button className="btn ghost sm" onClick={() => newCampaign(custom ? 'custom' : seg)}><Icon name="mail" />Créer une campagne pour ce segment</button>
+                <button
+                  className="btn ghost sm" disabled={!campaignAudienceId}
+                  title={!campaignAudienceId ? 'Enregistrez ce segment pour pouvoir l’utiliser dans une campagne' : undefined}
+                  onClick={() => { if (campaignAudienceId) newCampaign(campaignAudienceId); }}
+                >
+                  <Icon name="mail" />Créer une campagne pour ce segment
+                </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {modal === 'saveSegment' && (
+        <NameModal
+          title="Enregistrer ce segment"
+          subtitle={`${fr(builderCount)} contact(s) correspondent à ces critères`}
+          icon="filter" placeholder="Ex : Clients Paris fidèles" confirmLabel="Enregistrer"
+          onConfirm={(name) => {
+            createSegment(name, criteria);
+            showToast(UI.check, `Segment « ${name} » enregistré — disponible pour vos campagnes.`);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === 'createGroup' && (
+        <NameModal
+          title="Créer un groupe"
+          subtitle={selected.size ? `${fr(selected.size)} contact(s) sélectionné(s) seront ajoutés` : undefined}
+          icon="users" placeholder="Ex : Clients VIP Paris" confirmLabel="Créer"
+          onConfirm={(name) => {
+            const g = createGroup(name);
+            if (selected.size) addToGroup(g.id, [...selected]);
+            showToast(UI.check, `Groupe « ${name} » créé${selected.size ? ` avec ${fr(selected.size)} contact(s)` : ''}.`);
+            setSelected(new Set());
+          }}
+          onClose={() => setModal(null)}
+        />
       )}
     </section>
   );
@@ -373,11 +529,4 @@ function ExportButton({ contacts }: { contacts: Contact[] }) {
     setTimeout(() => setTxt(<><Icon name="download" />Exporter le segment</>), 1100);
   };
   return <button className="btn outline" onClick={doExport}>{txt}</button>;
-}
-
-function SaveSegmentButton({ onSave }: { onSave: () => void }) {
-  const [txt, setTxt] = useState<React.ReactNode>(<><Icon name="filter" />Cibler ce segment</>);
-  return (
-    <button className="btn acc block" style={{ marginTop: 12 }} onClick={() => { onSave(); setTxt('Segment ciblé ✓'); setTimeout(() => setTxt(<><Icon name="filter" />Cibler ce segment</>), 1100); }}>{txt}</button>
-  );
 }
