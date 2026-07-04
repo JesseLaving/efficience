@@ -16,6 +16,7 @@ export interface ScheduledPost {
   createdAt: string;
   lastResult?: string | null;
   auto?: boolean;        // auto-publication serveur activée
+  googleEventId?: string | null; // synchronisé vers l'agenda Google dédié — présent une fois poussé
 }
 
 const LS = 'eff_calendar_v1';

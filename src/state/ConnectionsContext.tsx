@@ -19,6 +19,10 @@ import {
   clearStoredTiktok, fetchTiktokUserInfo, fetchTiktokVideos, getStoredTiktokToken, getStoredTiktokRefresh,
   refreshTiktok, setStoredTiktok, tiktokLogin, type TiktokProfile, type TiktokVideo,
 } from '../lib/tiktok';
+import {
+  clearStoredGcal, createEditorialCalendar, gcalLogin, getStoredGcalCalendarId, getStoredGcalCalendarName,
+  getStoredGcalRefresh, getStoredGcalToken, setStoredGcal, setStoredGcalCalendar, type GcalCreateResult,
+} from '../lib/googleCalendar';
 
 export type Phase = 'connecting' | 'loading' | null;
 const META_NETS = ['instagram', 'facebook'];
@@ -84,6 +88,15 @@ interface ConnectionsCtx {
   connectTiktok: () => void;
   disconnectTiktok: () => void;
   refreshTiktokToken: () => Promise<string | null>;
+  /* --- Google Agenda (planning éditorial → agenda dédié) --- */
+  gcalConnected: boolean;
+  gcalToken: string | null;
+  gcalCalendarId: string | null;
+  gcalCalendarName: string | null;
+  connectGcal: () => void;
+  disconnectGcal: () => void;
+  refreshGcalToken: () => Promise<string | null>;
+  createGcalCalendar: (name: string) => Promise<GcalCreateResult>;
 }
 
 const Ctx = createContext<ConnectionsCtx | null>(null);
@@ -118,7 +131,11 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const [tiktokReason, setTiktokReason] = useState<string | null>(null);
   const [tiktokVideos, setTiktokVideos] = useState<TiktokVideo[]>([]);
 
-  // Capture the OAuth bounce (Meta + Google + LinkedIn + YouTube + TikTok tokens / errors in URL hash) once.
+  const [gcalToken, setGcalToken] = useState<string | null>(() => getStoredGcalToken());
+  const [gcalCalendarId, setGcalCalendarId] = useState<string | null>(() => getStoredGcalCalendarId());
+  const [gcalCalendarName, setGcalCalendarName] = useState<string | null>(() => getStoredGcalCalendarName());
+
+  // Capture the OAuth bounce (Meta + Google + LinkedIn + YouTube + TikTok + Google Agenda tokens / errors in URL hash) once.
   useEffect(() => {
     if (!location.hash) return;
     const h = new URLSearchParams(location.hash.slice(1));
@@ -127,7 +144,8 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     const lt = h.get('li_token'), le = h.get('li_error');
     const yt = h.get('yt_token'), yr = h.get('yt_refresh'), ye = h.get('yt_error');
     const tt = h.get('tt_token'), tr = h.get('tt_refresh'), to = h.get('tt_openid'), te = h.get('tt_error');
-    if (mt || me || gt || ge || lt || le || yt || ye || tt || te) history.replaceState(null, '', location.pathname + location.search);
+    const gct = h.get('gcal_token'), gcr = h.get('gcal_refresh'), gce = h.get('gcal_error');
+    if (mt || me || gt || ge || lt || le || yt || ye || tt || te || gct || gce) history.replaceState(null, '', location.pathname + location.search);
     if (mt) { setStoredMetaToken(mt); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
     else if (me) { setMetaError(me); showToast(UI.close, `Connexion Meta : ${me}`); }
     if (gt) { setStoredGoogle(gt, gr || undefined); setGoogleToken(gt); showToast(UI.check, 'Google Business connecté'); }
@@ -138,6 +156,8 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     else if (ye) { setYoutubeReason(ye); showToast(UI.close, `Connexion YouTube : ${ye}`); }
     if (tt) { setStoredTiktok(tt, tr || undefined, to || undefined); setTiktokToken(tt); showToast(UI.check, 'TikTok connecté'); }
     else if (te) { setTiktokReason(te); showToast(UI.close, `Connexion TikTok : ${te}`); }
+    if (gct) { setStoredGcal(gct, gcr || undefined); setGcalToken(gct); showToast(UI.check, 'Google Agenda connecté'); }
+    else if (gce) { showToast(UI.close, `Connexion Google Agenda : ${gce}`); }
   }, []);
 
   // Load Google locations whenever we hold a token. The access token expires
@@ -315,6 +335,26 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     return res.token;
   }, []);
 
+  const connectGcal = useCallback(() => gcalLogin(), []);
+  const disconnectGcal = useCallback(() => {
+    clearStoredGcal(); setGcalToken(null); setGcalCalendarId(null); setGcalCalendarName(null);
+  }, []);
+  const refreshGcalToken = useCallback(async () => {
+    const r = getStoredGcalRefresh();
+    if (!r) return null;
+    try { const t = await refreshGoogle(r); setStoredGcal(t); setGcalToken(t); return t; } catch { return null; }
+  }, []);
+  const createGcalCalendar = useCallback(async (name: string) => {
+    if (!gcalToken) return { ok: false, reason: 'Google Agenda non connecté.' };
+    const res = await createEditorialCalendar(gcalToken, name);
+    if (res.ok && res.calendarId) {
+      setStoredGcalCalendar(res.calendarId, res.summary || name);
+      setGcalCalendarId(res.calendarId);
+      setGcalCalendarName(res.summary || name);
+    }
+    return res;
+  }, [gcalToken]);
+
   const connect = useCallback((id: string) => {
     if (META_NETS.includes(id)) connectMeta();
     else if (id === 'google') connectGoogle();
@@ -361,6 +401,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     linkedinConnected: !!linkedinToken, linkedinToken, linkedinMe, linkedinStatus, connectLinkedin, disconnectLinkedin,
     youtubeConnected: !!youtubeToken, youtubeToken, youtubeChannel, youtubeStatus, youtubeReason, connectYoutube, disconnectYoutube, refreshYoutubeToken,
     tiktokConnected: !!tiktokToken, tiktokToken, tiktokProfile, tiktokStatus, tiktokReason, tiktokVideos, connectTiktok, disconnectTiktok, refreshTiktokToken,
+    gcalConnected: !!gcalToken, gcalToken, gcalCalendarId, gcalCalendarName, connectGcal, disconnectGcal, refreshGcalToken, createGcalCalendar,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -7,6 +7,8 @@ import { UI, type BrandName } from '../lib/icons';
 import { netName } from '../lib/networks';
 import { showToast } from '../lib/toast';
 import { getStoredGoogleRefresh } from '../lib/google';
+import { getBusiness } from '../lib/business';
+import { syncPostsToCalendar } from '../lib/googleCalendar';
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from '../lib/schedule';
 import { PublishPanel } from '../components/PublishPanel';
 import type { ScheduledPost } from '../lib/calendar';
@@ -29,9 +31,44 @@ function StatusBadge({ s }: { s: ScheduledPost['status'] }) {
 export function Calendar() {
   const { show } = useEff();
   const { scheduled, updateCalendar, removeFromCalendar } = useCalendar();
-  const { isConnected, metaToken, linkedinToken, googleToken, googleAccounts } = useConnections();
+  const {
+    isConnected, metaToken, linkedinToken, googleToken, googleAccounts,
+    gcalConnected, gcalToken, gcalCalendarId, gcalCalendarName,
+    connectGcal, disconnectGcal, refreshGcalToken, createGcalCalendar,
+  } = useConnections();
   const [publishing, setPublishing] = useState<ScheduledPost | null>(null);
   const [arming, setArming] = useState<string | null>(null);
+  const [creatingCal, setCreatingCal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const createCalendar = async () => {
+    setCreatingCal(true);
+    const res = await createGcalCalendar(`Éditorial — ${getBusiness().name}`);
+    setCreatingCal(false);
+    if (res.ok) showToast(UI.check, `Agenda « ${res.summary} » créé`);
+    else showToast(UI.close, res.reason || 'Échec de la création de l’agenda.');
+  };
+
+  const syncCalendar = async () => {
+    if (!gcalToken || !gcalCalendarId || !scheduled.length) return;
+    setSyncing(true);
+    const events = scheduled.map((p) => ({ id: p.id, dateTime: p.dateTime, text: p.text, networks: p.networks, googleEventId: p.googleEventId || undefined }));
+    let res = await syncPostsToCalendar(gcalToken, gcalCalendarId, events);
+    // Le jeton expire après ~1h — si tout a échoué, un rafraîchissement puis un
+    // seul nouvel essai avant de renoncer, comme pour Google Business/YouTube.
+    if ((res.results || []).length && (res.results || []).every((r) => !r.ok)) {
+      const fresh = await refreshGcalToken();
+      if (fresh) res = await syncPostsToCalendar(fresh, gcalCalendarId, events);
+    }
+    const results = res.results || [];
+    results.forEach((r) => { if (r.ok && r.googleEventId) updateCalendar(r.id, { googleEventId: r.googleEventId }); });
+    setSyncing(false);
+    if (!results.length) { showToast(UI.close, res.reason || 'Échec de la synchronisation.'); return; }
+    const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    if (okCount) showToast(UI.check, `${okCount} publication${okCount > 1 ? 's' : ''} synchronisée${okCount > 1 ? 's' : ''} avec Google Agenda`);
+    if (failCount) showToast(UI.close, `${failCount} échec${failCount > 1 ? 's' : ''} de synchronisation`);
+  };
 
   const byDay = useMemo(() => {
     const m = new Map<string, ScheduledPost[]>();
@@ -94,6 +131,38 @@ export function Calendar() {
 
       <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', color: 'var(--tx-2)', fontSize: 12.5, marginBottom: 16 }}>
         <b style={{ color: 'var(--acc)' }}>Auto-publier</b> = publication automatique à l’heure prévue, même app fermée (moteur serveur). <b>Publier</b> = diffusion immédiate en 1 clic. L’auto-publication nécessite l’activation du store serveur (Vercel KV) et du cron — voir la doc.
+      </div>
+
+      <div className="net-summary" style={{ marginBottom: 16 }}>
+        <div className="ns-ic"><Icon name="calendar" /></div>
+        <div>
+          <div className="ns-t">Google Agenda</div>
+          <div className="ns-s">
+            {!gcalConnected
+              ? 'Créez un agenda Google dédié à votre planning éditorial et synchronisez vos publications programmées.'
+              : !gcalCalendarId
+                ? 'Connecté — créez l’agenda dédié pour commencer à synchroniser.'
+                : `Synchronisé avec « ${gcalCalendarName} ».`}
+          </div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!gcalConnected && (
+            <button className="btn outline sm" onClick={connectGcal}><Icon name="link" />Connecter Google Agenda</button>
+          )}
+          {gcalConnected && !gcalCalendarId && (
+            <button className="btn acc sm" disabled={creatingCal} onClick={createCalendar}>
+              {creatingCal ? <span className="spin lt" /> : <Icon name="plus" />}Créer l’agenda
+            </button>
+          )}
+          {gcalConnected && gcalCalendarId && (
+            <button className="btn acc sm" disabled={syncing || !scheduled.length} onClick={syncCalendar} title={!scheduled.length ? 'Aucune publication programmée à synchroniser' : undefined}>
+              {syncing ? <span className="spin lt" /> : <Icon name="refresh" />}Synchroniser
+            </button>
+          )}
+          {gcalConnected && (
+            <button className="unlink-btn" title="Déconnecter Google Agenda" aria-label="Déconnecter Google Agenda" onClick={disconnectGcal}><Icon name="unlink" /></button>
+          )}
+        </div>
       </div>
 
       {!scheduled.length ? (

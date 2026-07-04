@@ -10,8 +10,14 @@ import contactsfetch from '../_h/google/contactsfetch.js';
 import youtubelogin from '../_h/google/youtubelogin.js';
 import youtubechannel from '../_h/google/youtubechannel.js';
 import youtubeupload from '../_h/google/youtubeupload.js';
+import calendarlogin from '../_h/google/calendarlogin.js';
+import calendarcreate from '../_h/google/calendarcreate.js';
+import calendarsync from '../_h/google/calendarsync.js';
 
-const MAP = { login, authlogin, callback, refresh, accounts, post, contactslogin, contactsfetch, youtubelogin, youtubechannel, youtubeupload };
+const MAP = {
+  login, authlogin, callback, refresh, accounts, post, contactslogin, contactsfetch,
+  youtubelogin, youtubechannel, youtubeupload, calendarlogin, calendarcreate, calendarsync,
+};
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;
