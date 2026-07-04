@@ -13,6 +13,7 @@ import { MetaPostModal } from '../components/MetaPostModal';
 import { YoutubeUploadModal } from '../components/YoutubeUploadModal';
 import { TiktokPostModal } from '../components/TiktokPostModal';
 import { TiktokVideosModal } from '../components/TiktokVideosModal';
+import { useTilt3d } from '../lib/useTilt3d';
 
 const META_NETS = ['instagram', 'facebook'];
 /* Réseaux avec une vraie intégration (connexion + publication). Les autres
@@ -59,12 +60,13 @@ function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; a
   );
 }
 
-function NetCard({ net }: { net: Network }) {
+function NetCard({ net, i }: { net: Network; i: number }) {
   const { show } = useEff();
   const {
     phase, connect, disconnect, isConnected, accountFor, googleAccounts, googleReason, googleStatus, linkedinMe, linkedinStatus,
     youtubeChannel, youtubeStatus, youtubeReason, tiktokProfile, tiktokStatus, tiktokReason,
   } = useConnections();
+  const tiltRef = useTilt3d<HTMLDivElement>(6);
   const [liModal, setLiModal] = useState(false);
   const [metaModal, setMetaModal] = useState(false);
   const [ytModal, setYtModal] = useState(false);
@@ -186,7 +188,12 @@ function NetCard({ net }: { net: Network }) {
   }
 
   return (
-    <div className={'net-card' + (isConn ? ' connected' : '')} data-net={net.id}>
+    <div
+      ref={tiltRef}
+      className={'net-card tilt rise-in' + (isConn ? ' connected' : '')}
+      data-net={net.id}
+      style={{ '--i': i } as React.CSSProperties}
+    >
       <div className="nc-top">
         <div className="nc-logo"><Brand name={net.id as BrandName} /></div>
         <div><div className="nc-name">{net.name}</div><div className="nc-kind">{net.kind}</div></div>
@@ -254,7 +261,7 @@ export function Connexion() {
       </div>
 
       <div className="net-grid">
-        {NETWORKS.filter((n) => INTEGRATED_IDS.includes(n.id)).map((n) => <NetCard key={n.id} net={n} />)}
+        {NETWORKS.filter((n) => INTEGRATED_IDS.includes(n.id)).map((n, i) => <NetCard key={n.id} net={n} i={i} />)}
       </div>
 
       {(() => {

@@ -8,6 +8,7 @@ import { countUp } from '../lib/countup';
 import { netName } from '../lib/networks';
 import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from '../lib/kpi';
 import { KpiModal } from '../components/KpiModal';
+import { useTilt3d } from '../lib/useTilt3d';
 import { aggregateMeta, engagementSeries, type MetaSeries } from '../lib/meta';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
@@ -15,7 +16,7 @@ const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 const POSTS: { net: string; t: string; when: string; tag: string; tagL: string }[] = [];
 
 /* ---------- KPI card ---------- */
-function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void }) {
+function KpiCard({ id, def, raw, removing, onRemove, i }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void; i: number }) {
   const valRef = useRef<HTMLSpanElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const s = SRC[def.src] || SRC.manual;
@@ -36,7 +37,7 @@ function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef
       : <span className="pill neutral">{tr.val}</span>;
 
   return (
-    <div className={'kpi kpi-in' + (removing ? ' kpi-out' : '')} data-kpi={id}>
+    <div className={'kpi kpi-in' + (removing ? ' kpi-out' : '')} data-kpi={id} style={{ '--i': i } as React.CSSProperties}>
       <button className="kpi-rm" title="Retirer" aria-label="Retirer cet indicateur" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
       <div className="kl"><RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />{def.label}</div>
       <div className="kv"><span className="kv-n" ref={valRef}>0</span>{unit}</div>
@@ -52,14 +53,15 @@ function KpiCard({ id, def, raw, removing, onRemove }: { id: string; def: KpiDef
 }
 
 /* ---------- suggestion card ---------- */
-function SugCard({ id, onAdd }: { id: string; onAdd: (id: string) => void }) {
+function SugCard({ id, onAdd, i }: { id: string; onAdd: (id: string) => void; i: number }) {
   const d = CATALOG[id];
   const s = SRC[d.src] || SRC.manual;
   const tr = d.trend || { dir: 'up', val: '' };
   const val = fmtVal(d.fmt, d.val) + (UNIT[d.fmt] || '');
   const trCls = tr.dir === 'down' ? 'down' : 'up';
+  const tiltRef = useTilt3d<HTMLDivElement>(5);
   return (
-    <div className="sug-card">
+    <div className="sug-card tilt rise-in" ref={tiltRef} style={{ '--i': i } as React.CSSProperties}>
       <div className="sug-top">
         <div className="sg-ic"><RawIcon svg={UI[d.icon as keyof typeof UI] || UI.target} /></div>
         <div className="sg-t">
@@ -193,10 +195,10 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="kpi-board">
-          {state.board.map((id) => {
+          {state.board.map((id, i) => {
             const d = def(id);
             if (!d) return null;
-            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} />;
+            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} i={i} />;
           })}
           <div className="kpi add-tile" onClick={() => setModal(true)}>
             <div className="at-ic"><Icon name="plus" /></div>
@@ -214,7 +216,7 @@ export function Dashboard() {
           </div>
           {state.suggestOpen && (
             sugList.length
-              ? <div className="ks-row">{sugList.map((id) => <SugCard key={id} id={id} onAdd={addKpi} />)}</div>
+              ? <div className="ks-row">{sugList.map((id, i) => <SugCard key={id} id={id} onAdd={addKpi} i={i} />)}</div>
               : <div className="ks-empty">Tous les indicateurs suggérés sont déjà sur votre tableau de bord. 🎉</div>
           )}
         </div>

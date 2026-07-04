@@ -41,6 +41,10 @@
   --ff: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --ease: cubic-bezier(.4,.7,.3,1);
+  /* Stronger, more "felt" curves than the CSS built-ins — ease-out for things
+     entering/settling, ease-in-out for on-screen movement. */
+  --ease-out: cubic-bezier(.23,1,.32,1);
+  --ease-in-out: cubic-bezier(.77,0,.175,1);
 }
 
 * { box-sizing: border-box; }
@@ -215,8 +219,25 @@ body {
 .app-foot a:hover { color: var(--tx-2); text-decoration: underline; }
 .screen { display: none; padding: 34px 36px 64px; max-width: 1280px; margin: 0 auto; }
 .screen.show { display: block; }
-.screen.show.anim { animation: scr-in .4s var(--ease); }
-@keyframes scr-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.screen.show.anim { animation: scr-in .42s var(--ease-out); }
+@keyframes scr-in { from { opacity: 0; transform: translateY(10px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+/* ---------- staggered grid entrance (cards set --i to their index) ---------- */
+.rise-in { animation: rise-in .45s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* ---------- 3D tilt (mouse-tracked — see useTilt3d; --rx/--ry set on the
+   element, this just renders them). Skipped entirely on touch/reduced-motion
+   devices by the hook, so no perspective ever gets stuck mid-tilt there.
+   Deliberately doesn't declare `transition` here: the consuming card class
+   (.net-card, .sug-card…) owns its full transition list, since the CSS
+   cascade would otherwise let whichever rule loads last silently replace
+   the other's transition shorthand instead of merging them. */
+.tilt {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  will-change: transform;
+}
+.tilt:hover { box-shadow: 0 20px 40px -20px rgba(20,21,15,.22); }
 
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
 .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--acc); }

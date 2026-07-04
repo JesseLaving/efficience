@@ -21,7 +21,7 @@
 .net-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 
 .net-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); padding: 18px;
-  transition: border-color .18s, box-shadow .18s; }
+  transition: border-color .18s, box-shadow .2s var(--ease-out), transform .2s var(--ease-out); }
 .net-card:hover { border-color: #c3c7b6; }
 .net-card.connected { border-color: var(--acc-soft2); }
 
