@@ -21,13 +21,6 @@ const META_NETS = ['instagram', 'facebook'];
    donner la même carte pleine taille que les intégrations fonctionnelles. */
 const INTEGRATED_IDS = [...META_NETS, 'google', 'linkedin', 'youtube', 'tiktok'];
 
-function FlashButton({ className, label, flash, onClick }: { className: string; label: string; flash: string; onClick?: () => void }) {
-  const [txt, setTxt] = useState(label);
-  return (
-    <button className={className} onClick={() => { onClick?.(); setTxt(flash); setTimeout(() => setTxt(label), 1100); }}>{txt}</button>
-  );
-}
-
 function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; acc?: MetaAccount }) {
   if (loading) {
     return (
@@ -169,13 +162,6 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     body = <ProfileBlock net={net} loading={false} acc={acc} />;
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setMetaModal(true)}>Publier</button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
-    </>;
-  } else if (isConn) {
-    stateLbl = <span className="nc-dot on"><i />Connecté</span>;
-    body = <ProfileBlock net={net} loading={false} acc={acc} />;
-    foot = <>
-      <FlashButton className="btn ghost sm grow" label="Gérer la page" flash="Ouvrez votre app native" />
       <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
     </>;
   } else {

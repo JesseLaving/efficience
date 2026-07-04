@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
+import { useCalendar } from '../state/CalendarContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { FMT, UNIT } from '../lib/format';
@@ -13,7 +14,11 @@ import { aggregateMeta, engagementSeries, type MetaSeries } from '../lib/meta';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
-const POSTS: { net: string; t: string; when: string; tag: string; tagL: string }[] = [];
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
 
 /* ---------- KPI card ---------- */
 function KpiCard({ id, def, raw, removing, onRemove, i }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void; i: number }) {
@@ -132,9 +137,12 @@ function Chart({ series }: { series: MetaSeries | null }) {
 export function Dashboard() {
   const { show } = useEff();
   const { totalReach, metaStats } = useConnections();
+  const { scheduled } = useCalendar();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
   const [removing, setRemoving] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState(false);
+
+  const upcomingPosts = scheduled.filter((p) => p.status === 'scheduled').slice(0, 4);
 
   // Real Meta aggregates (followers, engagement, posts…) — all derived, never invented.
   const agg = aggregateMeta(metaStats);
@@ -247,18 +255,18 @@ export function Dashboard() {
           <div className="card">
             <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm" onClick={() => show('calendar')}>Tout voir</button></div>
             <div>
-              {POSTS.length === 0 ? (
+              {upcomingPosts.length === 0 ? (
                 <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13.5, textAlign: 'center', padding: '28px 24px' }}>
                   Aucun post programmé. Créez-en un depuis le <b style={{ color: 'var(--tx-2)' }}>Studio</b>.
                 </div>
-              ) : POSTS.map((p, i) => (
-                <div className="post" key={i}>
-                  <div className="thumb"><Icon name="image" /></div>
+              ) : upcomingPosts.map((p) => (
+                <div className="post" key={p.id}>
+                  <div className="thumb">{p.photoUrl ? <img src={p.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : <Icon name="image" />}</div>
                   <div className="pmeta">
-                    <div className="pt">{p.t}</div>
-                    <div className="pl"><Brand name={p.net as BrandName} /><span>{netName(p.net)}</span><span>·</span><span>{p.when}</span></div>
+                    <div className="pt">{p.text.slice(0, 60)}{p.text.length > 60 ? '…' : ''}</div>
+                    <div className="pl">{p.networks[0] && <Brand name={p.networks[0] as BrandName} />}<span>{p.networks.map(netName).join(', ') || 'Aucun réseau'}</span><span>·</span><span>{fmtWhen(p.dateTime)}</span></div>
                   </div>
-                  <span className={'tag ' + p.tag}>{p.tagL}</span>
+                  <span className="tag sched">Programmé</span>
                 </div>
               ))}
             </div>

@@ -203,11 +203,6 @@ export function Studio() {
     } finally { setAiBusy(null); }
   };
 
-  const finish = (label: string) => {
-    const where = type === 'email' ? 'e-mailing' : sel.map(netName).join(', ');
-    showToast(UI.calendar, `${label} · ${where}`);
-  };
-
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragMedia, setDragMedia] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -287,7 +282,7 @@ export function Studio() {
       <div className="cmp">
         <div className="cmp-edit">
           {type === 'email' ? (
-            <EmailEditor subject={subject} setSubject={setSubject} pre={pre} setPre={setPre} body={body} setBody={setBody} finish={finish} onSaveDraft={saveDraftNow} />
+            <EmailEditor subject={subject} setSubject={setSubject} pre={pre} setPre={setPre} body={body} setBody={setBody} onSaveDraft={saveDraftNow} />
           ) : (
             <>
               <div className="ce-sec">
@@ -555,9 +550,9 @@ function EmailPreviewCard({ subject, pre, body }: { subject: string; pre: string
 }
 
 /* ---------- email editor ---------- */
-function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish, onSaveDraft }: {
+function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, onSaveDraft }: {
   subject: string; setSubject: (v: string) => void; pre: string; setPre: (v: string) => void;
-  body: string; setBody: (v: string) => void; finish: (l: string) => void; onSaveDraft: () => void;
+  body: string; setBody: (v: string) => void; onSaveDraft: () => void;
 }) {
   const subjLim = 60, preLim = 90;
   const counter = (len: number, lim: number) => {
@@ -582,11 +577,14 @@ function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish, 
         <textarea className="inp" rows={7} placeholder="Rédigez votre e-mail…" value={body} onChange={(e) => setBody(e.target.value)} />
         <div className="counter" style={{ marginTop: 8 }}>Largeur d’image conseillée <b>600 px</b> · texte alternatif requis</div>
       </div>
-      <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <input className="inp" type="datetime-local" style={{ maxWidth: 220 }} />
+      <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>
+          <RawIcon svg={UI.clock} style={{ width: 12, height: 12, display: 'inline-grid', verticalAlign: -1.5, marginRight: 4 }} />
+          Envoi e-mail — à venir prochainement
+        </span>
         <span style={{ flex: 1 }} />
         <FlashBtn className="btn outline" label="Enregistrer" flash="Brouillon enregistré" onClick={onSaveDraft} />
-        <button className="btn acc" onClick={() => finish('Envoi programmé')}><Icon name="send" />Programmer l’envoi</button>
+        <button className="btn acc" disabled title="L’envoi réel n’est pas encore connecté — rédigez et enregistrez votre brouillon en attendant."><Icon name="send" />Programmer l’envoi</button>
       </div>
     </>
   );

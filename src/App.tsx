@@ -42,7 +42,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }> = {
-  help: { icon: 'help', title: 'Aide & support', sub: '' },
+  help: { icon: 'help', title: 'Aide & support', sub: 'Le centre d’aide arrive prochainement. En attendant, contactez-nous directement pour toute question.' },
 };
 
 export function App() {

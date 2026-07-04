@@ -150,12 +150,14 @@ export function Campagnes() {
   };
 
   const finish = (status: 'sent' | 'sched') => {
-    const open = +(34 + Math.random() * 12).toFixed(1);
-    const click = +(5 + Math.random() * 4).toFixed(1);
+    // Aucun envoi e-mail réel n'est encore branché (pas de fournisseur
+    // d'envoi/suivi) — les ouvertures et clics restent donc à null plutôt
+    // que des chiffres inventés. Le statut "envoyée" enregistre la campagne
+    // dans l'historique, mais l'engagement réel n'est pas encore mesurable.
     addCampaign({
       name: gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/g, '').trim(),
       seg: seg.name, status, recipients: seg.count,
-      open: status === 'sent' ? open : null, click: status === 'sent' ? click : null,
+      open: null, click: null,
       when: status === 'sent' ? 'Envoyée à l’instant' : 'Programmée sam. 09:00',
     });
     setView('list'); setGen(null); setPrompt('');
@@ -284,9 +286,15 @@ export function Campagnes() {
   }
 
   // ---------- list ----------
+  // L'envoi e-mail réel (et donc le suivi ouvertures/clics) n'est pas encore
+  // branché — `open`/`click` restent à null pour toute campagne envoyée
+  // depuis cette version. Les agrégats ne portent donc que sur les
+  // campagnes où une vraie mesure existerait un jour, jamais une moyenne
+  // sur 0 déguisée en donnée réelle.
   const sent = campaigns.filter((c) => c.status === 'sent');
-  const avgOpen = sent.length ? sent.reduce((s, c) => s + (c.open || 0), 0) / sent.length : 0;
-  const clicks = sent.reduce((s, c) => s + Math.round((c.recipients * (c.click || 0)) / 100), 0);
+  const tracked = sent.filter((c) => c.open != null);
+  const avgOpen = tracked.length ? tracked.reduce((s, c) => s + (c.open || 0), 0) / tracked.length : null;
+  const clicks = tracked.length ? tracked.reduce((s, c) => s + Math.round((c.recipients * (c.click || 0)) / 100), 0) : null;
 
   return (
     <section className="screen show anim">
@@ -301,8 +309,8 @@ export function Campagnes() {
 
       <div className="crm-stats" style={{ marginBottom: 18 }}>
         <div className="crm-stat"><div className="cs-l"><Icon name="send" />Campagnes</div><div className="cs-v">{campaigns.length}</div><div className="cs-f">tous statuts</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="mailopen" />Taux d’ouverture moyen</div><div className="cs-v">{avgOpen.toFixed(1).replace('.', ',')} %</div><div className="cs-f"><span className="acc">+11 pts</span> vs. moyenne secteur</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="cursor" />Clics générés</div><div className="cs-v">{fr(clicks)}</div><div className="cs-f">sur les 30 derniers jours</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="mailopen" />Taux d’ouverture moyen</div><div className="cs-v">{avgOpen != null ? avgOpen.toFixed(1).replace('.', ',') + ' %' : '—'}</div><div className="cs-f">{avgOpen != null ? 'sur les 30 derniers jours' : 'à venir prochainement — envoi e-mail non connecté'}</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="cursor" />Clics générés</div><div className="cs-v">{clicks != null ? fr(clicks) : '—'}</div><div className="cs-f">{clicks != null ? 'sur les 30 derniers jours' : 'à venir prochainement — envoi e-mail non connecté'}</div></div>
         <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Désinscriptions</div><div className="cs-v">—</div><div className="cs-f">conforme RGPD</div></div>
       </div>
 
