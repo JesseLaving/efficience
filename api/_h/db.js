@@ -55,6 +55,23 @@ export function ensureSchema() {
           count INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY (user_id, day)
         )`);
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS app_email_usage (
+          user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          day DATE NOT NULL DEFAULT CURRENT_DATE,
+          count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, day)
+        )`);
+      // Un e-mail désabonné l'est pour un espace donné (une entreprise) —
+      // pas pour tout le compte Google de l'utilisateur, qui peut gérer
+      // plusieurs espaces/clients avec des bases de contacts distinctes.
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS app_email_unsubscribes (
+          space_id INTEGER NOT NULL REFERENCES app_spaces(id) ON DELETE CASCADE,
+          email VARCHAR(320) NOT NULL,
+          unsubscribed_at TIMESTAMPTZ DEFAULT NOW(),
+          PRIMARY KEY (space_id, email)
+        )`);
     })().catch((e) => { schemaReady = null; throw e; });
   }
   return schemaReady;
@@ -65,14 +82,16 @@ export async function query(text, params) {
   return getPool().query(text, params);
 }
 
-/* Atomically increments today's AI call count for a user and reports whether
-   they're still under the daily quota. Fails OPEN (quota "ok") on any DB
-   error — a Postgres hiccup should never block legitimate AI usage. */
-export async function checkAiQuota(userId, limit = parseInt(process.env.AI_DAILY_QUOTA || '', 10) || 60) {
+/* Atomically increments today's usage count for a user in the given table
+   and reports whether they're still under the daily quota. Fails OPEN
+   (quota "ok") on any DB error — a Postgres hiccup should never block
+   legitimate use. `table` is never user input (always a literal from the
+   call site below), so string-building the query is safe here. */
+async function incrementDailyUsage(table, userId, limit) {
   try {
     const { rows } = await query(
-      `INSERT INTO app_ai_usage (user_id, day, count) VALUES ($1, CURRENT_DATE, 1)
-       ON CONFLICT (user_id, day) DO UPDATE SET count = app_ai_usage.count + 1
+      `INSERT INTO ${table} (user_id, day, count) VALUES ($1, CURRENT_DATE, 1)
+       ON CONFLICT (user_id, day) DO UPDATE SET count = ${table}.count + 1
        RETURNING count`,
       [userId]
     );
@@ -81,6 +100,84 @@ export async function checkAiQuota(userId, limit = parseInt(process.env.AI_DAILY
   } catch {
     return { ok: true, count: 0, limit };
   }
+}
+
+export async function checkAiQuota(userId, limit = parseInt(process.env.AI_DAILY_QUOTA || '', 10) || 60) {
+  return incrementDailyUsage('app_ai_usage', userId, limit);
+}
+
+/* Campaign sending shares the same daily-cap protection as AI usage: it
+   guards Jesse's Resend account/reputation from runaway or abusive use,
+   not real customer volume — the default is deliberately generous.
+   Unlike the single-unit AI quota, a campaign's `recipientCount` can be in
+   the hundreds, so this checks BEFORE committing rather than incrementing
+   then checking — a campaign that would blow the cap gets rejected without
+   burning quota it never actually used (a small check-then-write race is
+   an acceptable trade-off for a single-operator tool, not a payments path). */
+export async function checkEmailQuota(userId, recipientCount, limit = parseInt(process.env.EMAIL_DAILY_QUOTA || '', 10) || 500) {
+  try {
+    const { rows: cur } = await query(`SELECT count FROM app_email_usage WHERE user_id = $1 AND day = CURRENT_DATE`, [userId]);
+    const before = cur[0]?.count || 0;
+    if (before + recipientCount > limit) return { ok: false, count: before, limit };
+    const { rows } = await query(
+      `INSERT INTO app_email_usage (user_id, day, count) VALUES ($1, CURRENT_DATE, $2)
+       ON CONFLICT (user_id, day) DO UPDATE SET count = app_email_usage.count + $2
+       RETURNING count`,
+      [userId, recipientCount]
+    );
+    return { ok: true, count: rows[0]?.count ?? recipientCount, limit };
+  } catch {
+    return { ok: true, count: 0, limit };
+  }
+}
+
+/* ---- unsubscribe list (per space — see app_email_unsubscribes above) ---- */
+export async function isUnsubscribed(spaceId, email) {
+  try {
+    const { rows } = await query(
+      `SELECT 1 FROM app_email_unsubscribes WHERE space_id = $1 AND email = $2`,
+      [spaceId, (email || '').toLowerCase()]
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+/* One round-trip for a whole campaign's recipient list instead of one query
+   per contact. Fails OPEN (empty set) on error — same rationale as the
+   quota helpers: a DB hiccup should degrade, not silently block sending
+   (the per-recipient check in filterUnsubscribed still runs at send time). */
+export async function getUnsubscribedSet(spaceId, emails) {
+  try {
+    const lower = [...new Set(emails.map((e) => (e || '').toLowerCase()).filter(Boolean))];
+    if (!lower.length) return new Set();
+    const { rows } = await query(
+      `SELECT email FROM app_email_unsubscribes WHERE space_id = $1 AND email = ANY($2)`,
+      [spaceId, lower]
+    );
+    return new Set(rows.map((r) => r.email));
+  } catch {
+    return new Set();
+  }
+}
+export async function addUnsubscribe(spaceId, email) {
+  await query(
+    `INSERT INTO app_email_unsubscribes (space_id, email) VALUES ($1, $2)
+     ON CONFLICT (space_id, email) DO NOTHING`,
+    [spaceId, (email || '').toLowerCase()]
+  );
+}
+
+/* ---- unsubscribe link signing (HMAC, same secret as sessions) ----
+   No login required to unsubscribe — the recipient isn't an Efficience
+   user — so the link itself must be unguessable and tamper-proof instead. */
+export function makeUnsubToken(spaceId, email) {
+  return sign(`${spaceId}:${(email || '').toLowerCase()}`);
+}
+export function verifyUnsubToken(spaceId, email, token) {
+  if (!token) return false;
+  const expected = makeUnsubToken(spaceId, email);
+  return token.length === expected.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
 }
 
 /* Run schema creation without the ensureSchema guard re-entry (used by query). */

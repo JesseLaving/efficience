@@ -5,8 +5,11 @@
    `.canvas` de App.tsx est remonté avec une clé différente à chaque
    changement d'écran, ce qui démonte Campagnes et perd son état). */
 export interface Campaign {
-  name: string; seg: string; status: 'sent' | 'sched' | 'draft';
+  name: string; seg: string; status: 'sent' | 'sched' | 'draft' | 'failed';
   recipients: number; open: number | null; click: number | null; when: string;
+  /** Résultat réel du dernier envoi (Resend) — absent pour les campagnes
+   *  programmées ou antérieures à la mise en place de l'envoi réel. */
+  sentCount?: number; failedCount?: number; sendError?: string | null;
 }
 
 const LS = 'eff_campaigns_v1';

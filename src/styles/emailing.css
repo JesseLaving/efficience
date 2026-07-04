@@ -198,6 +198,7 @@ textarea.inp { resize: none; line-height: 1.55; }
 .st-pill.sent { color: var(--acc); border-color: var(--acc-soft2); } .st-pill.sent i { background: var(--acc); box-shadow: 0 0 7px var(--acc); }
 .st-pill.sched { color: #6fb3ff; border-color: rgba(111,179,255,.35); } .st-pill.sched i { background: #6fb3ff; }
 .st-pill.draft { color: var(--tx-3); } .st-pill.draft i { background: var(--tx-3); }
+.st-pill.failed { color: var(--warn); border-color: rgba(143,100,35,.35); } .st-pill.failed i { background: var(--warn); }
 
 /* ============================ CAMPAIGN BUILDER (IA) ============================ */
 .cb { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }

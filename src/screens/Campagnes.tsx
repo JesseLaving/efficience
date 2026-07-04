@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useContacts } from '../state/ContactsContext';
 import { useCampaigns } from '../state/CampaignsContext';
+import { useSpaces } from '../state/SpaceContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
-import { segmentInfos, type SegmentInfo } from '../lib/population';
+import { segmentInfos, SEGMENTS, type SegmentInfo } from '../lib/population';
 import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
+import { sendCampaignEmail } from '../lib/email';
 import type { Campaign } from '../lib/campaigns';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
@@ -86,7 +88,9 @@ function TypedBody({ paras, genId }: { paras: string[]; genId: number }) {
 }
 
 function StatusPill({ s }: { s: Campaign['status'] }) {
-  const [cls, lbl] = ({ sent: ['sent', 'Envoyée'], sched: ['sched', 'Programmée'], draft: ['draft', 'Brouillon'] } as Record<string, [string, string]>)[s];
+  const [cls, lbl] = ({
+    sent: ['sent', 'Envoyée'], sched: ['sched', 'Programmée'], draft: ['draft', 'Brouillon'], failed: ['failed', 'Échec'],
+  } as Record<string, [string, string]>)[s];
   return <span className={'st-pill ' + cls}><i />{lbl}</span>;
 }
 
@@ -94,7 +98,9 @@ export function Campagnes() {
   const { campaignSeed, clearCampaignSeed } = useEff();
   const { contacts } = useContacts();
   const { campaigns, addCampaign } = useCampaigns();
+  const { activeSpaceId } = useSpaces();
   const [view, setView] = useState<'list' | 'builder'>('list');
+  const [sending, setSending] = useState(false);
   const segs = useMemo<SegmentInfo[]>(() => segmentInfos(contacts), [contacts]);
 
   // builder state
@@ -105,6 +111,14 @@ export function Campagnes() {
   const [gen, setGen] = useState<Generated | null>(null);
   const [subject, setSubject] = useState(0);
   const [genId, setGenId] = useState(0);
+
+  // Nombre réel de destinataires atteignables — un e-mail valide et un
+  // consentement pas explicitement refusé, pas juste "membre du segment"
+  // (c'est ce compte, pas seg.count, que l'envoi utilisera vraiment).
+  const sendableCount = useMemo(() => {
+    const segment = SEGMENTS.find((s) => s.id === seg.id);
+    return contacts.filter((c) => c.email && c.consent !== false && (!segment || segment.pred(c))).length;
+  }, [contacts, seg]);
 
   const openBuilder = (segId?: string) => {
     setSeg(segs.find((s) => s.id === segId) || segs[0]);
@@ -149,19 +163,58 @@ export function Campagnes() {
     }
   };
 
-  const finish = (status: 'sent' | 'sched') => {
-    // Aucun envoi e-mail réel n'est encore branché (pas de fournisseur
-    // d'envoi/suivi) — les ouvertures et clics restent donc à null plutôt
-    // que des chiffres inventés. Le statut "envoyée" enregistre la campagne
-    // dans l'historique, mais l'engagement réel n'est pas encore mesurable.
-    addCampaign({
-      name: gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/g, '').trim(),
-      seg: seg.name, status, recipients: seg.count,
-      open: null, click: null,
-      when: status === 'sent' ? 'Envoyée à l’instant' : 'Programmée sam. 09:00',
+  // Les ouvertures/clics restent à null : aucun fournisseur ne les mesure
+  // encore pour cette version (voir la note dans la liste plus bas) — on ne
+  // les invente jamais, contrairement à l'ancien comportement de cet écran.
+  const finish = async (status: 'sent' | 'sched') => {
+    const name = gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/gu, '').trim();
+
+    if (status === 'sched') {
+      // Contrairement aux réseaux sociaux (auto-publication via cron déjà en
+      // place), aucun moteur de programmation d'e-mails n'existe encore —
+      // on enregistre l'intention sans jamais prétendre à un envoi
+      // automatique à une date donnée.
+      addCampaign({ name, seg: seg.name, status: 'sched', recipients: seg.count, open: null, click: null, when: 'Programmée — envoi manuel à déclencher' });
+      setView('list'); setGen(null); setPrompt('');
+      showToast(UI.calendar, 'Campagne enregistrée comme programmée. Revenez l’envoyer manuellement le moment venu — l’envoi automatique à date n’est pas encore disponible.');
+      return;
+    }
+
+    const segment = SEGMENTS.find((s) => s.id === seg.id);
+    const recipients = contacts.filter((c) => c.email && c.consent !== false && (!segment || segment.pred(c)));
+    if (!recipients.length) { showToast(UI.close, 'Aucun destinataire avec une adresse e-mail valide dans ce segment.'); return; }
+    if (activeSpaceId == null) { showToast(UI.close, 'Espace introuvable — reconnectez-vous.'); return; }
+
+    setSending(true);
+    const b = getBusiness();
+    const res = await sendCampaignEmail({
+      spaceId: activeSpaceId,
+      business: { name: b.name, email: b.email, addressLine: b.addressLine },
+      subject: gen!.subjects[subject],
+      preheader: gen!.pre,
+      headline: gen!.headline || gen!.subjects[subject],
+      bodyParagraphs: gen!.body,
+      cta: gen!.cta,
+      contacts: recipients.map((c) => ({ id: c.id, email: c.email, first: c.first, name: c.name })),
     });
-    setView('list'); setGen(null); setPrompt('');
-    showToast(status === 'sent' ? UI.rocket : UI.calendar, status === 'sent' ? `Campagne envoyée à ${fr(seg.count)} contacts` : 'Campagne programmée');
+    setSending(false);
+
+    if (res.ok) {
+      const sentN = res.sent || 0, failedN = res.failed || 0;
+      addCampaign({
+        name, seg: seg.name, status: 'sent', recipients: res.total || recipients.length,
+        open: null, click: null, when: 'Envoyée à l’instant', sentCount: sentN, failedCount: failedN,
+      });
+      setView('list'); setGen(null); setPrompt('');
+      showToast(UI.rocket, failedN ? `Envoyée à ${fr(sentN)} contacts (${failedN} échec${failedN > 1 ? 's' : ''})` : `Campagne envoyée à ${fr(sentN)} contacts`);
+    } else {
+      addCampaign({
+        name, seg: seg.name, status: 'failed', recipients: recipients.length,
+        open: null, click: null, when: 'Échec de l’envoi', sendError: res.reason || null,
+      });
+      setView('list'); setGen(null); setPrompt('');
+      showToast(UI.close, res.reason || 'Échec de l’envoi de la campagne.');
+    }
   };
 
   if (view === 'builder') {
@@ -243,9 +296,12 @@ export function Campagnes() {
               {generating && <span className="grow" style={{ fontSize: 12.5, color: 'var(--tx-3)' }}>Analyse de l’objectif et du segment…</span>}
               {gen && !generating && (
                 <>
-                  <button className="btn outline" onClick={() => finish('sched')}><Icon name="calendar" />Programmer</button>
+                  <button className="btn outline" disabled={sending} onClick={() => finish('sched')}><Icon name="calendar" />Programmer</button>
                   <span className="grow" />
-                  <button className="btn acc" onClick={() => finish('sent')}><Icon name="rocket" />Envoyer à {fr(seg.count)} contacts</button>
+                  <button className="btn acc" disabled={sending || !sendableCount} title={!sendableCount ? 'Aucun destinataire avec e-mail valide dans ce segment' : undefined} onClick={() => finish('sent')}>
+                    {sending ? <span className="spin" /> : <Icon name="rocket" />}
+                    {sending ? 'Envoi en cours…' : `Envoyer à ${fr(sendableCount)} contacts`}
+                  </button>
                 </>
               )}
             </div>
@@ -330,6 +386,13 @@ export function Campagnes() {
                   <div className="camp-metric"><div className="cm-v">{c.open.toFixed(1).replace('.', ',')}%</div><div className="cm-l">ouvertures</div></div>
                   <div className="camp-metric"><div className="cm-v">{(c.click || 0).toFixed(1).replace('.', ',')}%</div><div className="cm-l">clics</div></div>
                 </>
+              ) : c.status === 'sent' && c.sentCount != null ? (
+                <>
+                  <div className="camp-metric"><div className="cm-v">{fr(c.sentCount)}</div><div className="cm-l">envoyés</div></div>
+                  {!!c.failedCount && <div className="camp-metric"><div className="cm-v" style={{ color: 'var(--warn)' }}>{fr(c.failedCount)}</div><div className="cm-l">échecs</div></div>}
+                </>
+              ) : c.status === 'failed' ? (
+                <div className="camp-metric" title={c.sendError || undefined}><div className="cm-v" style={{ color: 'var(--warn)' }}>0</div><div className="cm-l">envoyés</div></div>
               ) : (
                 <div className="camp-metric"><div className="cm-v" style={{ color: 'var(--tx-3)' }}>—</div><div className="cm-l">en attente</div></div>
               )}
