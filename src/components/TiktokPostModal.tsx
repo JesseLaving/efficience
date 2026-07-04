@@ -87,6 +87,10 @@ export function TiktokPostModal({ onClose }: Props) {
         </div>
 
         <div className="kmodal-body">
+          <div style={{ fontSize: 12.5, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', color: 'var(--tx-2)' }}>
+            <b style={{ color: 'var(--warn)' }}>En attente de validation TikTok</b> — ni la publication directe ni le mode brouillon ne sont encore approuvés par TikTok : l’envoi ci-dessous échouera tant que l’un des deux ne l’est pas.
+          </div>
+
           <div className="field">
             <label className="field-lbl">Mode de publication</label>
             <div style={{ display: 'flex', gap: 8 }}>

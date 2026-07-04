@@ -72,6 +72,10 @@ export function YoutubeUploadModal({ onClose }: Props) {
         </div>
 
         <div className="kmodal-body">
+          <div style={{ fontSize: 12.5, padding: '10px 12px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', color: 'var(--tx-2)' }}>
+            <b style={{ color: 'var(--warn)' }}>Mode test Google</b> — l’envoi ne fonctionne aujourd’hui que pour les comptes Google ajoutés comme testeurs de l’application, pas encore pour tout utilisateur externe.
+          </div>
+
           <div className="field">
             <label className="field-lbl">Fichier vidéo</label>
             <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => pickFile(e.target.files?.[0] || null)} />

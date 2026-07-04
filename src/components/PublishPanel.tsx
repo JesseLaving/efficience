@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useConnections } from '../state/ConnectionsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
-import { netName } from '../lib/networks';
+import { netName, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
 import { showToast } from '../lib/toast';
 import { publishMetaPost } from '../lib/meta';
 import { publishLinkedInPost } from '../lib/linkedin';
@@ -28,12 +28,18 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
   }, [onClose]);
 
   // Split selection into networks we can actually publish to vs. the rest.
-  const metaTargets = platforms.filter((p) => META_NETS.includes(p) && metaAccounts.some((a) => a.network === p));
-  const canLinkedin = platforms.includes('linkedin') && !!linkedinToken;
-  const canGoogle = platforms.includes('google') && !!googleToken && googleAccounts.length > 0;
+  // "Connected" isn't the same as "publish-ready": Google Business is
+  // reachable via OAuth but its write scope isn't approved yet, so a
+  // connected-but-pending network gets its own bucket instead of being
+  // attempted and failing live against the real API.
+  const isReady = (id: string) => (PUBLISH_STATUS[id] || 'ready') === 'ready';
+  const metaTargets = platforms.filter((p) => META_NETS.includes(p) && metaAccounts.some((a) => a.network === p) && isReady(p));
+  const canLinkedin = platforms.includes('linkedin') && !!linkedinToken && isReady('linkedin');
+  const canGoogle = platforms.includes('google') && !!googleToken && googleAccounts.length > 0 && isReady('google');
 
   const publishable: string[] = [...metaTargets, ...(canLinkedin ? ['linkedin'] : []), ...(canGoogle ? ['google'] : [])];
-  const unavailable = platforms.filter((p) => !publishable.includes(p));
+  const pendingApproval = platforms.filter((p) => !publishable.includes(p) && PUBLISH_STATUS[p] && PUBLISH_STATUS[p] !== 'ready');
+  const unavailable = platforms.filter((p) => !publishable.includes(p) && !pendingApproval.includes(p));
 
   const run = async () => {
     if (!text.trim() || !publishable.length || busy) return;
@@ -107,6 +113,22 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
                   </div>
                 )}
               </div>
+
+              {pendingApproval.length > 0 && (
+                <div className="field">
+                  <label className="field-lbl">En attente d’approbation plateforme <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— non tentés</span></label>
+                  <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+                    {pendingApproval.map((id) => (
+                      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-3)' }}>
+                        <span className="plat-chip" style={{ pointerEvents: 'none', opacity: 0.7 }}>
+                          <Brand name={id as BrandName} />{netName(id)}
+                        </span>
+                        {PUBLISH_STATUS_REASON[PUBLISH_STATUS[id]]}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {unavailable.length > 0 && (
                 <div className="field">

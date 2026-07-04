@@ -18,6 +18,32 @@ export interface Network {
   def?: boolean;
 }
 
+/** Real publication readiness per platform — reflects the actual app-review
+ *  status granted by each platform, not just whether OAuth connection works.
+ *  A network can connect (read a real page/profile) while publishing still
+ *  fails, because the write scope needs separate platform approval:
+ *   - 'ready'   — publication réellement fonctionnelle aujourd'hui.
+ *   - 'pending' — connexion possible, mais la publication échouera tant que
+ *                 la plateforme n'a pas validé l'accès en écriture.
+ *   - 'test'    — fonctionnel uniquement pour les comptes Google ajoutés
+ *                 comme testeurs (app en mode Test, pas encore vérifiée).
+ *  Update this map the day an approval comes through — never leave it
+ *  guessing at a status nobody confirmed. */
+export type PublishStatus = 'ready' | 'pending' | 'test';
+export const PUBLISH_STATUS: Record<string, PublishStatus> = {
+  instagram: 'ready',
+  facebook: 'ready',
+  linkedin: 'ready',
+  google: 'pending',
+  tiktok: 'pending',
+  youtube: 'test',
+};
+export const PUBLISH_STATUS_REASON: Record<PublishStatus, string> = {
+  ready: 'Publication active',
+  pending: 'En attente de validation de la plateforme',
+  test: 'Mode test — réservé aux comptes ajoutés comme testeurs',
+};
+
 /* The platforms Efficience Marketing can connect.
    No account is pre-connected and no metric is invented: every page
    starts at 0 — real figures arrive only once a real account is linked.

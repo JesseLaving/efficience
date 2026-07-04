@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
 import { useCalendar } from '../state/CalendarContext';
+import { useDrafts } from '../state/DraftsContext';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
 import { showToast } from '../lib/toast';
-import { netName } from '../lib/networks';
+import { netName, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
 import { getBusiness } from '../lib/business';
 import { generatePost, improvePost, generateHashtags, sampleRecentCaptions } from '../lib/ai';
 import { TONES, loadStrategy } from '../lib/strategy';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
+import type { Draft } from '../lib/drafts';
 
 /* ig action glyphs */
 const A = {
@@ -224,6 +226,46 @@ export function Studio() {
     setSchedOpen(false);
   };
 
+  // Brouillons — persistés (src/lib/drafts.ts), synchronisés par espace comme
+  // le reste de l'état. Ne stocke que l'URL publique d'un visuel éventuel
+  // (VisualGenerator/Pexels) : un fichier local glissé-déposé n'a pas d'URL
+  // et n'est donc pas restauré au chargement d'un brouillon.
+  const { drafts, saveDraft, deleteDraft } = useDrafts();
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const saveDraftNow = () => {
+    const hasContent = type === 'email' ? (subject.trim() || body.trim()) : text.trim();
+    if (!hasContent) { showToast(UI.close, 'Rien à enregistrer pour le moment.'); return; }
+    const d: Draft = {
+      id: `d_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type, text: type === 'email' ? body : text,
+      networks: type === 'email' ? [] : sel, ratio, photoUrl: publicImageUrl,
+      subject: type === 'email' ? subject : undefined,
+      preheader: type === 'email' ? pre : undefined,
+      savedAt: Date.now(),
+    };
+    saveDraft(d);
+    showToast(UI.check, 'Brouillon enregistré');
+  };
+  const loadDraft = (d: Draft) => {
+    setType(d.type);
+    if (d.type === 'email') {
+      setSubject(d.subject || ''); setPre(d.preheader || ''); setBody(d.text);
+    } else {
+      setText(d.text);
+      const known = Object.keys(SPECS[d.type]);
+      const restored = d.networks.filter((n) => known.includes(n));
+      const nextSel = restored.length ? restored : initSel(d.type).sel;
+      const nextActive = nextSel[0] || null;
+      setSelState({ sel: nextSel, active: nextActive });
+      const rs = nextActive ? SPECS[d.type][nextActive].ratios : [];
+      setRatio(rs.includes(d.ratio) ? d.ratio : (rs[0] || d.ratio));
+      if (d.photoUrl) { setMedia({ url: d.photoUrl, kind: 'image', name: 'brouillon.jpg', size: 0 }); setPublicImageUrl(d.photoUrl); }
+      else { setMedia(null); setPublicImageUrl(null); }
+    }
+    setDraftsOpen(false);
+    showToast(UI.check, 'Brouillon chargé');
+  };
+
   return (
     <section className="screen show anim">
       <div className="page-head" style={{ marginBottom: 22 }}>
@@ -245,18 +287,33 @@ export function Studio() {
       <div className="cmp">
         <div className="cmp-edit">
           {type === 'email' ? (
-            <EmailEditor subject={subject} setSubject={setSubject} pre={pre} setPre={setPre} body={body} setBody={setBody} finish={finish} />
+            <EmailEditor subject={subject} setSubject={setSubject} pre={pre} setPre={setPre} body={body} setBody={setBody} finish={finish} onSaveDraft={saveDraftNow} />
           ) : (
             <>
               <div className="ce-sec">
                 <label className="field-lbl">Plateformes {type === 'story' ? '(stories)' : ''}</label>
                 <div className="plat-row">
-                  {availablePlatforms(type).map((id) => (
-                    <button key={id} className={'plat-chip' + (sel.includes(id) ? ' on' : '')} onClick={() => togglePlat(id)}>
-                      <Brand name={id as BrandName} />{netName(id)}<RawIcon svg={UI.check} className="pc-x" />
-                    </button>
-                  ))}
+                  {availablePlatforms(type).map((id) => {
+                    const status = PUBLISH_STATUS[id];
+                    const pending = status && status !== 'ready';
+                    return (
+                      <button
+                        key={id} className={'plat-chip' + (sel.includes(id) ? ' on' : '')} onClick={() => togglePlat(id)}
+                        title={pending ? PUBLISH_STATUS_REASON[status] : undefined}
+                      >
+                        <Brand name={id as BrandName} />{netName(id)}
+                        {pending && <span className="plat-pending-dot" aria-label={PUBLISH_STATUS_REASON[status]} />}
+                        <RawIcon svg={UI.check} className="pc-x" />
+                      </button>
+                    );
+                  })}
                 </div>
+                {sel.some((id) => PUBLISH_STATUS[id] && PUBLISH_STATUS[id] !== 'ready') && (
+                  <div className="counter" style={{ marginTop: 8, color: 'var(--tx-3)' }}>
+                    <RawIcon svg={UI.warning} style={{ width: 12, height: 12, display: 'inline-grid', verticalAlign: -1.5, marginRight: 4 }} />
+                    {sel.filter((id) => PUBLISH_STATUS[id] && PUBLISH_STATUS[id] !== 'ready').map((id) => `${netName(id)} : ${PUBLISH_STATUS_REASON[PUBLISH_STATUS[id]]}`).join(' · ')}
+                  </div>
+                )}
               </div>
 
               <div className="ce-sec">
@@ -381,7 +438,32 @@ export function Studio() {
               )}
 
               <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <FlashBtn className="btn outline" label="Enregistrer le brouillon" flash="Brouillon enregistré" />
+                <button className="btn outline" onClick={saveDraftNow}>Enregistrer le brouillon</button>
+                <div style={{ position: 'relative' }}>
+                  <button className="btn outline" onClick={() => setDraftsOpen((v) => !v)} aria-expanded={draftsOpen}>
+                    <Icon name="clipboard" />Brouillons{drafts.length > 0 ? ` (${drafts.length})` : ''}
+                  </button>
+                  {draftsOpen && (
+                    <div className="notif-dropdown">
+                      <div className="notif-head">Brouillons enregistrés</div>
+                      {drafts.length === 0 ? (
+                        <div className="notif-empty">Aucun brouillon pour l’instant.</div>
+                      ) : (
+                        <div className="notif-list">
+                          {drafts.map((d) => (
+                            <div className="notif-item" key={d.id} style={{ alignItems: 'center' }}>
+                              <button type="button" className="notif-body" style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => loadDraft(d)}>
+                                <div className="notif-text">{(d.type === 'email' ? d.subject : d.text)?.slice(0, 70) || <em>Sans texte</em>}{(d.type === 'email' ? d.subject : d.text) && (d.type === 'email' ? d.subject! : d.text).length > 70 ? '…' : ''}</div>
+                                <div className="notif-time">{d.type === 'email' ? 'E-mail' : d.type === 'story' ? 'Story' : 'Publication'} · {new Date(d.savedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                              </button>
+                              <button type="button" className="unlink-btn" title="Supprimer ce brouillon" aria-label="Supprimer ce brouillon" onClick={() => deleteDraft(d.id)}><Icon name="trash" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {!anyConnected && <span style={{ fontSize: 12, color: 'var(--tx-3)', whiteSpace: 'nowrap' }}>Reliez un réseau pour publier.</span>}
                 <span style={{ flex: 1 }} />
                 <button className="btn outline" disabled={!text.trim() || !sel.length} onClick={() => setSchedOpen((v) => !v)}><Icon name="clock" />Programmer</button>
@@ -473,9 +555,9 @@ function EmailPreviewCard({ subject, pre, body }: { subject: string; pre: string
 }
 
 /* ---------- email editor ---------- */
-function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish }: {
+function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish, onSaveDraft }: {
   subject: string; setSubject: (v: string) => void; pre: string; setPre: (v: string) => void;
-  body: string; setBody: (v: string) => void; finish: (l: string) => void;
+  body: string; setBody: (v: string) => void; finish: (l: string) => void; onSaveDraft: () => void;
 }) {
   const subjLim = 60, preLim = 90;
   const counter = (len: number, lim: number) => {
@@ -503,7 +585,7 @@ function EmailEditor({ subject, setSubject, pre, setPre, body, setBody, finish }
       <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <input className="inp" type="datetime-local" style={{ maxWidth: 220 }} />
         <span style={{ flex: 1 }} />
-        <FlashBtn className="btn outline" label="Enregistrer" flash="Brouillon enregistré" />
+        <FlashBtn className="btn outline" label="Enregistrer" flash="Brouillon enregistré" onClick={onSaveDraft} />
         <button className="btn acc" onClick={() => finish('Envoi programmé')}><Icon name="send" />Programmer l’envoi</button>
       </div>
     </>

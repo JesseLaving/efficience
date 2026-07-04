@@ -11,6 +11,7 @@ import { CalendarProvider } from './state/CalendarContext';
 import { BrandProvider } from './state/BrandContext';
 import { ContactsProvider } from './state/ContactsContext';
 import { CampaignsProvider } from './state/CampaignsContext';
+import { DraftsProvider } from './state/DraftsContext';
 import { AuthWrapper } from './components/AuthWrapper';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -22,7 +23,9 @@ createRoot(document.getElementById('root')!).render(
           <BrandProvider>
             <ContactsProvider>
               <CampaignsProvider>
-                <AuthWrapper />
+                <DraftsProvider>
+                  <AuthWrapper />
+                </DraftsProvider>
               </CampaignsProvider>
             </ContactsProvider>
           </BrandProvider>

@@ -28,6 +28,7 @@
 .plat-chip.disabled { opacity: .4; cursor: not-allowed; }
 .plat-chip .pc-x { width: 14px; height: 14px; opacity: 0; margin-left: -2px; transition: opacity .15s; }
 .plat-chip.on .pc-x { opacity: .6; }
+.plat-pending-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
 .plat-chip.sm { padding: 3px 8px 3px 6px; font-size: 11px; gap: 5px; }
 .plat-chip.sm svg { width: 13px; height: 13px; }
 .plat-chip.sm .pc-x { width: 11px; height: 11px; margin-left: -1px; }

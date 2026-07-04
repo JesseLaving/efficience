@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
-import { NETWORKS, type Network } from '../lib/networks';
+import { NETWORKS, type Network, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -196,7 +196,16 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     >
       <div className="nc-top">
         <div className="nc-logo"><Brand name={net.id as BrandName} /></div>
-        <div><div className="nc-name">{net.name}</div><div className="nc-kind">{net.kind}</div></div>
+        <div>
+          <div className="nc-name">{net.name}</div>
+          <div className="nc-kind">{net.kind}</div>
+          {PUBLISH_STATUS[net.id] && (
+            <div className={'nc-pub-status ' + PUBLISH_STATUS[net.id]} title={PUBLISH_STATUS_REASON[PUBLISH_STATUS[net.id]]}>
+              {PUBLISH_STATUS[net.id] === 'ready' ? <RawIcon svg={UI.check} /> : <RawIcon svg={UI.clock} />}
+              {PUBLISH_STATUS_REASON[PUBLISH_STATUS[net.id]]}
+            </div>
+          )}
+        </div>
         <div className="nc-state">{stateLbl}</div>
       </div>
       <div className="nc-body">{body}</div>
