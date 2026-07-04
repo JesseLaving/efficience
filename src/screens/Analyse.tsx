@@ -4,6 +4,7 @@ import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
 import { analyzeCompany, analyzeSite, type CompanyResult, type SiteResponse, type Audit } from '../lib/api';
 import { loadProfile } from '../lib/profile';
+import { AiLoader } from '../components/AiLoader';
 
 const frDate = (s: string | null) => {
   if (!s) return '—';
@@ -105,6 +106,15 @@ export function Analyse() {
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <AiLoader
+            lead="Analyse en cours"
+            phrases={['Interrogation de l’INSEE (SIRENE)…', 'Audit technique du site (Lighthouse)…', 'Calcul des scores et recommandations…']}
+          />
+        </div>
+      )}
 
       <div className="dash-grid">
         {/* ---- Company ---- */}

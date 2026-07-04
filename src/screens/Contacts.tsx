@@ -17,15 +17,36 @@ import {
 } from '../lib/contacts';
 import { googleContactsLogin, consumeGoogleContactsHash, fetchGoogleContacts, mapGoogleContacts } from '../lib/google';
 import { NameModal } from '../components/NameModal';
+import { AddContactModal } from '../components/AddContactModal';
 
 const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
-  phone: 'Téléphone', city: 'Ville', basket: 'Panier moyen', lastDays: 'Dernier achat',
-  consent: 'Consentement', tags: 'Tags',
+  phone: 'Téléphone', city: 'Ville', company: 'Société', jobTitle: 'Poste',
+  basket: 'Panier moyen', lastDays: 'Dernier achat', lastContactAt: 'Dernier contact',
+  createdAt: 'Date de création', notes: 'Notes', consent: 'Consentement', tags: 'Tags',
 };
 
 type Flow = 'idle' | 'analyzing' | 'mapped' | 'confirming';
 type Audience = { kind: 'fixed' | 'custom' | 'saved' | 'group'; id: string };
+
+const frDate = (iso?: string) => {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-');
+  return d ? `${d}/${m}/${y}` : iso;
+};
+
+/* Infobulle au survol d'une ligne — regroupe les champs saisis à la main qui
+   n'ont pas leur propre colonne (trop de colonnes rendraient le tableau
+   illisible), sans les cacher complètement. */
+function contactTooltip(c: Contact): string | undefined {
+  const lines = [
+    c.phone ? `Téléphone : ${c.phone}` : null,
+    c.createdAt ? `Client depuis le ${frDate(c.createdAt)}` : null,
+    c.lastContactAt ? `Dernier contact le ${frDate(c.lastContactAt)}` : null,
+    c.notes ? `Notes : ${c.notes}` : null,
+  ].filter((l): l is string => !!l);
+  return lines.length ? lines.join('\n') : undefined;
+}
 
 export function Contacts() {
   const { newCampaign } = useEff();
@@ -39,7 +60,7 @@ export function Contacts() {
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [modal, setModal] = useState<null | 'saveSegment' | 'createGroup'>(null);
+  const [modal, setModal] = useState<null | 'saveSegment' | 'createGroup' | 'addContact'>(null);
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -236,12 +257,15 @@ export function Contacts() {
               <div className="iz-formats"><span className="fmt-chip"><Icon name="sheet" />.csv</span></div>
             )}
           </div>
-          <div className="iz-cta" style={{ display: 'flex', gap: 8 }}>
+          <div className="iz-cta" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className={contacts.length ? 'btn sm' : 'btn acc'} onClick={(e) => { e.stopPropagation(); openPicker(); }}>
               <Icon name="upload" />{contacts.length ? 'Importer un fichier' : 'Choisir un fichier'}
             </button>
             <button className="btn outline sm" disabled={gcBusy} onClick={(e) => { e.stopPropagation(); connectGoogleContacts(); }}>
               {gcBusy ? <span className="spin lt" /> : <Icon name="link" />}Google Contacts
+            </button>
+            <button className="btn outline sm" onClick={(e) => { e.stopPropagation(); setModal('addContact'); }}>
+              <Icon name="plus" />Ajouter un contact
             </button>
           </div>
         </div>
@@ -457,9 +481,18 @@ export function Contacts() {
                   </thead>
                   <tbody>
                     {rows.length ? rows.map((c) => (
-                      <tr key={c.id}>
+                      <tr key={c.id} title={contactTooltip(c)}>
                         <td className="chk"><input type="checkbox" aria-label={`Sélectionner ${c.name}`} checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} /></td>
-                        <td><div className="ct-name"><div className="av" style={{ background: avFor(c) }}>{initials(c)}</div><div><div className="cn-t">{c.name}</div><div className="cn-e">{c.email || '—'}</div></div></div></td>
+                        <td>
+                          <div className="ct-name">
+                            <div className="av" style={{ background: avFor(c) }}>{initials(c)}</div>
+                            <div>
+                              <div className="cn-t">{c.name}</div>
+                              <div className="cn-e">{c.email || '—'}</div>
+                              {(c.jobTitle || c.company) && <div className="cn-e">{[c.jobTitle, c.company].filter(Boolean).join(' · ')}</div>}
+                            </div>
+                          </div>
+                        </td>
                         <td><span className="ct-city"><Icon name="pin" />{c.city || '—'}</span></td>
                         <td className="num">{c.basket != null ? c.basket.toFixed(1).replace('.', ',') + ' €' : '—'}</td>
                         <td>{c.lastDays == null ? '—' : c.lastDays === 0 ? 'aujourd’hui' : 'il y a ' + c.lastDays + ' j'}</td>
@@ -513,6 +546,15 @@ export function Contacts() {
             if (selected.size) addToGroup(g.id, [...selected]);
             showToast(UI.check, `Groupe « ${name} » créé${selected.size ? ` avec ${fr(selected.size)} contact(s)` : ''}.`);
             setSelected(new Set());
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === 'addContact' && (
+        <AddContactModal
+          onAdd={(c) => {
+            const stats = addContacts([c]);
+            showToast(UI.check, stats.added ? `${c.name} ajouté à votre base.` : `${c.name} mis à jour (contact existant).`);
           }}
           onClose={() => setModal(null)}
         />

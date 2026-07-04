@@ -13,14 +13,24 @@ export interface Contact {
   email: string;
   phone?: string;
   city?: string;
+  company?: string;
+  jobTitle?: string;
   /** Panier moyen (€) — seulement si la source fournit une donnée d'achat réelle. */
   basket?: number;
   /** Jours depuis le dernier achat — idem, jamais inventé. */
   lastDays?: number;
+  /** Date ISO (aaaa-mm-jj) du dernier contact humain (appel, rdv, échange) —
+   *  distinct de lastDays qui mesure le dernier ACHAT. */
+  lastContactAt?: string;
+  /** Date ISO (aaaa-mm-jj) d'entrée en relation. Éditable à la création
+   *  manuelle pour permettre de renseigner un client connu de longue date
+   *  (plutôt que de forcer la date d'ajout dans Efficience). */
+  createdAt?: string;
+  notes?: string;
   /** null = non renseigné (ni accepté, ni refusé explicitement). */
   consent: boolean | null;
   tags: string[];
-  source: 'file' | 'google';
+  source: 'file' | 'google' | 'manual';
 }
 
 const LS_KEY = 'eff_contacts_v1';
@@ -86,7 +96,9 @@ export function parseDelimited(text: string): ParsedTable {
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
-export type TargetField = 'first' | 'last' | 'name' | 'email' | 'phone' | 'city' | 'basket' | 'lastDays' | 'consent' | 'tags';
+export type TargetField =
+  | 'first' | 'last' | 'name' | 'email' | 'phone' | 'city' | 'company' | 'jobTitle'
+  | 'basket' | 'lastDays' | 'lastContactAt' | 'createdAt' | 'notes' | 'consent' | 'tags';
 
 const ALIASES: Record<TargetField, string[]> = {
   email: ['email', 'mail', 'courriel', 'adresseemail', 'e mail'],
@@ -95,15 +107,23 @@ const ALIASES: Record<TargetField, string[]> = {
   name: ['nomcomplet', 'fullname', 'name', 'contact', 'client', 'nomprenom'],
   phone: ['telephone', 'tel', 'phone', 'mobile', 'portable', 'numero', 'numerodetelephone'],
   city: ['ville', 'city', 'localite', 'commune'],
+  company: ['societe', 'entreprise', 'company', 'organisation', 'raisonsociale'],
+  jobTitle: ['poste', 'fonction', 'jobtitle', 'titre', 'role', 'metier'],
   basket: ['paniermoyen', 'panier', 'basket', 'montant', 'ca', 'chiffredaffaires', 'valeur', 'depensemoyenne'],
   lastDays: ['dernierachat', 'lastpurchase', 'derniereactivite', 'recence', 'dateachat', 'lastorder'],
+  lastContactAt: ['derniercontact', 'lastcontact', 'dernierrdv', 'dernierechange', 'lastinteraction'],
+  createdAt: ['datecreation', 'creele', 'createdat', 'dateajout', 'clientdepuis', 'datedentree'],
+  notes: ['notes', 'commentaire', 'commentaires', 'remarques', 'informations', 'infos'],
   consent: ['consentement', 'optin', 'optinemail', 'rgpd', 'consent', 'newsletter', 'accepteemail'],
   tags: ['tags', 'etiquettes', 'segment', 'categorie', 'interet'],
 };
 
 /* Ordre de priorité pour l'assignation gloutonne (une colonne du fichier ne
    sert qu'à un seul champ Efficience). */
-const FIELD_ORDER: TargetField[] = ['email', 'first', 'last', 'name', 'phone', 'city', 'basket', 'lastDays', 'consent', 'tags'];
+const FIELD_ORDER: TargetField[] = [
+  'email', 'first', 'last', 'name', 'phone', 'city', 'company', 'jobTitle',
+  'basket', 'lastDays', 'lastContactAt', 'createdAt', 'notes', 'consent', 'tags',
+];
 
 export interface ColumnMapping { field: TargetField; headerIndex: number | null; confidence: number; }
 
@@ -153,6 +173,23 @@ function parseLastDays(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/* Normalise une date saisie (jj/mm/aaaa, jj-mm-aaaa ou aaaa-mm-jj) en ISO
+   aaaa-mm-jj — contrairement à parseLastDays, on garde la date elle-même
+   (pas un delta de jours) : createdAt et lastContactAt sont des dates
+   affichées telles quelles, pas des compteurs qui se décalent chaque jour. */
+function parseDateToIso(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const dmy = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const ymd = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  let d: Date | null = null;
+  if (dmy) d = new Date(+dmy[3], +dmy[2] - 1, +dmy[1]);
+  else if (ymd) d = new Date(+ymd[1], +ymd[2] - 1, +ymd[3]);
+  if (!d || isNaN(d.getTime())) return undefined;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function parseConsent(raw: string): boolean | null {
   const v = norm(raw);
   if (!v) return null;
@@ -172,6 +209,8 @@ export function rowsToContacts(_headers: string[], rows: string[][], mapping: Co
   const idx = (f: TargetField) => mapping.find((m) => m.field === f)?.headerIndex ?? null;
   const iEmail = idx('email'), iFirst = idx('first'), iLast = idx('last'), iName = idx('name');
   const iPhone = idx('phone'), iCity = idx('city'), iBasket = idx('basket'), iLastDays = idx('lastDays');
+  const iCompany = idx('company'), iJobTitle = idx('jobTitle');
+  const iLastContactAt = idx('lastContactAt'), iCreatedAt = idx('createdAt'), iNotes = idx('notes');
   const iConsent = idx('consent'), iTags = idx('tags');
   const get = (row: string[], i: number | null) => (i != null && i < row.length ? (row[i] || '').trim() : '');
 
@@ -199,14 +238,41 @@ export function rowsToContacts(_headers: string[], rows: string[][], mapping: Co
       email,
       phone: get(row, iPhone) || undefined,
       city: get(row, iCity) || undefined,
+      company: get(row, iCompany) || undefined,
+      jobTitle: get(row, iJobTitle) || undefined,
       basket: basketRaw ? parseBasket(basketRaw) : undefined,
       lastDays: lastDaysRaw ? parseLastDays(lastDaysRaw) : undefined,
+      lastContactAt: parseDateToIso(get(row, iLastContactAt)),
+      createdAt: parseDateToIso(get(row, iCreatedAt)),
+      notes: get(row, iNotes) || undefined,
       consent: iConsent != null ? parseConsent(get(row, iConsent)) : null,
       tags: tagsRaw ? tagsRaw.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : [],
       source,
     });
   }
   return out;
+}
+
+/* ---------- création manuelle (un contact à la fois) ---------- */
+
+export function createManualContact(input: {
+  first: string; last: string; email: string; phone?: string; city?: string;
+  company?: string; jobTitle?: string;
+  basket?: number; consent: boolean | null; tags: string[];
+  createdAt?: string; lastContactAt?: string; notes?: string;
+}): Contact {
+  const name = (input.first + ' ' + input.last).trim();
+  const email = input.email.trim().toLowerCase();
+  return {
+    id: makeId(email, name),
+    first: input.first.trim(), last: input.last.trim(), name: name || email,
+    email, phone: input.phone?.trim() || undefined, city: input.city?.trim() || undefined,
+    company: input.company?.trim() || undefined, jobTitle: input.jobTitle?.trim() || undefined,
+    basket: input.basket, consent: input.consent, tags: input.tags,
+    createdAt: input.createdAt || undefined, lastContactAt: input.lastContactAt || undefined,
+    notes: input.notes?.trim() || undefined,
+    source: 'manual',
+  };
 }
 
 /* ---------- fusion (dédoublonnage par e-mail) ---------- */
@@ -224,7 +290,14 @@ export function mergeContacts(existing: Contact[], incoming: Contact[]): Contact
         ...prev,
         first: c.first || prev.first, last: c.last || prev.last, name: c.name || prev.name,
         phone: c.phone ?? prev.phone, city: c.city ?? prev.city,
+        company: c.company ?? prev.company, jobTitle: c.jobTitle ?? prev.jobTitle,
         basket: c.basket ?? prev.basket, lastDays: c.lastDays ?? prev.lastDays,
+        // La date d'entrée en relation la plus ancienne l'emporte ; le
+        // dernier contact le plus récent l'emporte — les deux fusionnent
+        // par "meilleure information connue", pas par simple écrasement.
+        createdAt: prev.createdAt && c.createdAt ? (prev.createdAt < c.createdAt ? prev.createdAt : c.createdAt) : (prev.createdAt ?? c.createdAt),
+        lastContactAt: prev.lastContactAt && c.lastContactAt ? (prev.lastContactAt > c.lastContactAt ? prev.lastContactAt : c.lastContactAt) : (c.lastContactAt ?? prev.lastContactAt),
+        notes: c.notes ?? prev.notes,
         consent: c.consent ?? prev.consent,
         tags: [...new Set([...(prev.tags || []), ...(c.tags || [])])],
       });
@@ -236,12 +309,16 @@ export function mergeContacts(existing: Contact[], incoming: Contact[]): Contact
 /* ---------- export CSV ---------- */
 
 export function contactsToCsv(contacts: Contact[]): string {
-  const head = ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Ville', 'Panier moyen', 'Dernier achat (jours)', 'Consentement', 'Tags'];
+  const head = [
+    'Prénom', 'Nom', 'E-mail', 'Téléphone', 'Ville', 'Société', 'Poste',
+    'Panier moyen', 'Dernier achat (jours)', 'Dernier contact', 'Date de création', 'Consentement', 'Tags', 'Notes',
+  ];
   const esc = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
   const rows = contacts.map((c) => [
-    c.first, c.last, c.email, c.phone || '', c.city || '',
+    c.first, c.last, c.email, c.phone || '', c.city || '', c.company || '', c.jobTitle || '',
     c.basket != null ? String(c.basket) : '', c.lastDays != null ? String(c.lastDays) : '',
-    c.consent === true ? 'Oui' : c.consent === false ? 'Non' : '', (c.tags || []).join('; '),
+    c.lastContactAt || '', c.createdAt || '',
+    c.consent === true ? 'Oui' : c.consent === false ? 'Non' : '', (c.tags || []).join('; '), c.notes || '',
   ].map(esc).join(','));
   return [head.map(esc).join(','), ...rows].join('\r\n');
 }

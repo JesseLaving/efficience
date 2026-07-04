@@ -13,6 +13,7 @@ import { generateAiPlanIdeas, sampleRecentCaptions } from '../lib/ai';
 import { loadStrategy } from '../lib/strategy';
 import { buildAidaPost } from '../lib/aida';
 import { defaultDateTime } from '../lib/calendar';
+import { AiLoader } from '../components/AiLoader';
 
 const AI_MAX_SLOTS = 30;
 
@@ -227,6 +228,12 @@ export function EditorialPlanning() {
               {plan ? 'Régénérer le planning' : 'Générer le planning'}
             </button>
           </div>
+          {aiBusy && aiMode && (
+            <AiLoader
+              lead="Génération IA en cours"
+              phrases={['Analyse de votre secteur et de votre stratégie…', 'Rédaction des sujets par Gemini…', 'Équilibrage du calendrier…']}
+            />
+          )}
         </div>
       </div>
 

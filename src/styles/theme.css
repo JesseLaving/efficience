@@ -299,11 +299,46 @@ body {
 .skel { position: relative; overflow: hidden; background: var(--canvas-soft); }
 .skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(20,21,15,.06), transparent); transform: translateX(-100%); animation: shimmer 1.2s infinite; }
 @keyframes shimmer { to { transform: translateX(100%); } }
-.spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--on-acc); animation: spin .7s linear infinite; }
-.spin.lt { border-color: var(--line); border-top-color: var(--acc); }
+.spin { width: 15px; height: 15px; border-radius: 50%; flex: none;
+  background: conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,.18) 50%, var(--on-acc) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: spin .8s linear infinite; }
+.spin.lt { background: conic-gradient(from 0deg, transparent 0%, var(--acc-soft2) 50%, var(--acc) 100%); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .screen-load { display: grid; place-items: center; min-height: 40vh; }
-.screen-load .spin { width: 24px; height: 24px; border-width: 3px; }
+.screen-load .spin { width: 26px; height: 26px;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); }
+
+/* ---------- AI generation / analysis loader (see components/AiLoader.tsx) ---------- */
+.ai-loader { display: flex; align-items: center; gap: 16px; padding: 26px 22px; }
+.ai-loader-orb { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
+.ai-loader-orb::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; background: var(--acc-soft);
+  filter: blur(7px); animation: ai-glow 1.8s var(--ease-in-out) infinite; }
+.ai-loader-ring { position: relative; width: 32px; height: 32px; border-radius: 50%; z-index: 1;
+  background: conic-gradient(from 0deg, transparent 0%, var(--acc-soft2) 45%, var(--acc) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: spin .9s linear infinite; }
+.ai-loader-ring::after { content: ""; position: absolute; top: -2px; left: 50%; width: 6px; height: 6px; margin-left: -3px;
+  border-radius: 50%; background: var(--acc); box-shadow: 0 0 8px var(--acc); }
+.ai-loader-body { min-width: 0; }
+.ai-loader-lead { font-size: 13.5px; color: var(--tx-2); }
+.ai-loader-lead b { color: var(--tx-str); font-weight: 600; }
+.ai-loader-cycle { position: relative; height: 17px; margin-top: 4px; overflow: hidden; }
+.ai-loader-cycle span { display: block; font-size: 12px; color: var(--tx-3); animation: ai-fade-in .4s var(--ease-out) both; }
+@keyframes ai-glow { 0%, 100% { opacity: .3; transform: scale(.88); } 50% { opacity: .65; transform: scale(1.18); } }
+@keyframes ai-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.ai-loader.compact { padding: 0; gap: 12px; }
+.ai-loader.compact .ai-loader-orb { width: 30px; height: 30px; }
+.ai-loader.compact .ai-loader-ring { width: 24px; height: 24px; }
+.ai-loader.dark .ai-loader-lead { color: rgba(255,255,255,.92); }
+.ai-loader.dark .ai-loader-lead b { color: #fff; }
+.ai-loader.dark .ai-loader-cycle span { color: rgba(255,255,255,.62); }
+.ai-loader.dark .ai-loader-ring { background: conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,.35) 45%, #fff 100%); }
+.ai-loader.dark .ai-loader-ring::after { background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.8); }
+.ai-loader.dark .ai-loader-orb::before { background: rgba(255,255,255,.25); }
 
 .fade-in { animation: fadein .5s var(--ease) both; }
 @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }

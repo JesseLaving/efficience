@@ -12,6 +12,7 @@ import { segmentInfos, SEGMENTS, fieldsFor, matchCriteria, type SegmentInfo, typ
 import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
 import { sendCampaignEmail } from '../lib/email';
+import { AiLoader } from '../components/AiLoader';
 import type { Campaign } from '../lib/campaigns';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
@@ -292,9 +293,10 @@ export function Campagnes() {
                 </>
               )}
               {generating && (
-                <div className="ai-thinking"><span className="spin lt" />
-                  <div>Rédaction en cours pour le segment <b style={{ color: 'var(--tx-str)' }}>{seg.name}</b><div className="ai-dots" style={{ marginTop: 6 }}><span /><span /><span /></div></div>
-                </div>
+                <AiLoader
+                  lead={<>Rédaction en cours pour le segment <b>{seg.name}</b></>}
+                  phrases={['Analyse du ton et de l’audience…', 'Rédaction de l’objet et de l’accroche…', 'Mise en forme du message…']}
+                />
               )}
               {gen && !generating && (
                 <div className="ai-block">

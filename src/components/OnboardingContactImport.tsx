@@ -11,8 +11,9 @@ import {
 
 const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
-  phone: 'Téléphone', city: 'Ville', basket: 'Panier moyen', lastDays: 'Dernier achat',
-  consent: 'Consentement', tags: 'Tags',
+  phone: 'Téléphone', city: 'Ville', company: 'Société', jobTitle: 'Poste',
+  basket: 'Panier moyen', lastDays: 'Dernier achat', lastContactAt: 'Dernier contact',
+  createdAt: 'Date de création', notes: 'Notes', consent: 'Consentement', tags: 'Tags',
 };
 
 type Flow = 'idle' | 'analyzing' | 'mapped' | 'confirming' | 'done';

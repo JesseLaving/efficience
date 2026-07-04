@@ -11,6 +11,7 @@ import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
 import { aiImageUrl, aiImagePrompt, generateAiImage } from '../lib/ai';
 import { brandPhoto, uploadImage } from '../lib/upload';
+import { AiLoader } from './AiLoader';
 
 interface Props {
   text: string;
@@ -357,7 +358,11 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                 {aiUrl ? (
                   <img src={aiUrl} alt="" onLoad={() => setAiLoading(false)} onError={() => setAiLoading(false)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 ) : <div style={{ fontSize: 12.5, color: 'var(--tx-3)', padding: 20, textAlign: 'center' }}>Décrivez l’image puis générez.</div>}
-                {aiLoading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.25)' }}><span className="spin" /></div>}
+                {aiLoading && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.45)' }}>
+                    <AiLoader dark compact lead="Génération de l’image" phrases={['Composition de la scène…', 'Rendu par l’IA…', 'Finalisation des détails…']} />
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
                 {aiProvider === 'gemini' ? 'Image générée par Gemini (Google) — haute qualité.'
