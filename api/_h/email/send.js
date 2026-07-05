@@ -43,10 +43,16 @@ export default async function handler(req, res) {
     // best-effort client-side filter alone (see filterUnsubscribed).
     const withValidEmail = contacts.filter((c) => c && c.email && EMAIL_RE.test(c.email));
     const recipients = await filterUnsubscribed(spaceId, withValidEmail);
-    if (!recipients.length) return json(res, 200, { ok: false, reason: 'Aucun destinataire valide (adresses manquantes, invalides ou désinscrites).' });
+    if (!recipients.length) {
+      console.error('[email/send] no valid recipients', { spaceId, total: contacts.length, withValidEmail: withValidEmail.length });
+      return json(res, 200, { ok: false, reason: 'Aucun destinataire valide (adresses manquantes, invalides ou désinscrites).' });
+    }
 
     const quota = await checkEmailQuota(session.userId, recipients.length);
-    if (!quota.ok) return json(res, 200, { ok: false, reason: `Quota d'envoi quotidien atteint (${quota.limit} e-mails/jour). Réessayez demain.` });
+    if (!quota.ok) {
+      console.error('[email/send] quota exceeded', { userId: session.userId, requested: recipients.length, limit: quota.limit });
+      return json(res, 200, { ok: false, reason: `Quota d'envoi quotidien atteint (${quota.limit} e-mails/jour). Réessayez demain.` });
+    }
 
     const bizName = sanitizeHeaderValue(business.name);
     const from = `${bizName} via Efficience <campagnes@${process.env.EMAIL_FROM_DOMAIN}>`;
@@ -72,13 +78,17 @@ export default async function handler(req, res) {
         const ids = (d && d.data) || [];
         group.forEach((c, i) => results.push({ email: c.email, ok: true, id: ids[i]?.id }));
       } catch (e) {
-        group.forEach((c) => results.push({ email: c.email, ok: false, reason: String((e && e.message) || e) }));
+        const reason = String((e && e.message) || e);
+        console.error('[email/send] Resend batch failed', { spaceId, from, groupSize: group.length, reason });
+        group.forEach((c) => results.push({ email: c.email, ok: false, reason }));
       }
     }
 
     const sent = results.filter((r) => r.ok).length;
+    if (sent === 0) console.error('[email/send] all recipients failed', { spaceId, from, results });
     return json(res, 200, { ok: sent > 0, sent, failed: results.length - sent, total: results.length, results });
   } catch (e) {
+    console.error('[email/send] unhandled error', { spaceId, reason: String(e && e.message || e) });
     return json(res, 500, { ok: false, reason: String(e && e.message || e) });
   }
 }
