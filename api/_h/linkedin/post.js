@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     };
 
     if (photoUrl && photoUrl.trim()) {
-      const previewUrl = 'https://efficience.vercel.app/api/preview?' +
+      const previewUrl = 'https://efficience.vercel.app/api/media/preview?' +
         'img=' + encodeURIComponent(photoUrl) +
         '&title=' + encodeURIComponent('Visuel Efficience');
 

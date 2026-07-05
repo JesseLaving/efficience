@@ -4,14 +4,14 @@ export interface UploadResult { ok: boolean; url?: string; reason?: string }
 
 /* Envoie une image (data-URL) sur Vercel Blob → URL publique. */
 export async function uploadImage(dataUrl: string): Promise<UploadResult> {
-  const r = await fetch(`${API_BASE}/upload`, {
+  const r = await fetch(`${API_BASE}/media/upload`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dataUrl }),
   });
   return r.json().catch(() => ({ ok: false, reason: 'Réponse invalide du serveur d’hébergement.' }));
 }
 
 /* URL proxy (CORS *) d'une photo Pexels — pour la compositer sur un canvas. */
-export const proxiedPhoto = (url: string) => `${API_BASE}/stock?proxy=${encodeURIComponent(url)}`;
+export const proxiedPhoto = (url: string) => `${API_BASE}/media/stock?proxy=${encodeURIComponent(url)}`;
 
 function loadImg(src: string, cors: boolean): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

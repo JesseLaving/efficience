@@ -18,7 +18,7 @@ export interface StockPhoto {
 export interface StockResponse { available: boolean; reason?: string; query?: string; total?: number; photos: StockPhoto[]; }
 
 export async function fetchStockPhotos(query: string, orientation = 'square'): Promise<StockResponse> {
-  const r = await fetch(`${API_BASE}/stock?q=${encodeURIComponent(query)}&orientation=${encodeURIComponent(orientation)}`);
+  const r = await fetch(`${API_BASE}/media/stock?q=${encodeURIComponent(query)}&orientation=${encodeURIComponent(orientation)}`);
   const d = await r.json().catch(() => ({ available: false, reason: 'Réponse invalide', photos: [] }));
   return d as StockResponse;
 }
