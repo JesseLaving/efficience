@@ -18,6 +18,7 @@ import {
 import { googleContactsLogin, consumeGoogleContactsHash, fetchGoogleContacts, mapGoogleContacts } from '../lib/google';
 import { NameModal } from '../components/NameModal';
 import { AddContactModal } from '../components/AddContactModal';
+import { EditContactModal } from '../components/EditContactModal';
 
 const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
@@ -50,7 +51,7 @@ function contactTooltip(c: Contact): string | undefined {
 
 export function Contacts() {
   const { newCampaign } = useEff();
-  const { contacts, addContacts } = useContacts();
+  const { contacts, addContacts, updateContact, removeContact } = useContacts();
   const {
     savedSegments, groups, createSegment, deleteSegment,
     createGroup, deleteGroup, addToGroup, removeFromGroup,
@@ -61,6 +62,7 @@ export function Contacts() {
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<null | 'saveSegment' | 'createGroup' | 'addContact'>(null);
+  const [editing, setEditing] = useState<Contact | null>(null);
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -476,7 +478,7 @@ export function Contacts() {
                   <thead>
                     <tr>
                       <th className="chk"><input type="checkbox" aria-label="Tout sélectionner" checked={rows.length > 0 && rows.every((c) => selected.has(c.id))} onChange={toggleAll} /></th>
-                      <th>Contact</th><th>Ville</th><th className="num">Panier moy.</th><th>Dernier achat</th><th>Tags</th><th style={{ textAlign: 'center' }}>Opt-in</th>
+                      <th>Contact</th><th>Ville</th><th className="num">Panier moy.</th><th>Dernier achat</th><th>Tags</th><th style={{ textAlign: 'center' }}>Opt-in</th><th style={{ width: 40 }} />
                     </tr>
                   </thead>
                   <tbody>
@@ -498,9 +500,10 @@ export function Contacts() {
                         <td>{c.lastDays == null ? '—' : c.lastDays === 0 ? 'aujourd’hui' : 'il y a ' + c.lastDays + ' j'}</td>
                         <td><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(c.tags || []).map((t) => <span key={t} className="tag-chip">{t}</span>)}</div></td>
                         <td style={{ textAlign: 'center' }}>{c.consent === true ? <span className="consent-y"><Icon name="check" /></span> : c.consent === false ? <span className="consent-n"><Icon name="close" /></span> : <span style={{ color: 'var(--tx-3)' }}>—</span>}</td>
+                        <td><button className="row-edit" aria-label={`Modifier ${c.name}`} onClick={() => setEditing(c)}><Icon name="edit" /></button></td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={7}><div className="crm-empty" style={{ minHeight: 180 }}>
+                      <tr><td colSpan={8}><div className="crm-empty" style={{ minHeight: 180 }}>
                         <div className="ce-ic"><Icon name="filter" /></div>
                         <div className="ce-t">Aucun contact dans ce segment</div>
                         <p>Ajustez vos critères pour élargir l’audience.</p>
@@ -557,6 +560,14 @@ export function Contacts() {
             showToast(UI.check, stats.added ? `${c.name} ajouté à votre base.` : `${c.name} mis à jour (contact existant).`);
           }}
           onClose={() => setModal(null)}
+        />
+      )}
+      {editing && (
+        <EditContactModal
+          contact={editing}
+          onSave={(patch) => { updateContact(editing.id, patch); showToast(UI.check, 'Contact mis à jour.'); }}
+          onDelete={() => { removeContact(editing.id); showToast(UI.check, `${editing.name} supprimé de votre base.`); }}
+          onClose={() => setEditing(null)}
         />
       )}
     </section>

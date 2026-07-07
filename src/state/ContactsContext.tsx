@@ -9,6 +9,7 @@ export interface ImportStats { imported: number; added: number; updated: number;
 interface ContactsCtx {
   contacts: Contact[];
   addContacts: (incoming: Contact[]) => ImportStats;
+  updateContact: (id: string, patch: Partial<Contact>) => void;
   removeContact: (id: string) => void;
   clearContacts: () => void;
 }
@@ -27,6 +28,14 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
     return stats;
   }, [contacts]);
 
+  const updateContact = useCallback((id: string, patch: Partial<Contact>) => {
+    setContacts((prev) => {
+      const next = prev.map((c) => (c.id === id ? { ...c, ...patch } : c));
+      saveContacts(next);
+      return next;
+    });
+  }, []);
+
   const removeContact = useCallback((id: string) => {
     setContacts((prev) => {
       const next = prev.filter((c) => c.id !== id);
@@ -37,7 +46,7 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
 
   const clearContacts = useCallback(() => { setContacts([]); saveContacts([]); }, []);
 
-  return <Ctx.Provider value={{ contacts, addContacts, removeContact, clearContacts }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ contacts, addContacts, updateContact, removeContact, clearContacts }}>{children}</Ctx.Provider>;
 }
 
 export function useContacts(): ContactsCtx {
