@@ -24,11 +24,16 @@ export default function handler(req, res) {
   const redirect = `https://${req.headers.host}/api/meta/callback`;
   const ret = getParam(req, 'return') || `https://${req.headers.host}`;
   const state = Buffer.from(JSON.stringify({ ret })).toString('base64url');
+  // auth_type=reauthenticate force Facebook à redemander les identifiants au
+  // lieu de réutiliser silencieusement la session déjà active dans le
+  // navigateur — indispensable pour pouvoir connecter un compte Meta
+  // différent de celui déjà utilisé (voir "Changer de compte" côté app).
   const url = `https://www.facebook.com/v21.0/dialog/oauth`
     + `?client_id=${encodeURIComponent(appId)}`
     + `&redirect_uri=${encodeURIComponent(redirect)}`
     + `&state=${state}`
     + `&response_type=code`
+    + `&auth_type=reauthenticate`
     + `&scope=${encodeURIComponent(SCOPES)}`;
   res.statusCode = 302;
   res.setHeader('Location', url);
