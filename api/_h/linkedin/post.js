@@ -1,6 +1,10 @@
-/* LinkedIn — publish a text post on the connected member's profile.
+/* LinkedIn — publish a text post on the connected member's profile, or on a
+   Company Page they administer.
    Uses the UGC Posts API (works with w_member_social, no version header).
-   POST body: { token, text, photoUrl? }. If photoUrl is present, uploads the image and attaches it. */
+   POST body: { token, text, photoUrl?, organizationId? }. If photoUrl is
+   present, uploads the image and attaches it. organizationId (from
+   /api/linkedin/organizations) posts as that Company Page instead of the
+   member's own profile — requires w_organization_social on the token. */
 import { requireSession } from '../requireSession.js';
 
 function cors(res) {
@@ -20,15 +24,21 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'POST requis' });
   if (!requireSession(req, res, json)) return;
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
-  const { token, text, photoUrl } = body || {};
+  const { token, text, photoUrl, organizationId } = body || {};
   if (!token || !text || !text.trim()) return json(res, 400, { error: 'token et text requis.' });
 
   try {
-    // 1) resolve the author URN
-    const ui = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${token}` } });
-    const uj = await ui.json();
-    if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
-    const author = `urn:li:person:${uj.sub}`;
+    // 1) resolve the author URN — a Company Page if one was picked, else the
+    // member's own profile (the only option before Company Page support).
+    let author;
+    if (organizationId) {
+      author = `urn:li:organization:${organizationId}`;
+    } else {
+      const ui = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${token}` } });
+      const uj = await ui.json();
+      if (!uj.sub) return json(res, 200, { ok: false, reason: uj.error_description || uj.message || 'Identité LinkedIn introuvable' });
+      author = `urn:li:person:${uj.sub}`;
+    }
 
     // 2) LinkedIn UGC Posts v2 doesn't support image attachments.
     // Workaround: use ARTICLE type with preview page that has og:image metadata.

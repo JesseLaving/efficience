@@ -3,8 +3,9 @@ import login from '../_h/linkedin/login.js';
 import callback from '../_h/linkedin/callback.js';
 import me from '../_h/linkedin/me.js';
 import post from '../_h/linkedin/post.js';
+import organizations from '../_h/linkedin/organizations.js';
 
-const MAP = { login, callback, me, post };
+const MAP = { login, callback, me, post, organizations };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;

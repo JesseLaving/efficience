@@ -1,8 +1,16 @@
 /* LinkedIn OAuth — step 1: redirect to the consent screen.
    Scopes: OpenID (identity) + w_member_social (post to the member's profile).
    Note: LinkedIn UGC Posts API v2 does not support native image uploads.
-   Images must be added manually or via web link previews. */
-const SCOPE = 'openid profile email w_member_social';
+   Images must be added manually or via web link previews.
+
+   Company Page posting (r_organization_admin + w_organization_social) needs
+   LinkedIn's Community Management API product, which requires a manual
+   application review — unlike the base products above, which are self-serve.
+   Gated behind an env var so login keeps working for everyone while that
+   review is pending; set LINKEDIN_ORG_SCOPES=1 once LinkedIn approves it. */
+const BASE_SCOPE = 'openid profile email w_member_social';
+const ORG_SCOPE = 'r_organization_admin w_organization_social';
+const SCOPE = process.env.LINKEDIN_ORG_SCOPES === '1' ? `${BASE_SCOPE} ${ORG_SCOPE}` : BASE_SCOPE;
 
 function getParam(req, name) {
   if (req.query && req.query[name] != null) return req.query[name];
