@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrand } from '../state/BrandContext';
+import { useCalendar } from '../state/CalendarContext';
+import { mostRecentPublishedPhoto } from '../lib/calendar';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
@@ -35,6 +37,8 @@ async function toDataUrl(url: string): Promise<string | null> {
 
 export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const { brandKit, brandStatus, setBrandKit, refreshBrand } = useBrand();
+  const { scheduled } = useCalendar();
+  const referencePhoto = useMemo(() => mostRecentPublishedPhoto(scheduled), [scheduled]);
   const [kit, setKit] = useState<BrandKit>(brandKit);
   const [mode, setMode] = useState<'template' | 'photo' | 'ai'>('template');
   const [template, setTemplate] = useState('citation');
@@ -61,7 +65,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
     if (!p) return;
     setAiLoading(true);
     setAiFallbackReason(null);
-    const res = await generateAiImage(p, ratio);
+    const res = await generateAiImage(p, ratio, referencePhoto);
     if (res.available && res.dataUrl) {
       setAiProvider('gemini');
       setAiUrl(res.dataUrl);
@@ -371,6 +375,9 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               </div>
               {aiFallbackReason && (
                 <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 4 }}>Gemini indisponible ({aiFallbackReason}) — repli sur le modèle gratuit.</div>
+              )}
+              {aiProvider === 'gemini' && referencePhoto && (
+                <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 4 }}>Style inspiré de votre dernière publication publiée, pour une identité visuelle cohérente.</div>
               )}
             </div>
             {/* ---- prompt ---- */}

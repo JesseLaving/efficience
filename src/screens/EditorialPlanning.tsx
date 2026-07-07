@@ -7,12 +7,12 @@ import { UI, type BrandName } from '../lib/icons';
 import { getBusiness } from '../lib/business';
 import { showToast } from '../lib/toast';
 import {
-  DURATIONS, SECTOR_PRESETS, PILLARS, generatePlan, planScaffold, applyIdeas, planToCsv, type PlanItem,
+  DURATIONS, SECTOR_PRESETS, PILLARS, planScaffold, applyIdeas, planToCsv, type PlanItem,
 } from '../lib/editorial';
-import { generateAiPlanIdeas, sampleRecentCaptions } from '../lib/ai';
+import { generateAiPlanIdeas, sampleRecentCaptions, type AiContext } from '../lib/ai';
 import { loadStrategy } from '../lib/strategy';
 import { buildAidaPost } from '../lib/aida';
-import { defaultDateTime } from '../lib/calendar';
+import { defaultDateTime, publishedCaptions } from '../lib/calendar';
 import { AiLoader } from '../components/AiLoader';
 
 const AI_MAX_SLOTS = 30;
@@ -38,15 +38,15 @@ function downloadCsv(items: PlanItem[]) {
 
 export function EditorialPlanning() {
   const { client, seedStudio } = useEff();
-  const { addToCalendar } = useCalendar();
+  const { scheduled, addToCalendar } = useCalendar();
   const { isConnected, metaStats, tiktokVideos } = useConnections();
   const [sector, setSector] = useState(() => getBusiness().sector);
   const [durKey, setDurKey] = useState('1m');
   const [perWeek, setPerWeek] = useState(3);
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
-  const [aiMode, setAiMode] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [regenBusy, setRegenBusy] = useState<Set<PlanItem>>(new Set());
   // Réseaux sélectionnés pour la multidiffusion, par publication du planning
   // (clé = date + index). Par défaut : tous les réseaux connectés parmi
   // ceux que les piliers couvrent, sinon le réseau suggéré par le pilier.
@@ -55,33 +55,34 @@ export function EditorialPlanning() {
 
   const weeks = DURATIONS.find((d) => d.key === durKey)?.weeks ?? 4;
 
+  // Contexte commun aux appels IA (plan entier + régénération individuelle) —
+  // le ton et les sujets déjà traités viennent d'abord des publications
+  // RÉELLEMENT publiées via Efficience (fonctionne même sans réseau social
+  // connecté), complétés par les légendes récentes des réseaux connectés.
+  const buildCtx = (sec: string): AiContext => {
+    const b = getBusiness();
+    const strat = loadStrategy();
+    return {
+      name: b.name, sector: sec, city: b.city,
+      audience: strat?.audience || undefined, products: strat?.products || undefined, goal: strat?.goal || undefined,
+      recentPosts: [...publishedCaptions(scheduled), ...sampleRecentCaptions(metaStats, tiktokVideos)].slice(0, 6),
+    };
+  };
+
   const generate = async () => {
     const b = getBusiness();
     const sec = sector.trim() || b.sector;
     setAiNote(null);
 
-    if (!aiMode) {
-      const items = generatePlan({ sector: sec, city: b.city, weeks, perWeek });
-      setPlan(items);
-      showToast(UI.check, `${items.length} publications proposées`);
-      return;
-    }
-
     const scaffold = planScaffold({ weeks, perWeek });
     if (scaffold.length > AI_MAX_SLOTS) {
-      showToast(UI.close, `Génération IA limitée à ${AI_MAX_SLOTS} publications à la fois — réduisez la durée ou le rythme, ou désactivez l’IA pour ce volume.`);
+      showToast(UI.close, `Génération IA limitée à ${AI_MAX_SLOTS} publications à la fois — réduisez la durée ou le rythme.`);
       return;
     }
     setAiBusy(true);
     try {
       const slots = scaffold.map((s) => ({ pillar: s.pillar, format: s.format, network: s.network }));
-      const strat = loadStrategy();
-      const ctx = {
-        name: b.name, sector: sec, city: b.city,
-        audience: strat?.audience || undefined, products: strat?.products || undefined, goal: strat?.goal || undefined,
-        recentPosts: sampleRecentCaptions(metaStats, tiktokVideos),
-      };
-      const res = await generateAiPlanIdeas(ctx, slots);
+      const res = await generateAiPlanIdeas(buildCtx(sec), slots);
       if (res.available && res.ideas) {
         setPlan(applyIdeas(scaffold, res.ideas, sec, b.city));
         showToast(UI.check, `${scaffold.length} publications proposées par IA`);
@@ -95,6 +96,28 @@ export function EditorialPlanning() {
       setAiNote('IA indisponible — sujets génériques utilisés en repli.');
       showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
     } finally { setAiBusy(false); }
+  };
+
+  // Régénère le sujet d'UNE seule publication du planning, sans toucher au
+  // reste — utile pour varier un angle qui ne convient pas plutôt que de
+  // relancer toute la génération.
+  const regenerateOne = async (p: PlanItem) => {
+    setRegenBusy((s) => new Set(s).add(p));
+    try {
+      const sec = sector.trim() || getBusiness().sector;
+      const res = await generateAiPlanIdeas(buildCtx(sec), [{ pillar: p.pillar, format: p.format, network: p.network }]);
+      const idea = res.available && res.ideas && res.ideas[0] ? res.ideas[0].trim() : '';
+      if (idea) {
+        setPlan((prev) => (prev ? prev.map((item) => (item === p ? { ...item, idea } : item)) : prev));
+        showToast(UI.check, 'Nouveau sujet proposé');
+      } else {
+        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'}`);
+      }
+    } catch (e) {
+      showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
+    } finally {
+      setRegenBusy((s) => { const n = new Set(s); n.delete(p); return n; });
+    }
   };
 
   // Regroupe le planning par mois pour l'affichage.
@@ -207,12 +230,7 @@ export function EditorialPlanning() {
             </div>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-2)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={aiMode} onChange={(e) => setAiMode(e.target.checked)} style={{ accentColor: 'var(--acc)' }} />
-            Sujets personnalisés par IA (Gemini)
-            <span style={{ color: 'var(--tx-3)' }}>· sinon banque de sujets locale, adaptée à votre secteur</span>
-          </label>
-          {aiMode && weeks * perWeek > AI_MAX_SLOTS && (
+          {weeks * perWeek > AI_MAX_SLOTS && (
             <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>
               L’IA personnalise jusqu’à {AI_MAX_SLOTS} publications par génération — réduisez la durée ou le rythme pour ce volume ({weeks * perWeek}).
             </div>
@@ -221,14 +239,14 @@ export function EditorialPlanning() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
-              {aiMode ? 'Sujets rédigés par Gemini pour votre entreprise — dates et équilibre calculés localement.' : 'Propositions générées localement, sans donnée inventée.'}
+              Sujets rédigés par Gemini pour votre entreprise — dates et équilibre calculés localement.
             </span>
             <button className="btn acc" disabled={aiBusy} onClick={generate}>
               {aiBusy ? <span className="spin" /> : <RawIcon svg={UI.sparkles2} />}
               {plan ? 'Régénérer le planning' : 'Générer le planning'}
             </button>
           </div>
-          {aiBusy && aiMode && (
+          {aiBusy && (
             <AiLoader
               lead="Génération IA en cours"
               phrases={['Analyse de votre secteur et de votre stratégie…', 'Rédaction des sujets par Gemini…', 'Équilibrage du calendrier…']}
@@ -295,6 +313,9 @@ export function EditorialPlanning() {
                       </button>
                       <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>
                         <Icon name="edit" />Copier
+                      </button>
+                      <button className="btn ghost sm" disabled={regenBusy.has(p)} title="Générer un nouveau sujet par IA pour cette publication" onClick={() => regenerateOne(p)}>
+                        {regenBusy.has(p) ? <span className="spin lt" /> : <RawIcon svg={UI.sparkles2} />}Nouvelle idée
                       </button>
                     </div>
                   </div>

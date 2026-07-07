@@ -69,3 +69,24 @@ export function defaultDateTime(isoDate: string, hour = 9): string {
   const hh = String(hour).padStart(2, '0');
   return `${isoDate}T${hh}:00`;
 }
+
+/** Légendes des publications RÉELLEMENT publiées via Efficience (peu importe
+ *  qu'un réseau social soit connecté ou non) — sert de référence de ton et
+ *  de sujets déjà traités pour l'IA, des plus récentes aux plus anciennes. */
+export function publishedCaptions(list: ScheduledPost[], max = 6): string[] {
+  return list
+    .filter((p) => p.status === 'published' && p.text && p.text.trim())
+    .sort((a, b) => b.dateTime.localeCompare(a.dateTime))
+    .slice(0, max)
+    .map((p) => p.text.trim());
+}
+
+/** Visuel de la publication publiée la plus récente qui en a un — référence
+ *  d'identité visuelle pour que les nouvelles illustrations IA restent
+ *  cohérentes avec ce qui a déjà été posté. */
+export function mostRecentPublishedPhoto(list: ScheduledPost[]): string | null {
+  const withPhoto = list
+    .filter((p) => p.status === 'published' && p.photoUrl)
+    .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+  return withPhoto[0]?.photoUrl || null;
+}

@@ -10,6 +10,7 @@ import { showToast } from '../lib/toast';
 import { netName, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
 import { getBusiness } from '../lib/business';
 import { generatePost, improvePost, generateHashtags, sampleRecentCaptions } from '../lib/ai';
+import { publishedCaptions } from '../lib/calendar';
 import { TONES, loadStrategy } from '../lib/strategy';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
@@ -74,7 +75,7 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
 export function Studio() {
   const { studioSeed, clearStudioSeed } = useEff();
   const { isConnected, metaStats, tiktokVideos } = useConnections();
-  const { addToCalendar } = useCalendar();
+  const { scheduled, addToCalendar } = useCalendar();
   const [type, setType] = useState<ComposeType>('post');
   const [text, setText] = useState(studioSeed || '');
 
@@ -162,7 +163,7 @@ export function Studio() {
         tone: tone || undefined, maxLength: curLimit() || undefined,
         audience: strat?.audience || undefined, products: strat?.products || undefined,
         goal: strat?.goal || undefined, competitors: strat?.competitors || undefined,
-        recentPosts: sampleRecentCaptions(metaStats, tiktokVideos),
+        recentPosts: [...publishedCaptions(scheduled), ...sampleRecentCaptions(metaStats, tiktokVideos)].slice(0, 6),
       };
       const res = mode === 'improve'
         ? await improvePost(brief, ctx)

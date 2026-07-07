@@ -86,12 +86,16 @@ export function generateHashtags(text: string, context: AiContext = {}): Promise
    doit être uploadée (uploadImage) pour obtenir une URL publique publiable. */
 export interface AiImageResult { available: boolean; dataUrl?: string; provider?: string; reason?: string; }
 
-export async function generateAiImage(prompt: string, ratio = '1:1'): Promise<AiImageResult> {
+/** referenceImageUrl : visuel d'une publication déjà publiée (voir
+ *  mostRecentPublishedPhoto) — transmis à Gemini comme référence de style
+ *  pour garder une identité visuelle cohérente avec ce qui a déjà été posté,
+ *  jamais pour en reproduire le sujet. */
+export async function generateAiImage(prompt: string, ratio = '1:1', referenceImageUrl?: string | null): Promise<AiImageResult> {
   try {
     const r = await fetch(`${API_BASE}/ai/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: prompt.slice(0, 800), ratio }),
+      body: JSON.stringify({ prompt: prompt.slice(0, 800), ratio, referenceImageUrl: referenceImageUrl || undefined }),
     });
     return await r.json();
   } catch (e) {
