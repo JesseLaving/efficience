@@ -5,6 +5,7 @@ import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { publishLinkedInPost, fetchLinkedInOrganizations, type LiPostResult, type LinkedInOrg } from '../lib/linkedin';
+import { friendlyError, extractMessage } from '../lib/errors';
 
 export function LinkedInPostModal({ onClose }: { onClose: () => void }) {
   const { linkedinToken, linkedinMe } = useConnections();
@@ -32,7 +33,14 @@ export function LinkedInPostModal({ onClose }: { onClose: () => void }) {
       const r = await publishLinkedInPost(linkedinToken, text.trim(), undefined, target || undefined);
       setResult(r);
       if (r.ok) { showToast(UI.check, 'Post publié sur LinkedIn'); setText(''); }
-    } catch (e) { setResult({ error: String((e as Error).message || e) }); }
+      else if (r.reason || r.error) {
+        const msg = r.reason || r.error || 'Erreur inconnue';
+        setResult({ ...r, error: friendlyError(null, msg) });
+      }
+    } catch (e) {
+      const msg = extractMessage(e) || String(e);
+      setResult({ error: friendlyError(null, msg) });
+    }
     setBusy(false);
   };
 

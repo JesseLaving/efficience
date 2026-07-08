@@ -5,6 +5,7 @@ import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { showToast } from '../lib/toast';
 import { publishMetaPost, type MetaPostResult } from '../lib/meta';
+import { friendlyError, extractMessage } from '../lib/errors';
 
 interface Props { onClose: () => void; defaultTargets?: ('facebook' | 'instagram')[]; }
 
@@ -35,8 +36,14 @@ export function MetaPostModal({ onClose, defaultTargets = ['facebook', 'instagra
       const res = await publishMetaPost({ token: metaToken, targets: [...targets], message: message.trim(), photoUrl: photoUrl.trim() || undefined });
       setResults(res.results || []);
       if (res.ok) { showToast(UI.check, 'Publication envoyée sur Meta'); }
-      else setErrorMsg(res.reason || (res.results || []).map((r) => r.reason).filter(Boolean).join(' · ') || 'Erreur inconnue.');
-    } catch (e) { setErrorMsg(String((e as Error).message || e)); }
+      else {
+        const rawMsg = res.reason || (res.results || []).map((r) => r.reason).filter(Boolean).join(' · ') || 'Erreur inconnue.';
+        setErrorMsg(friendlyError(null, rawMsg));
+      }
+    } catch (e) {
+      const msg = extractMessage(e) || String(e);
+      setErrorMsg(friendlyError(null, msg));
+    }
     setBusy(false);
   };
 

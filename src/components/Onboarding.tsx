@@ -4,6 +4,7 @@ import { useEff } from '../state/EffContext';
 import { useBrand } from '../state/BrandContext';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
+import { SpinnerSmall } from './Spinner';
 import { showToast } from '../lib/toast';
 import { setStoredSiteUrl } from '../lib/brand';
 import { loadProfile, saveProfile, profileFromAnalysis, initialsFrom } from '../lib/profile';
@@ -190,7 +191,7 @@ export function Onboarding() {
             <div className="onb-foot">
               <span className="grow"><RawIcon svg={UI.shield} style={{ width: 13, height: 13, display: 'inline-grid', verticalAlign: -2, color: 'var(--acc)' }} /> Données publiques officielles · conforme RGPD</span>
               <button className="btn outline" onClick={close}>Plus tard</button>
-              <button className="btn acc" onClick={analyze} disabled={!domain.trim()}><Icon name="search" />Analyser mon entreprise</button>
+              <button className="btn acc" onClick={analyze} disabled={!domain.trim() || stSite === 'active' || stInsee === 'active'}>{(stSite === 'active' || stInsee === 'active') ? <><SpinnerSmall /> Analyse en cours</> : <><Icon name="search" />Analyser mon entreprise</>}</button>
             </div>
           </>
         )}

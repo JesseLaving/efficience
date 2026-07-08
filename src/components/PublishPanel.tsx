@@ -8,6 +8,7 @@ import { showToast } from '../lib/toast';
 import { publishMetaPost } from '../lib/meta';
 import { publishLinkedInPost } from '../lib/linkedin';
 import { publishGooglePost } from '../lib/google';
+import { friendlyError, extractMessage } from '../lib/errors';
 
 interface Props { text: string; platforms: string[]; localMedia: boolean; defaultPhotoUrl?: string | null; onClose: () => void; }
 
@@ -55,17 +56,25 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
         const res = await publishMetaPost({ token: metaToken, targets: metaTargets, message: text.trim(), photoUrl: photo });
         for (const t of metaTargets) {
           const r = (res.results || []).find((x) => x.network === t);
-          out.push({ id: t, label: netName(t), status: r?.ok ? 'ok' : 'error', reason: r ? r.reason : (res.reason || 'Aucun résultat') });
+          const rawReason = r ? r.reason : (res.reason || 'Aucun résultat');
+          out.push({ id: t, label: netName(t), status: r?.ok ? 'ok' : 'error', reason: r?.ok ? undefined : friendlyError(null, rawReason) });
         }
-      } catch (e) { for (const t of metaTargets) out.push({ id: t, label: netName(t), status: 'error', reason: String((e as Error).message || e) }); }
+      } catch (e) {
+        const msg = extractMessage(e) || String(e);
+        for (const t of metaTargets) out.push({ id: t, label: netName(t), status: 'error', reason: friendlyError(null, msg) });
+      }
     }
 
     // LinkedIn — member profile.
     if (canLinkedin && linkedinToken) {
       try {
         const r = await publishLinkedInPost(linkedinToken, text.trim(), photo);
-        out.push({ id: 'linkedin', label: netName('linkedin'), status: r.ok ? 'ok' : 'error', reason: r.reason || r.error, url: r.url });
-      } catch (e) { out.push({ id: 'linkedin', label: netName('linkedin'), status: 'error', reason: String((e as Error).message || e) }); }
+        const msg = r.reason || r.error;
+        out.push({ id: 'linkedin', label: netName('linkedin'), status: r.ok ? 'ok' : 'error', reason: r.ok ? undefined : friendlyError(null, msg), url: r.url });
+      } catch (e) {
+        const msg = extractMessage(e) || String(e);
+        out.push({ id: 'linkedin', label: netName('linkedin'), status: 'error', reason: friendlyError(null, msg) });
+      }
     }
 
     // Google Business — one post per connected location.
@@ -73,8 +82,12 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
       for (const loc of googleAccounts) {
         try {
           const r = await publishGooglePost({ token: googleToken, path: loc.path, summary: text.trim(), photoUrl: photo });
-          out.push({ id: 'google', label: loc.title || netName('google'), status: r.ok ? 'ok' : 'error', reason: r.reason || r.error, url: r.post?.searchUrl });
-        } catch (e) { out.push({ id: 'google', label: loc.title || netName('google'), status: 'error', reason: String((e as Error).message || e) }); }
+          const msg = r.reason || r.error;
+          out.push({ id: 'google', label: loc.title || netName('google'), status: r.ok ? 'ok' : 'error', reason: r.ok ? undefined : friendlyError(null, msg), url: r.post?.searchUrl });
+        } catch (e) {
+          const msg = extractMessage(e) || String(e);
+          out.push({ id: 'google', label: loc.title || netName('google'), status: 'error', reason: friendlyError(null, msg) });
+        }
       }
     }
 
