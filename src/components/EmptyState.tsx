@@ -1,15 +1,15 @@
-import { Icon, type IconName } from '../lib/Icon';
+import { Icon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 
 interface Props {
-  icon?: keyof typeof UI | 'sparkles';
+  icon?: keyof typeof UI;
   title: string;
   description?: string;
   action?: { label: string; onClick: () => void };
   secondary?: string;
 }
 
-export function EmptyState({ icon = 'layers', title, description, action, secondary }: Props) {
+export function EmptyState({ icon = 'sparkles2', title, description, action, secondary }: Props) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,

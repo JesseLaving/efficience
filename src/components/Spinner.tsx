@@ -1,5 +1,3 @@
-import { UI } from '../lib/icons';
-import { RawIcon } from '../lib/Icon';
 
 /** Spinner compact pour boutons et champs (15px) */
 export function SpinnerSmall() {

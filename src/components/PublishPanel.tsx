@@ -56,8 +56,8 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
         const res = await publishMetaPost({ token: metaToken, targets: metaTargets, message: text.trim(), photoUrl: photo });
         for (const t of metaTargets) {
           const r = (res.results || []).find((x) => x.network === t);
-          const rawReason = r ? r.reason : (res.reason || 'Aucun résultat');
-          out.push({ id: t, label: netName(t), status: r?.ok ? 'ok' : 'error', reason: r?.ok ? undefined : friendlyError(null, rawReason) });
+          const rawReason: string | null = r ? (r.reason || null) : (res.reason || 'Aucun résultat');
+          out.push({ id: t, label: netName(t), status: r?.ok ? 'ok' : 'error', reason: r?.ok ? null : friendlyError(null, rawReason) });
         }
       } catch (e) {
         const msg = extractMessage(e) || String(e);
@@ -69,8 +69,8 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
     if (canLinkedin && linkedinToken) {
       try {
         const r = await publishLinkedInPost(linkedinToken, text.trim(), photo);
-        const msg = r.reason || r.error;
-        out.push({ id: 'linkedin', label: netName('linkedin'), status: r.ok ? 'ok' : 'error', reason: r.ok ? undefined : friendlyError(null, msg), url: r.url });
+        const msg = (r.reason || r.error) as string | null;
+        out.push({ id: 'linkedin', label: netName('linkedin'), status: r.ok ? 'ok' : 'error', reason: r.ok ? null : friendlyError(null, msg), url: r.url });
       } catch (e) {
         const msg = extractMessage(e) || String(e);
         out.push({ id: 'linkedin', label: netName('linkedin'), status: 'error', reason: friendlyError(null, msg) });
@@ -82,8 +82,8 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
       for (const loc of googleAccounts) {
         try {
           const r = await publishGooglePost({ token: googleToken, path: loc.path, summary: text.trim(), photoUrl: photo });
-          const msg = r.reason || r.error;
-          out.push({ id: 'google', label: loc.title || netName('google'), status: r.ok ? 'ok' : 'error', reason: r.ok ? undefined : friendlyError(null, msg), url: r.post?.searchUrl });
+          const msg = (r.reason || r.error) as string | null;
+          out.push({ id: 'google', label: loc.title || netName('google'), status: r.ok ? 'ok' : 'error', reason: r.ok ? null : friendlyError(null, msg), url: r.post?.searchUrl });
         } catch (e) {
           const msg = extractMessage(e) || String(e);
           out.push({ id: 'google', label: loc.title || netName('google'), status: 'error', reason: friendlyError(null, msg) });
