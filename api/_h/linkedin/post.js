@@ -6,6 +6,7 @@
    /api/linkedin/organizations) posts as that Company Page instead of the
    member's own profile — requires w_organization_social on the token. */
 import { requireSession } from '../requireSession.js';
+import { originFrom } from '../origin.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -49,7 +50,7 @@ export default async function handler(req, res) {
     };
 
     if (photoUrl && photoUrl.trim()) {
-      const previewUrl = 'https://efficience.vercel.app/api/media/preview?' +
+      const previewUrl = `${originFrom(req)}/api/media/preview?` +
         'img=' + encodeURIComponent(photoUrl) +
         '&title=' + encodeURIComponent('Visuel Efficience');
 

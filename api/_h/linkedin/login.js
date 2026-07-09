@@ -8,6 +8,8 @@
    application review — unlike the base products above, which are self-serve.
    Gated behind an env var so login keeps working for everyone while that
    review is pending; set LINKEDIN_ORG_SCOPES=1 once LinkedIn approves it. */
+import { originFrom } from '../origin.js';
+
 const BASE_SCOPE = 'openid profile email w_member_social';
 const ORG_SCOPE = 'r_organization_admin w_organization_social';
 const SCOPE = process.env.LINKEDIN_ORG_SCOPES === '1' ? `${BASE_SCOPE} ${ORG_SCOPE}` : BASE_SCOPE;
@@ -22,8 +24,9 @@ export default function handler(req, res) {
   if (!clientId) { res.statusCode = 500; res.end('LINKEDIN_CLIENT_ID manquant'); return; }
   // Doit matcher le domaine réellement visité — chaque domaine utilisé doit
   // être enregistré dans LinkedIn Developer App (Auth → Authorized redirect URLs).
-  const redirect = `https://${req.headers.host}/api/linkedin/callback`;
-  const ret = getParam(req, 'return') || `https://${req.headers.host}/`;
+  const origin = originFrom(req);
+  const redirect = `${origin}/api/linkedin/callback`;
+  const ret = getParam(req, 'return') || `${origin}/`;
   const state = Buffer.from(JSON.stringify({ ret })).toString('base64url');
   const url = 'https://www.linkedin.com/oauth/v2/authorization'
     + '?response_type=code'
