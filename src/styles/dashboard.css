@@ -100,5 +100,18 @@
 .kmodal-foot { display: flex; align-items: center; gap: 10px; padding: 18px 22px; border-top: 1px solid var(--line-2); }
 .kmodal-foot .grow { flex: 1; }
 
+/* KPI sparkline (real per-metric trend) */
+.kpi-spark { display: block; width: 100%; height: 30px; margin-top: 12px; opacity: .5; }
+/* Clickable KPI cards drill into the network stats screen */
+.kpi.kpi-clickable { cursor: pointer; }
+.kpi.kpi-clickable:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Segmented period control (7j / 30j / 90j / Tout) */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--pill); border: 1px solid var(--line); background: var(--canvas-2); }
+.seg-b { font-size: 12px; font-weight: 600; color: var(--tx-3); padding: 5px 11px; border-radius: var(--pill);
+  border: none; background: transparent; cursor: pointer; font-family: inherit; transition: color .15s, background .15s; }
+.seg-b:hover { color: var(--tx); }
+.seg-b.on { color: var(--acc); background: var(--acc-soft); }
+
 @media (max-width: 1080px) { .kpi-board { grid-template-columns: repeat(2, 1fr); } .ks-row { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .kpi-board { grid-template-columns: 1fr; } .kmodal-body .km-2 { grid-template-columns: 1fr; } }

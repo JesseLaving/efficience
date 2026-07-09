@@ -10,7 +10,7 @@ import { netName } from '../lib/networks';
 import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from '../lib/kpi';
 import { KpiModal } from '../components/KpiModal';
 import { useTilt3d } from '../lib/useTilt3d';
-import { aggregateMeta, engagementSeries, type MetaSeries } from '../lib/meta';
+import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
@@ -21,7 +21,22 @@ function fmtWhen(iso: string): string {
 }
 
 /* ---------- KPI card ---------- */
-function KpiCard({ id, def, raw, removing, onRemove, i }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void; i: number }) {
+// Mini trend line drawn from a real per-metric series (or nothing when there's
+// no honest history for the metric). Uses the same catmull-rom smoothing as the
+// main chart so the two read as one visual language.
+function Sparkline({ data }: { data: number[] }) {
+  const W = 240, H = 30, pad = 3;
+  const max = Math.max(...data, 1);
+  const n = data.length;
+  const pts = data.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
+  return (
+    <svg className="kpi-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <path d={smooth(pts)} fill="none" stroke="var(--acc)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function KpiCard({ id, def, raw, removing, onRemove, onOpen, spark, i }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void; onOpen?: () => void; spark?: number[] | null; i: number }) {
   const valRef = useRef<HTMLSpanElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const s = SRC[def.src] || SRC.manual;
@@ -42,11 +57,21 @@ function KpiCard({ id, def, raw, removing, onRemove, i }: { id: string; def: Kpi
       : <span className="pill neutral">{tr.val}</span>;
 
   return (
-    <div className={'kpi kpi-in' + (removing ? ' kpi-out' : '')} data-kpi={id} style={{ '--i': i } as React.CSSProperties}>
+    <div
+      className={'kpi kpi-in' + (removing ? ' kpi-out' : '') + (onOpen ? ' kpi-clickable' : '')}
+      data-kpi={id}
+      style={{ '--i': i } as React.CSSProperties}
+      {...(onOpen ? {
+        role: 'button', tabIndex: 0, title: 'Voir les statistiques réseaux',
+        onClick: onOpen,
+        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } },
+      } : {})}
+    >
       <button className="kpi-rm" title="Retirer" aria-label="Retirer cet indicateur" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
       <div className="kl"><RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />{def.label}</div>
       <div className="kv"><span className="kv-n" ref={valRef}>0</span>{unit}</div>
       <div className="kf">{pill}{tr.since && <span className="since">{tr.since}</span>}<span className="ksrc"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{s.label}</span></div>
+      {spark && spark.length ? <Sparkline data={spark} /> : null}
       {def.target ? (
         <div className="ktarget">
           <div className="kt-h"><span>Objectif</span><b>{fmtVal(def.fmt, def.target)}</b></div>
@@ -141,12 +166,17 @@ export function Dashboard() {
   const [state, setState] = useState<KpiState>(() => loadKpiState());
   const [removing, setRemoving] = useState<Record<string, boolean>>({});
   const [modal, setModal] = useState(false);
+  // Chart period filter — undefined = full history. Options below.
+  const [periodDays, setPeriodDays] = useState<number | undefined>(undefined);
+  const PERIODS: { label: string; days?: number }[] = [
+    { label: '7 j', days: 7 }, { label: '30 j', days: 30 }, { label: '90 j', days: 90 }, { label: 'Tout' },
+  ];
 
   const upcomingPosts = scheduled.filter((p) => p.status === 'scheduled').slice(0, 4);
 
   // Real Meta aggregates (followers, engagement, posts…) — all derived, never invented.
   const agg = aggregateMeta(metaStats);
-  const series = engagementSeries(metaStats);
+  const series = engagementSeries(metaStats, 12, periodDays);
 
   const update = (next: KpiState) => { setState(next); saveKpiState(next); };
   const def = (id: string): KpiDef | undefined => CATALOG[id] || state.custom[id];
@@ -206,7 +236,7 @@ export function Dashboard() {
           {state.board.map((id, i) => {
             const d = def(id);
             if (!d) return null;
-            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} i={i} />;
+            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} spark={kpiSparkline(metaStats, d.live)} onOpen={d.live ? () => show('inbox') : undefined} i={i} />;
           })}
           <div className="kpi add-tile" onClick={() => setModal(true)}>
             <div className="at-ic"><Icon name="plus" /></div>
@@ -235,7 +265,18 @@ export function Dashboard() {
           <div className="card-h">
             <div><h3>Performance</h3><div className="sub">{series ? `Interactions par publication · ${series.from} → ${series.to}` : 'Interactions des publications récentes'}</div></div>
             <div className="chart-legend">
-              <span className="lg"><i style={{ background: 'var(--acc)' }} />Interactions</span>
+              <div className="seg" role="tablist" aria-label="Période">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    role="tab"
+                    aria-selected={periodDays === p.days}
+                    className={'seg-b' + (periodDays === p.days ? ' on' : '')}
+                    onClick={() => setPeriodDays(p.days)}
+                  >{p.label}</button>
+                ))}
+              </div>
               {series
                 ? <span className="chip"><RawIcon svg={UI.dot} />{FMT.int(series.total)} au total</span>
                 : <span className="chip"><RawIcon svg={UI.dot} />En attente de données</span>}

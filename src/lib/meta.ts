@@ -124,30 +124,59 @@ export function aggregateMeta(accounts: MetaStatAccount[] | null): MetaAggregate
   };
 }
 
-/** Build an engagement-over-time series from recent posts (likes+comments+shares),
- *  bucketed into `buckets` slices across the real date span of the posts.
- *  Returns null when there isn't enough dated data to draw an honest line. */
-export interface MetaSeries { values: number[]; labels: string[]; total: number; from: string; to: string; }
-export function engagementSeries(accounts: MetaStatAccount[] | null, buckets = 12): MetaSeries | null {
+/** Collect real, dated posts as {t, v} points, v computed by `valueFn`.
+ *  `sinceDays` (optional) keeps only posts from the last N days — this is what
+ *  powers the dashboard period selector. Returns null when fewer than 2 dated
+ *  points remain, so nothing is ever drawn from invented data. */
+function postPoints(
+  accounts: MetaStatAccount[] | null,
+  valueFn: (p: MetaPost) => number,
+  sinceDays?: number,
+): { t: number; v: number }[] | null {
   if (!accounts) return null;
-  const pts: { t: number; e: number }[] = [];
+  const cutoff = sinceDays ? Date.now() - sinceDays * 86400000 : -Infinity;
+  const pts: { t: number; v: number }[] = [];
   for (const a of accounts) {
     for (const p of (a.posts || [])) {
       if (!p.date) continue;
       const t = Date.parse(p.date);
-      if (isNaN(t)) continue;
-      pts.push({ t, e: (p.likes || 0) + (p.comments || 0) + (p.shares || 0) });
+      if (isNaN(t) || t < cutoff) continue;
+      pts.push({ t, v: valueFn(p) });
     }
   }
-  if (pts.length < 2) return null;
-  pts.sort((x, y) => x.t - y.t);
-  const min = pts[0].t, max = pts[pts.length - 1].t;
-  const span = Math.max(1, max - min);
+  return pts.length < 2 ? null : pts.sort((x, y) => x.t - y.t);
+}
+
+function bucketize(pts: { t: number; v: number }[], buckets: number): number[] {
+  const min = pts[0].t, max = pts[pts.length - 1].t, span = Math.max(1, max - min);
   const values = new Array(buckets).fill(0);
-  for (const p of pts) {
-    const idx = Math.min(buckets - 1, Math.floor(((p.t - min) / span) * buckets));
-    values[idx] += p.e;
-  }
+  for (const p of pts) values[Math.min(buckets - 1, Math.floor(((p.t - min) / span) * buckets))] += p.v;
+  return values;
+}
+
+const postEngagement = (p: MetaPost) => (p.likes || 0) + (p.comments || 0) + (p.shares || 0);
+
+/** Build an engagement-over-time series from recent posts (likes+comments+shares),
+ *  bucketed into `buckets` slices across the real date span of the posts.
+ *  `sinceDays` limits it to the last N days (period selector).
+ *  Returns null when there isn't enough dated data to draw an honest line. */
+export interface MetaSeries { values: number[]; labels: string[]; total: number; from: string; to: string; }
+export function engagementSeries(accounts: MetaStatAccount[] | null, buckets = 12, sinceDays?: number): MetaSeries | null {
+  const pts = postPoints(accounts, postEngagement, sinceDays);
+  if (!pts) return null;
+  const min = pts[0].t, max = pts[pts.length - 1].t, span = Math.max(1, max - min);
   const fmtD = (ms: number) => { const d = new Date(ms); return `${d.getDate()}/${d.getMonth() + 1}`; };
-  return { values, labels: [fmtD(min), fmtD(min + span / 2), fmtD(max)], total: pts.reduce((s, p) => s + p.e, 0), from: fmtD(min), to: fmtD(max) };
+  return { values: bucketize(pts, buckets), labels: [fmtD(min), fmtD(min + span / 2), fmtD(max)], total: pts.reduce((s, p) => s + p.v, 0), from: fmtD(min), to: fmtD(max) };
+}
+
+/** Tiny real series for a KPI sparkline. Only post-derived metrics that actually
+ *  have history return data; snapshot-only metrics (followers/reach) return null
+ *  → no sparkline, never a fabricated trend. */
+export function kpiSparkline(accounts: MetaStatAccount[] | null, metric?: string, buckets = 10): number[] | null {
+  const valueFn = metric === 'postsMonth' ? () => 1
+    : metric === 'totalEngagement' ? postEngagement
+      : null;
+  if (!valueFn) return null;
+  const pts = postPoints(accounts, valueFn);
+  return pts ? bucketize(pts, buckets) : null;
 }
