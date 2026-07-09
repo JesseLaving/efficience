@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
@@ -16,11 +16,38 @@ const scoreColor = (n: number | null | undefined) =>
   n == null ? 'var(--tx-3)' : n >= 90 ? 'var(--acc)' : n >= 50 ? 'var(--warn)' : 'var(--danger)';
 const ndaFmt = (s: string | null) => (s && s.length === 11 ? `${s.slice(0, 2)} ${s.slice(2, 5)} ${s.slice(5, 8)} ${s.slice(8)}` : s);
 
+// Lighthouse-style circular score gauge: a track ring plus a coloured arc that
+// animates from empty to the score on mount (draw-on, like the dashboard chart).
+// value == null → an empty ring with "—", never a fabricated score.
 function Score({ label, value }: { label: string; value: number | null | undefined }) {
+  const arcRef = useRef<SVGCircleElement>(null);
+  const R = 30;
+  const C = 2 * Math.PI * R;
+  const v = value == null ? 0 : Math.max(0, Math.min(100, value));
+  const color = scoreColor(value);
+  useEffect(() => {
+    const el = arcRef.current;
+    if (!el) return;
+    el.style.strokeDasharray = String(C);
+    el.style.strokeDashoffset = String(C);
+    el.getBoundingClientRect(); // force reflow so the transition runs
+    el.style.transition = 'stroke-dashoffset 1.1s var(--ease, ease)';
+    el.style.strokeDashoffset = String(C * (1 - v / 100));
+  }, [v, C]);
   return (
     <div className="crm-stat" style={{ textAlign: 'center' }}>
-      <div className="cs-v" style={{ color: scoreColor(value), fontSize: 30 }}>{value == null ? '—' : value}</div>
-      <div className="cs-f" style={{ marginTop: 6 }}>{label}</div>
+      <div style={{ position: 'relative', width: 76, height: 76, margin: '0 auto' }}>
+        <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true">
+          <circle cx="38" cy="38" r={R} fill="none" stroke="var(--line)" strokeWidth="6" />
+          <circle ref={arcRef} cx="38" cy="38" r={R} fill="none" stroke={color} strokeWidth="6"
+            strokeLinecap="round" transform="rotate(-90 38 38)"
+            style={{ strokeDasharray: C, strokeDashoffset: C }} />
+        </svg>
+        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 700, color }}>
+          {value == null ? '—' : value}
+        </div>
+      </div>
+      <div className="cs-f" style={{ marginTop: 8 }}>{label}</div>
     </div>
   );
 }

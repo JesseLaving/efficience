@@ -75,11 +75,6 @@ export function App() {
 
       {/* ===================== SIDEBAR ===================== */}
       <aside className={'side' + (navOpen ? ' open' : '')}>
-        <div className="brand">
-          <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" />
-          <span className="name">Efficience</span>
-        </div>
-
         {GROUPS.map((g) => (
           <div className="nav-grp" key={g.label}>
             <div className="nav-lbl">{g.label}</div>
