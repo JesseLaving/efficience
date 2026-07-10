@@ -103,6 +103,22 @@ export async function generateAiImage(prompt: string, ratio = '1:1', referenceIm
   }
 }
 
+/** Moteur gratuit de qualité — Cloudflare Workers AI (FLUX.1-schnell), appelé
+ *  côté serveur car il exige un token. Renvoie { available:false } quand il
+ *  n'est pas configuré : l'appelant retombe alors sur Pollinations. */
+export async function generateFreeAiImage(prompt: string): Promise<AiImageResult> {
+  try {
+    const r = await fetch(`${API_BASE}/ai/imagefree`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt.slice(0, 2048) }),
+    });
+    return await r.json();
+  } catch (e) {
+    return { available: false, reason: String((e as Error).message || e) };
+  }
+}
+
 /* Sujets de publication personnalisés par IA pour le planning éditorial —
    un slot = {pillar, format, network} ; renvoie une idée par slot, dans le
    même ordre. Les dates restent calculées localement (jamais par le LLM). */

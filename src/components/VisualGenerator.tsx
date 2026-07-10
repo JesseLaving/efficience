@@ -11,7 +11,7 @@ import { getBusiness } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
-import { aiImageUrl, aiImagePrompt, generateAiImage, IMAGE_STYLES, type ImageStyle } from '../lib/ai';
+import { aiImageUrl, aiImagePrompt, generateAiImage, generateFreeAiImage, IMAGE_STYLES, type ImageStyle } from '../lib/ai';
 import { brandPhoto, uploadImage } from '../lib/upload';
 import { AiLoader } from './AiLoader';
 
@@ -61,7 +61,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [aiPrompt, setAiPrompt] = useState(() => aiImagePrompt(text, getBusiness().sector, 'photo', brandKit.palette));
   const [aiUrl, setAiUrl] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'pollinations' | null>(null);
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'cloudflare' | 'pollinations' | null>(null);
   const [aiModel, setAiModel] = useState<string | null>(null);
   const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
 
@@ -77,9 +77,23 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
     setAiLoading(true);
     setAiFallbackReason(null);
 
+    /* Chaîne gratuite : Cloudflare (FLUX.1-schnell) si configuré, sinon
+       Pollinations. Les deux sont gratuits ; FLUX rend nettement mieux. */
+    const generateFree = async () => {
+      const cf = await generateFreeAiImage(p);
+      if (cf.available && cf.dataUrl) {
+        setAiProvider('cloudflare');
+        setAiModel(cf.model || null);
+        setAiUrl(cf.dataUrl);
+      } else {
+        setAiProvider('pollinations');
+        setAiModel(null);
+        setAiUrl(aiImageUrl(p, ratio));
+      }
+    };
+
     if (aiEngine === 'free') {
-      setAiProvider('pollinations');
-      setAiUrl(aiImageUrl(p, ratio));
+      await generateFree();
       return; // aiLoading retombe sur onLoad/onError de l'<img>
     }
 
@@ -96,9 +110,8 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
       setAiLoading(false);
     } else {
       // Auto : Gemini indisponible (clé manquante, quota, blocage...) → repli gratuit.
-      setAiProvider('pollinations');
       setAiFallbackReason(res.reason || null);
-      setAiUrl(aiImageUrl(p, ratio));
+      await generateFree();
     }
   };
   const switchToAi = () => { setMode('ai'); if (!aiUrl) generateAi(); };
@@ -395,6 +408,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
                 {aiProvider === 'gemini' ? `Image générée par Gemini (Google)${aiModel ? ` · ${aiModel}` : ''} — haute qualité.`
+                  : aiProvider === 'cloudflare' ? 'Image générée par Cloudflare Workers AI · FLUX.1-schnell (gratuit). Sortie carrée, recadrée au format.'
                   : aiProvider === 'pollinations' ? 'Image générée par le moteur gratuit (Pollinations).'
                   : 'Image générée par IA. Aucune donnée chiffrée, illustration uniquement.'}
               </div>
@@ -430,7 +444,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                 <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 6 }}>
                   {aiEngine === 'auto' ? 'Gemini si disponible, sinon repli sur le moteur gratuit.'
                     : aiEngine === 'gemini' ? 'Gemini uniquement — aucune bascule silencieuse en cas d’erreur.'
-                    : 'Pollinations, gratuit et sans clé. Aucune limite de quota Gemini.'}
+                    : 'FLUX.1-schnell (Cloudflare) si configuré, sinon Pollinations. Aucun quota Gemini consommé.'}
                 </div>
               </div>
               <div className="field">
@@ -450,7 +464,9 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
         <div className="kmodal-foot">
           <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
             {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.'
-              : mode === 'ai' ? (aiProvider === 'gemini' ? 'Image Gemini — hébergée puis publiable en un clic.' : 'Image IA gratuite (Pollinations) — hébergée en URL publique, publiable.')
+              : mode === 'ai' ? (aiProvider === 'pollinations'
+                ? 'Image IA gratuite (Pollinations) — hébergée en URL publique, publiable.'
+                : 'Image IA — hébergée puis publiable en un clic.')
               : 'Respecte vos couleurs, logo, police et nom de marque.'}
           </span>
           <button className="btn outline" onClick={download} disabled={(mode === 'photo' && !selPhoto) || (mode === 'ai' && !aiUrl)}><Icon name="download" />Télécharger</button>
