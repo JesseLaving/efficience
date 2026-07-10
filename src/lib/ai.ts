@@ -122,29 +122,74 @@ export async function generateAiPlanIdeas(context: AiContext, slots: AiPlanSlot[
   }
 }
 
-/* Génération d'image par IA — Pollinations (gratuit, sans clé, CORS *, modèle
-   Flux). Repli automatique quand Gemini est indisponible. L'URL est
-   déterministe (prompt+seed) et publique → directement affichable,
-   compositable (canvas) et publiable. */
+/* Génération d'image par IA — Pollinations (gratuit, sans clé, CORS *).
+   L'URL est déterministe (prompt+seed) et publique → directement affichable,
+   compositable (canvas) et publiable.
+
+   Mesuré sur l'API publique (juillet 2026) :
+   - GET /models ne renvoie qu'un seul modèle sur le tier anonyme ("sana") ;
+   - le paramètre `model` est IGNORÉ : à seed constante, `flux`, `turbo` et
+     même un nom de modèle inexistant renvoient l'image octet pour octet.
+     On ne le passe donc plus, et on n'expose aucun choix de modèle côté UI
+     (ce serait un faux choix).
+   - `enhance` est bien honoré : il fait réécrire le prompt par un LLM avant
+     génération. Bénéfique pour un prompt court et vague, néfaste pour un
+     prompt déjà détaillé dont il écrase la direction artistique — on ne
+     l'active donc qu'en dessous d'un seuil de détail. */
+const ENHANCE_BELOW_CHARS = 140;
+
 export function aiImageUrl(prompt: string, ratio = '1:1', seed?: number): string {
   const [rw, rh] = (ratio || '1:1').split(':').map(Number);
   const base = 1024;
   const W = base;
   const H = rw && rh ? Math.round((base * rh) / rw) : base;
   const s = seed ?? Math.floor(Math.random() * 1e6);
-  const p = encodeURIComponent(prompt.slice(0, 400));
-  // enhance=true : Pollinations réécrit/enrichit le prompt via un modèle avant
-  // génération — améliore nettement le rendu pour un prompt court/générique.
-  // referrer : identifie l'app (utile si un compte Pollinations est enregistré
-  // plus tard — sans ça, reste sans effet mais ne coûte rien).
+  const enhance = prompt.trim().length < ENHANCE_BELOW_CHARS;
+  // 800 (et non 400) : un prompt dirigé dépasse 400 caractères et se faisait
+  // amputer de ses contraintes finales. Vérifié : l'URL complète reste < 1 ko
+  // et l'API répond 200.
+  const p = encodeURIComponent(prompt.slice(0, 800));
   // private=true : n'expose pas les visuels de marque du client dans le flux public.
-  return `https://image.pollinations.ai/prompt/${p}?width=${W}&height=${H}&nologo=true&model=flux&seed=${s}`
-    + `&enhance=true&private=true&referrer=efficienceconsulting.com`;
+  // referrer : identifie l'app (utile si un compte Pollinations est enregistré plus tard).
+  return `https://image.pollinations.ai/prompt/${p}?width=${W}&height=${H}&nologo=true&seed=${s}`
+    + `&enhance=${enhance}&private=true&referrer=efficienceconsulting.com`;
 }
 
-/* Prompt d'image par défaut, dérivé du sujet de la publication + du secteur. */
-export function aiImagePrompt(subject: string, sector?: string): string {
-  const subj = (subject || '').replace(/[#@\n]/g, ' ').trim().slice(0, 160) || 'communication d’entreprise';
-  const sec = sector ? `, secteur ${sector}` : '';
-  return `Photographie professionnelle illustrant : ${subj}${sec}. Lumineuse, moderne, style corporate épuré, haute qualité, sans texte.`;
+/* ---------- prompting des visuels ---------- */
+export type ImageStyle = 'photo' | 'illustration' | 'minimal' | 'rendu3d' | 'cinema';
+
+export const IMAGE_STYLES: { id: ImageStyle; label: string }[] = [
+  { id: 'photo', label: 'Photo' },
+  { id: 'illustration', label: 'Illustration' },
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'rendu3d', label: '3D' },
+  { id: 'cinema', label: 'Cinéma' },
+];
+
+/* Direction artistique par style : médium, optique, lumière, matière. C'est ce
+   qui manquait le plus à l'ancien prompt d'une seule phrase — un modèle de
+   diffusion suit bien mieux une direction explicite qu'un adjectif vague. */
+const STYLE_DIRECTION: Record<ImageStyle, string> = {
+  photo: 'Photographie professionnelle, objectif 50 mm, faible profondeur de champ, lumière naturelle douce, couleurs fidèles',
+  illustration: 'Illustration vectorielle éditoriale moderne, formes nettes, aplats de couleur, ombres douces',
+  minimal: 'Composition minimaliste, large espace négatif, géométrie simple, aplats de couleur, lumière diffuse',
+  rendu3d: 'Rendu 3D, matériaux mats et doux, éclairage de studio, volumes arrondis, ombres portées douces',
+  cinema: 'Photographie cinématographique, éclairage clair-obscur, contre-jour doré, grain fin, forte profondeur',
+};
+
+/* Contraintes négatives en langage naturel : l'URL Pollinations n'expose pas de
+   `negative_prompt`, mais les énoncer réduit nettement le texte parasite et les
+   artefacts de mains/visages. */
+const NEGATIVES = 'Sans texte ni lettres, sans logo, sans filigrane, sans visage ni main déformés, sans collage.';
+
+/** Prompt d'image structuré : direction artistique → sujet → contexte métier →
+ *  palette de marque → cadrage → contraintes. Nettement plus dirigé que
+ *  l'ancienne phrase unique, donc plus fidèle au sujet demandé. */
+export function aiImagePrompt(subject: string, sector?: string, style: ImageStyle = 'photo', palette?: string[]): string {
+  const subj = (subject || '').replace(/[#@\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) || 'communication d’entreprise';
+  const sec = sector ? ` Contexte : secteur ${sector}.` : '';
+  const cols = (palette || []).filter(Boolean).slice(0, 3);
+  const pal = cols.length ? ` Palette dominante : ${cols.join(', ')}.` : '';
+  return `${STYLE_DIRECTION[style]}. Sujet : ${subj}.${sec}${pal}`
+    + ` Cadrage soigné, sujet clairement lisible, arrière-plan non distrayant, haute qualité. ${NEGATIVES}`;
 }

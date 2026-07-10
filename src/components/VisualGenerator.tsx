@@ -11,7 +11,7 @@ import { getBusiness } from '../lib/business';
 import type { BrandKit } from '../lib/api';
 import { TEMPLATES, dimsFor, buildVisual } from '../lib/visualTemplates';
 import { fetchStockPhotos, photoQueryFor, orientationFor, type StockPhoto } from '../lib/stock';
-import { aiImageUrl, aiImagePrompt, generateAiImage } from '../lib/ai';
+import { aiImageUrl, aiImagePrompt, generateAiImage, IMAGE_STYLES, type ImageStyle } from '../lib/ai';
 import { brandPhoto, uploadImage } from '../lib/upload';
 import { AiLoader } from './AiLoader';
 
@@ -54,23 +54,46 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [selPhoto, setSelPhoto] = useState<StockPhoto | null>(null);
   const [brandPhotoOn, setBrandPhotoOn] = useState(true);
   // --- génération d'image par IA (Gemini en priorité, repli Pollinations) ---
-  const [aiPrompt, setAiPrompt] = useState(() => aiImagePrompt(text, getBusiness().sector));
+  const [aiStyle, setAiStyle] = useState<ImageStyle>('photo');
+  /* 'auto' = Gemini puis repli gratuit (comportement historique).
+     'gemini'/'free' = choix explicite, sans repli silencieux. */
+  const [aiEngine, setAiEngine] = useState<'auto' | 'gemini' | 'free'>('auto');
+  const [aiPrompt, setAiPrompt] = useState(() => aiImagePrompt(text, getBusiness().sector, 'photo', brandKit.palette));
   const [aiUrl, setAiUrl] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiProvider, setAiProvider] = useState<'gemini' | 'pollinations' | null>(null);
   const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
+
+  // Changer de style réécrit le prompt depuis le sujet + la charte de marque.
+  const applyStyle = (s: ImageStyle) => {
+    setAiStyle(s);
+    setAiPrompt(aiImagePrompt(text, getBusiness().sector, s, kit.palette));
+  };
 
   const generateAi = async () => {
     const p = aiPrompt.trim();
     if (!p) return;
     setAiLoading(true);
     setAiFallbackReason(null);
+
+    if (aiEngine === 'free') {
+      setAiProvider('pollinations');
+      setAiUrl(aiImageUrl(p, ratio));
+      return; // aiLoading retombe sur onLoad/onError de l'<img>
+    }
+
     const res = await generateAiImage(p, ratio, referencePhoto);
     if (res.available && res.dataUrl) {
       setAiProvider('gemini');
       setAiUrl(res.dataUrl);
+    } else if (aiEngine === 'gemini') {
+      // Choix explicite de Gemini : on montre l'erreur au lieu de basculer en
+      // silence sur un autre moteur — sinon l'utilisateur croit avoir du Gemini.
+      setAiProvider('gemini');
+      setAiFallbackReason(res.reason || 'indisponible');
+      setAiLoading(false);
     } else {
-      // Gemini indisponible (clé manquante, quota, blocage...) → repli gratuit.
+      // Auto : Gemini indisponible (clé manquante, quota, blocage...) → repli gratuit.
       setAiProvider('pollinations');
       setAiFallbackReason(res.reason || null);
       setAiUrl(aiImageUrl(p, ratio));
@@ -370,11 +393,15 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
                 {aiProvider === 'gemini' ? 'Image générée par Gemini (Google) — haute qualité.'
-                  : aiProvider === 'pollinations' ? 'Image générée par IA (Flux · gratuit) — repli automatique.'
+                  : aiProvider === 'pollinations' ? 'Image générée par le moteur gratuit (Pollinations).'
                   : 'Image générée par IA. Aucune donnée chiffrée, illustration uniquement.'}
               </div>
               {aiFallbackReason && (
-                <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 4 }}>Gemini indisponible ({aiFallbackReason}) — repli sur le modèle gratuit.</div>
+                <div style={{ fontSize: 11, color: aiProvider === 'gemini' ? 'var(--danger)' : 'var(--tx-3)', marginTop: 4 }}>
+                  {aiProvider === 'gemini'
+                    ? `Gemini indisponible (${aiFallbackReason}). Choisissez « Gratuit » pour générer quand même.`
+                    : `Gemini indisponible (${aiFallbackReason}) — repli sur le moteur gratuit.`}
+                </div>
               )}
               {aiProvider === 'gemini' && referencePhoto && (
                 <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 4 }}>Style inspiré de votre dernière publication publiée, pour une identité visuelle cohérente.</div>
@@ -382,6 +409,28 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
             </div>
             {/* ---- prompt ---- */}
             <div style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
+              <div className="field">
+                <label className="field-lbl">Style visuel</label>
+                <div className="km-fmt-row">
+                  {IMAGE_STYLES.map((s) => (
+                    <button key={s.id} type="button" className={'km-fmt' + (aiStyle === s.id ? ' on' : '')} onClick={() => applyStyle(s.id)}>{s.label}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 6 }}>Réécrit le prompt avec une direction artistique et vos couleurs de marque.</div>
+              </div>
+              <div className="field">
+                <label className="field-lbl">Moteur de génération</label>
+                <div className="km-fmt-row">
+                  {([['auto', 'Auto'], ['gemini', 'Gemini'], ['free', 'Gratuit']] as const).map(([id, label]) => (
+                    <button key={id} type="button" className={'km-fmt' + (aiEngine === id ? ' on' : '')} onClick={() => setAiEngine(id)}>{label}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 6 }}>
+                  {aiEngine === 'auto' ? 'Gemini si disponible, sinon repli sur le moteur gratuit.'
+                    : aiEngine === 'gemini' ? 'Gemini uniquement — aucune bascule silencieuse en cas d’erreur.'
+                    : 'Pollinations, gratuit et sans clé. Aucune limite de quota Gemini.'}
+                </div>
+              </div>
               <div className="field">
                 <label className="field-lbl">Décrivez l’image</label>
                 <textarea className="inp" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={5} placeholder="Ex : photographie d’un atelier de formation lumineux, style moderne" style={{ resize: 'vertical', minHeight: 96 }} />
@@ -399,7 +448,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
         <div className="kmodal-foot">
           <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
             {mode === 'photo' ? 'Photos Pexels — URL publique, publiable directement.'
-              : mode === 'ai' ? (aiProvider === 'gemini' ? 'Image Gemini — hébergée puis publiable en un clic.' : 'Image IA gratuite (Flux) — hébergée en URL publique, publiable.')
+              : mode === 'ai' ? (aiProvider === 'gemini' ? 'Image Gemini — hébergée puis publiable en un clic.' : 'Image IA gratuite (Pollinations) — hébergée en URL publique, publiable.')
               : 'Respecte vos couleurs, logo, police et nom de marque.'}
           </span>
           <button className="btn outline" onClick={download} disabled={(mode === 'photo' && !selPhoto) || (mode === 'ai' && !aiUrl)}><Icon name="download" />Télécharger</button>
