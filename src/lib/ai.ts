@@ -84,7 +84,7 @@ export function generateHashtags(text: string, context: AiContext = {}): Promise
    priorité, haute qualité. Retourne une data-URL (image encodée en base64) :
    pas d'hébergement à part, directement affichable et compositable, mais
    doit être uploadée (uploadImage) pour obtenir une URL publique publiable. */
-export interface AiImageResult { available: boolean; dataUrl?: string; provider?: string; reason?: string; }
+export interface AiImageResult { available: boolean; dataUrl?: string; provider?: string; model?: string; reason?: string; }
 
 /** referenceImageUrl : visuel d'une publication déjà publiée (voir
  *  mostRecentPublishedPhoto) — transmis à Gemini comme référence de style

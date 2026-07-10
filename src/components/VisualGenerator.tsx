@@ -62,6 +62,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
   const [aiUrl, setAiUrl] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiProvider, setAiProvider] = useState<'gemini' | 'pollinations' | null>(null);
+  const [aiModel, setAiModel] = useState<string | null>(null);
   const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
 
   // Changer de style réécrit le prompt depuis le sujet + la charte de marque.
@@ -85,6 +86,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
     const res = await generateAiImage(p, ratio, referencePhoto);
     if (res.available && res.dataUrl) {
       setAiProvider('gemini');
+      setAiModel(res.model || null);
       setAiUrl(res.dataUrl);
     } else if (aiEngine === 'gemini') {
       // Choix explicite de Gemini : on montre l'erreur au lieu de basculer en
@@ -392,7 +394,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                 )}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
-                {aiProvider === 'gemini' ? 'Image générée par Gemini (Google) — haute qualité.'
+                {aiProvider === 'gemini' ? `Image générée par Gemini (Google)${aiModel ? ` · ${aiModel}` : ''} — haute qualité.`
                   : aiProvider === 'pollinations' ? 'Image générée par le moteur gratuit (Pollinations).'
                   : 'Image générée par IA. Aucune donnée chiffrée, illustration uniquement.'}
               </div>
