@@ -80,7 +80,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
     /* Chaîne gratuite : Cloudflare (FLUX.1-schnell) si configuré, sinon
        Pollinations. Les deux sont gratuits ; FLUX rend nettement mieux. */
     const generateFree = async () => {
-      const cf = await generateFreeAiImage(p);
+      const cf = await generateFreeAiImage(p, ratio);
       if (cf.available && cf.dataUrl) {
         setAiProvider('cloudflare');
         setAiModel(cf.model || null);
@@ -408,7 +408,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 10 }}>
                 {aiProvider === 'gemini' ? `Image générée par Gemini (Google)${aiModel ? ` · ${aiModel}` : ''} — haute qualité.`
-                  : aiProvider === 'cloudflare' ? 'Image générée par Cloudflare Workers AI · FLUX.1-schnell (gratuit). Sortie carrée, recadrée au format.'
+                  : aiProvider === 'cloudflare' ? `Image générée par Cloudflare Workers AI (gratuit)${aiModel ? ` · ${aiModel.split('/').pop()}` : ''} — générée directement au format ${ratio}.`
                   : aiProvider === 'pollinations' ? 'Image générée par le moteur gratuit (Pollinations).'
                   : 'Image générée par IA. Aucune donnée chiffrée, illustration uniquement.'}
               </div>
@@ -444,7 +444,7 @@ export function VisualGenerator({ text, ratio, onClose, onUse }: Props) {
                 <div style={{ fontSize: 11, color: 'var(--tx-3)', marginTop: 6 }}>
                   {aiEngine === 'auto' ? 'Gemini si disponible, sinon repli sur le moteur gratuit.'
                     : aiEngine === 'gemini' ? 'Gemini uniquement — aucune bascule silencieuse en cas d’erreur.'
-                    : 'FLUX.1-schnell (Cloudflare) si configuré, sinon Pollinations. Aucun quota Gemini consommé.'}
+                    : 'FLUX.2 (Cloudflare) si configuré, sinon Pollinations. Aucun quota Gemini consommé.'}
                 </div>
               </div>
               <div className="field">
