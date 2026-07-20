@@ -54,11 +54,35 @@ const tranche = (code) => ({
   '32': '250 à 499 salariés', '41': '500 à 999 salariés', '42': '1000 à 1999 salariés',
 }[code] || code || null);
 
+/* Sections NAF (niveau 1) — libellés officiels, pour situer l'activité d'un
+   coup d'œil quand le code NAF seul ne parle pas. */
+const SECTION = {
+  A: 'Agriculture, sylviculture et pêche', B: 'Industries extractives',
+  C: 'Industrie manufacturière', D: 'Électricité, gaz, vapeur',
+  E: 'Eau, assainissement, déchets', F: 'Construction',
+  G: 'Commerce, réparation d’automobiles', H: 'Transports et entreposage',
+  I: 'Hébergement et restauration', J: 'Information et communication',
+  K: 'Activités financières et d’assurance', L: 'Activités immobilières',
+  M: 'Activités spécialisées, scientifiques et techniques',
+  N: 'Services administratifs et de soutien', O: 'Administration publique',
+  P: 'Enseignement', Q: 'Santé humaine et action sociale',
+  R: 'Arts, spectacles et activités récréatives', S: 'Autres activités de services',
+  T: 'Activités des ménages en tant qu’employeurs', U: 'Activités extra-territoriales',
+};
+
+/* L'API renvoie certains champs en tableau (tva, liste_idcc…). On prend la
+   première valeur : un seul numéro de TVA par entreprise, et l'IDCC principal
+   suffit à situer la convention collective. */
+const first = (v) => (Array.isArray(v) ? (v.length ? v[0] : null) : (v ?? null));
+
 function normalize(r) {
   const siege = r.siege || {};
   const c = r.complements || {};
   const nafCode = r.activite_principale || siege.activite_principale || null;
   const njCode = r.nature_juridique || null;
+  const section = r.section_activite_principale || null;
+  const lat = siege.latitude != null ? Number(siege.latitude) : null;
+  const lon = siege.longitude != null ? Number(siege.longitude) : null;
   const finances = r.finances && typeof r.finances === 'object'
     ? Object.keys(r.finances).sort((a, b) => b.localeCompare(a)).slice(0, 3).map((y) => ({
         annee: y, ca: r.finances[y].ca ?? null, resultatNet: r.finances[y].resultat_net ?? null,
@@ -71,18 +95,33 @@ function normalize(r) {
     siret: siege.siret || null,
     naf: { code: nafCode,
            libelle: r.libelle_activite_principale || siege.libelle_activite_principale || (nafCode ? NAF[nafCode] : null) || null },
+    // Nomenclature NAF 2025 : coexiste avec l'ancien code, utile pour anticiper
+    // la bascule et vérifier une reclassification d'activité.
+    naf2025: r.activite_principale_naf25 || siege.activite_principale_naf25 || null,
+    section,
+    sectionLabel: section ? (SECTION[section] || null) : null,
     formeJuridique: njCode,
     formeJuridiqueLabel: njCode ? (NJ[njCode] || null) : null,
     categorie: r.categorie_entreprise || null,
+    categorieAnnee: r.annee_categorie_entreprise || null,
     dateCreation: r.date_creation || null,
+    dateFermeture: r.date_fermeture || null,
     dateMaj: r.date_mise_a_jour || null,
     etatAdministratif: r.etat_administratif || siege.etat_administratif || null,
+    // Numéro de TVA intracommunautaire — renvoyé sous forme de tableau par l'API.
+    tva: first(r.tva),
+    // Convention collective applicable (IDCC), quand elle est renseignée.
+    idcc: first(siege.liste_idcc) || first(c.liste_idcc),
     effectif: tranche(r.tranche_effectif_salarie),
     effectifAnnee: r.annee_tranche_effectif_salarie || null,
     employeur: r.caractere_employeur === 'O' ? true : r.caractere_employeur === 'N' ? false : null,
     commune: siege.libelle_commune || null,
     codePostal: siege.code_postal || null,
     adresse: siege.geo_adresse || siege.adresse || null,
+    // Coordonnées du siège : l'app cible en local, une position exacte permet
+    // de situer la zone de chalandise (et d'ouvrir une carte).
+    latitude: Number.isFinite(lat) ? lat : null,
+    longitude: Number.isFinite(lon) ? lon : null,
     region: siege.region || null,
     departement: siege.departement || null,
     enseigne: (siege.liste_enseignes && siege.liste_enseignes[0]) || siege.nom_commercial || null,
@@ -96,6 +135,15 @@ function normalize(r) {
       association: !!c.est_association,
       entrepreneurIndividuel: !!c.est_entrepreneur_individuel,
       societeMission: !!c.est_societe_mission,
+      servicePublic: !!c.est_service_public,
+      achatsResponsables: !!c.est_achats_responsables,
+      siae: !!c.est_siae,
+      patrimoineVivant: !!c.est_patrimoine_vivant,
+      avocat: !!c.est_avocat,
+      // Déclarations extra-financières : signaux utiles pour l'angle éditorial
+      // (RSE, égalité professionnelle) d'une entreprise cliente.
+      egapro: !!c.egapro_renseignee,
+      bilanGes: !!c.bilan_ges_renseigne,
     },
     dirigeants: (r.dirigeants || []).map((d) => ({
       nom: [d.prenoms, d.nom].filter(Boolean).join(' ') || d.denomination || null,
@@ -105,6 +153,9 @@ function normalize(r) {
     })).filter((d) => d.nom),
     finances,
     nombreEtablissements: r.nombre_etablissements_ouverts != null ? r.nombre_etablissements_ouverts : null,
+    // Total tous états : l'écart avec les établissements ouverts révèle des
+    // fermetures passées, invisibles si on n'affiche que les ouverts.
+    nombreEtablissementsTotal: r.nombre_etablissements != null ? r.nombre_etablissements : null,
   };
 }
 

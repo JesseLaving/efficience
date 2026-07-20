@@ -25,18 +25,26 @@ export const API_BASE = resolveApiBase();
 export interface CompanyResult {
   nom: string | null; sigle: string | null; siren: string | null; siret: string | null;
   naf: { code: string | null; libelle: string | null };
+  naf2025: string | null;
+  section: string | null; sectionLabel: string | null;
   formeJuridique: string | null; formeJuridiqueLabel: string | null; categorie: string | null;
-  dateCreation: string | null; dateMaj: string | null; etatAdministratif: string | null;
+  categorieAnnee: string | number | null;
+  dateCreation: string | null; dateFermeture: string | null; dateMaj: string | null; etatAdministratif: string | null;
+  tva: string | null; idcc: string | null;
   effectif: string | null; effectifAnnee: number | string | null; employeur: boolean | null;
   commune: string | null; codePostal: string | null; adresse: string | null; region: string | null; departement: string | null; enseigne: string | null;
+  latitude: number | null; longitude: number | null;
   nda: string | null;
   badges: {
     organismeFormation: boolean; qualiopi: boolean; ess: boolean; rge: boolean;
     bio: boolean; association: boolean; entrepreneurIndividuel: boolean; societeMission: boolean;
+    servicePublic: boolean; achatsResponsables: boolean; siae: boolean;
+    patrimoineVivant: boolean; avocat: boolean; egapro: boolean; bilanGes: boolean;
   };
   dirigeants: { nom: string | null; qualite: string | null; anneeNaissance: string | null; type: string | null }[];
   finances: { annee: string; ca: number | null; resultatNet: number | null }[] | null;
   nombreEtablissements: number | null;
+  nombreEtablissementsTotal: number | null;
 }
 export interface CompanyResponse { query: string; total: number; results: CompanyResult[]; }
 

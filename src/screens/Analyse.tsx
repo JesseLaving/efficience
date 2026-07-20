@@ -72,19 +72,27 @@ export function Analyse() {
   const [siret, setSiret] = useState(prof?.siret || prof?.siren || '');
   const [site, setSite] = useState(prof?.domain || '');
   const [loading, setLoading] = useState(false);
-  const [company, setCompany] = useState<{ total: number; result: CompanyResult } | null>(null);
+  /* On conserve TOUS les résultats, pas seulement le premier : une recherche par
+     nom peut renvoyer plusieurs entreprises homonymes, dont des cessées — sans
+     choix possible, on analysait silencieusement la mauvaise. */
+  const [company, setCompany] = useState<{ total: number; results: CompanyResult[] } | null>(null);
+  const [pick, setPick] = useState(0);
   const [siteRes, setSiteRes] = useState<SiteResponse | null>(null);
   const [err, setErr] = useState<{ company?: string; site?: string }>({});
 
   const run = async () => {
-    setLoading(true); setErr({}); setCompany(null); setSiteRes(null);
+    setLoading(true); setErr({}); setCompany(null); setPick(0); setSiteRes(null);
     const [c, s] = await Promise.allSettled([
       siret.trim() ? analyzeCompany(siret.trim()) : Promise.reject(new Error('vide')),
       site.trim() ? analyzeSite(site.trim()) : Promise.reject(new Error('vide')),
     ]);
     if (c.status === 'fulfilled') {
-      const first = c.value.results[0];
-      if (first) setCompany({ total: c.value.total, result: first });
+      // Les entreprises encore actives passent devant : l'API classe par
+      // pertinence textuelle et remonte parfois une société cessée en premier.
+      const list = [...(c.value.results || [])].sort(
+        (a, z) => (z.etatAdministratif === 'A' ? 1 : 0) - (a.etatAdministratif === 'A' ? 1 : 0),
+      );
+      if (list.length) setCompany({ total: c.value.total, results: list });
       else setErr((e) => ({ ...e, company: 'Aucune entreprise trouvée pour cette recherche.' }));
     } else setErr((e) => ({ ...e, company: c.reason?.message || 'Erreur' }));
     if (s.status === 'fulfilled') setSiteRes(s.value);
@@ -105,6 +113,14 @@ export function Analyse() {
     if (r.badges.bio) out.push('Bio');
     if (r.badges.societeMission) out.push('Société à mission');
     if (r.badges.association) out.push('Association');
+    if (r.badges.servicePublic) out.push('Service public');
+    if (r.badges.siae) out.push('Insertion (SIAE)');
+    if (r.badges.avocat) out.push('Avocat');
+    if (r.badges.patrimoineVivant) out.push('Patrimoine vivant');
+    if (r.badges.achatsResponsables) out.push('Achats responsables');
+    // Déclarations extra-financières : angles éditoriaux RSE exploitables.
+    if (r.badges.egapro) out.push('Index égalité pro');
+    if (r.badges.bilanGes) out.push('Bilan GES');
     return out;
   };
 
@@ -151,12 +167,38 @@ export function Analyse() {
           <div className="pad">
             {err.company && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{err.company}</div>}
             {!company && !err.company && <div style={{ color: 'var(--tx-3)', fontSize: 13 }}>Lancez une analyse pour afficher les données légales.</div>}
-            {company && (() => { const r = company.result; const badges = badgeList(r); return (
+            {company && (() => { const r = company.results[Math.min(pick, company.results.length - 1)]; const badges = badgeList(r); return (
               <>
+                {company.results.length > 1 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, color: 'var(--tx-3)', marginBottom: 6 }}>
+                      {company.total} entreprise{company.total > 1 ? 's' : ''} trouvée{company.total > 1 ? 's' : ''} — choisissez la bonne :
+                    </div>
+                    <div className="km-fmt-row">
+                      {company.results.map((o, i) => (
+                        <button
+                          key={(o.siren || '') + i}
+                          type="button"
+                          className={'km-fmt' + (i === pick ? ' on' : '')}
+                          onClick={() => setPick(i)}
+                          title={[o.nom, o.adresse].filter(Boolean).join(' — ')}
+                        >
+                          {(o.nom || 'Sans nom').slice(0, 28)}
+                          {o.codePostal ? ` · ${o.codePostal}` : ''}
+                          {o.etatAdministratif !== 'A' ? ' · cessée' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ fontFamily: 'var(--ff-disp)', fontSize: 20, fontWeight: 600, color: 'var(--tx-str)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {r.nom}{r.etatAdministratif === 'A' && <RawIcon svg={UI.check} style={{ width: 16, height: 16, color: 'var(--acc)' }} />}
                 </div>
-                {company.total > 1 && <div style={{ fontSize: 12, color: 'var(--tx-3)', margin: '4px 0 0' }}>{company.total} résultats — 1er affiché</div>}
+                {r.etatAdministratif !== 'A' && (
+                  <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 4 }}>
+                    Entreprise cessée{r.dateFermeture ? ` le ${frDate(r.dateFermeture)}` : ''}.
+                  </div>
+                )}
                 {badges.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '12px 0 4px' }}>
                     {badges.map((bl) => <span key={bl} className="chip on" style={{ fontSize: 11.5 }}><RawIcon svg={UI.check} />{bl}</span>)}
@@ -165,19 +207,41 @@ export function Analyse() {
                 <div style={{ marginTop: 10 }}>
                   {([
                     ['SIREN', r.siren], ['SIRET (siège)', r.siret],
+                    ['N° TVA intracom.', r.tva || '—'],
                     ['Code NAF', r.naf.code ? `${r.naf.code}${r.naf.libelle ? ' · ' + r.naf.libelle : ''}` : '—'],
+                    ['NAF 2025', r.naf2025 || '—'],
+                    ['Secteur', r.sectionLabel || r.section || '—'],
                     ['Forme juridique', r.formeJuridiqueLabel || r.formeJuridique || '—'],
-                    ['Catégorie', r.categorie || '—'],
+                    ['Catégorie', r.categorie ? `${r.categorie}${r.categorieAnnee ? ` (${r.categorieAnnee})` : ''}` : '—'],
+                    ['Convention collective', r.idcc ? `IDCC ${r.idcc}` : '—'],
                     ['Création', frDate(r.dateCreation)],
                     ['État', r.etatAdministratif === 'A' ? 'Active' : r.etatAdministratif === 'C' ? 'Cessée' : (r.etatAdministratif || '—')],
+                    ...(r.dateFermeture ? [['Fermeture', frDate(r.dateFermeture)] as [string, string]] : []),
                     ['Effectif', r.effectif ? `${r.effectif}${r.effectifAnnee ? ` (${r.effectifAnnee})` : ''}` : '—'],
                     ['N° déclaration formation', r.nda ? ndaFmt(r.nda) : '—'],
+                    ['Adresse du siège', r.adresse || '—'],
                     ['Localisation', [r.codePostal, r.commune].filter(Boolean).join(' ') || '—'],
-                    ['Établissements', r.nombreEtablissements != null ? String(r.nombreEtablissements) : '—'],
+                    ['Établissements ouverts', r.nombreEtablissements != null
+                      ? `${r.nombreEtablissements}${r.nombreEtablissementsTotal != null ? ` sur ${r.nombreEtablissementsTotal}` : ''}`
+                      : '—'],
                     ['Mise à jour', frDate(r.dateMaj)],
                   ] as [string, string][]).filter(([, v]) => v !== '—' || true).map(([k, v]) => (
                     <div className="disc-info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>
                   ))}
+                  {r.latitude != null && r.longitude != null && (
+                    <div className="disc-info-row">
+                      <span className="k">Coordonnées</span>
+                      <span className="v">
+                        <a
+                          href={`https://www.openstreetmap.org/?mlat=${r.latitude}&mlon=${r.longitude}#map=17/${r.latitude}/${r.longitude}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ color: 'var(--acc)' }}
+                        >
+                          {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)} — voir la carte
+                        </a>
+                      </span>
+                    </div>
+                  )}
                   {r.dirigeants.length > 0 && (
                     <div className="disc-info-row"><span className="k">Dirigeant(s)</span><span className="v">{r.dirigeants.map((d) => d.nom + (d.anneeNaissance ? ` (${d.anneeNaissance})` : '') + (d.qualite ? ` — ${d.qualite}` : '')).join(', ')}</span></div>
                   )}

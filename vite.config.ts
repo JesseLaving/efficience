@@ -12,12 +12,14 @@ function apiDevServer(): PluginOption {
       server.middlewares.use(async (req, res, next) => {
         const u = req.url || ''
         try {
-          if (u.startsWith('/api/company')) {
-            const mod = await server.ssrLoadModule('/api/company.js')
-            return void mod.default(req, res)
-          }
-          if (u.startsWith('/api/site')) {
-            const mod = await server.ssrLoadModule('/api/site.js')
+          // Les handlers vivent sous /api/_h/<groupe>/<action>.js ; en production
+          // une fonction /api/<groupe>/[action].js les route. On refait ce routage
+          // ici pour que `npm run dev` serve les mêmes fichiers.
+          // (Auparavant ce middleware pointait vers /api/company.js et /api/site.js,
+          // supprimés depuis : l'analyse ne répondait plus du tout en local.)
+          const m = /^\/api\/(analyze|ai|meta|linkedin|google|media|spaces|schedule|tiktok|email)\/([a-z0-9_-]+)/i.exec(u)
+          if (m) {
+            const mod = await server.ssrLoadModule(`/api/_h/${m[1]}/${m[2]}.js`)
             return void mod.default(req, res)
           }
         } catch (e) {
