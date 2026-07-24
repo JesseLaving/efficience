@@ -131,6 +131,66 @@ export function EditorialPlanning() {
     return Array.from(m.entries());
   }, [plan]);
 
+  /* ---------- vue calendrier (grille mensuelle) ----------
+     Le planning s'affichait en liste alors que l'écran promet « votre
+     calendrier » : une liste ne montre ni les jours vides, ni le rythme réel
+     des publications. La grille reprend les codes d'un agenda (mois entier,
+     semaine du lundi au dimanche, pastilles cliquables). */
+
+  // Mois couverts par le plan, dans l'ordre chronologique : { ym, label }.
+  const planMonths = useMemo(() => {
+    if (!plan) return [] as { ym: string; label: string }[];
+    const seen = new Map<string, string>();
+    for (const p of plan) {
+      const ym = p.date.slice(0, 7);
+      if (!seen.has(ym)) seen.set(ym, p.monthLabel);
+    }
+    return Array.from(seen.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([ym, label]) => ({ ym, label }));
+  }, [plan]);
+
+  // Indice du mois affiché ; borné quand le plan est régénéré plus court.
+  const [monthIdx, setMonthIdx] = useState(0);
+  const safeMonthIdx = Math.min(monthIdx, Math.max(0, planMonths.length - 1));
+  const currentMonth = planMonths[safeMonthIdx];
+
+  // Publication sélectionnée dans la grille → panneau de détail sous le calendrier.
+  const [selected, setSelected] = useState<{ p: PlanItem; i: number } | null>(null);
+  // La liste reste accessible : elle sert à parcourir tous les sujets d'affilée.
+  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+
+  /* Cellules du mois affiché : semaines complètes du lundi au dimanche, avec
+     les jours des mois voisins en retrait pour ne pas casser la grille. */
+  const monthCells = useMemo(() => {
+    if (!currentMonth || !plan) return [];
+    const [y, m] = currentMonth.ym.split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    // getDay : 0 = dimanche. On décale pour une semaine commençant lundi.
+    const lead = (first.getDay() + 6) % 7;
+    const start = new Date(y, m - 1, 1 - lead);
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const byDate = new Map<string, { p: PlanItem; i: number }[]>();
+    plan.forEach((p, i) => {
+      if (!byDate.has(p.date)) byDate.set(p.date, []);
+      byDate.get(p.date)!.push({ p, i });
+    });
+
+    // 6 semaines : hauteur constante d'un mois à l'autre, comme un agenda.
+    return Array.from({ length: 42 }, (_, k) => {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + k);
+      const dIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return {
+        iso: dIso,
+        day: d.getDate(),
+        outside: d.getMonth() !== m - 1,
+        today: dIso === todayIso,
+        items: byDate.get(dIso) || [],
+      };
+    });
+  }, [currentMonth, plan]);
+
   // Répartition par pilier (preuve d'équilibre éditorial).
   const pillarDist = useMemo(() => {
     if (!plan) return [];
@@ -272,7 +332,102 @@ export function EditorialPlanning() {
             </div>
           </div>
 
-          {byMonth.map(([month, posts]) => (
+          {view === 'calendar' && currentMonth && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-h cal-head">
+                <button
+                  className="cal-nav" type="button" aria-label="Mois précédent"
+                  disabled={safeMonthIdx === 0}
+                  onClick={() => { setMonthIdx(safeMonthIdx - 1); setSelected(null); }}
+                ><Icon name="arrowleft" /></button>
+                <h3 style={{ textTransform: 'capitalize', minWidth: 150, textAlign: 'center' }}>{currentMonth.label}</h3>
+                <button
+                  className="cal-nav" type="button" aria-label="Mois suivant"
+                  disabled={safeMonthIdx >= planMonths.length - 1}
+                  onClick={() => { setMonthIdx(safeMonthIdx + 1); setSelected(null); }}
+                ><Icon name="arrowright" /></button>
+                <div style={{ flex: 1 }} />
+                <div className="seg">
+                  <button type="button" className="seg-b on">Calendrier</button>
+                  <button type="button" className="seg-b" onClick={() => { setView('list'); setSelected(null); }}>Liste</button>
+                </div>
+              </div>
+
+              <div className="cal-grid" role="grid" aria-label={`Planning de ${currentMonth.label}`}>
+                {['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map((d) => (
+                  <div className="cal-dow" key={d}>{d}</div>
+                ))}
+                {monthCells.map((c) => (
+                  <div key={c.iso} className={'cal-cell' + (c.outside ? ' out' : '') + (c.today ? ' today' : '')}>
+                    <div className="cal-num">{c.day}</div>
+                    {c.items.map(({ p, i }) => (
+                      <button
+                        key={p.date + '-' + i}
+                        type="button"
+                        className={'cal-ev' + (selected?.i === i ? ' sel' : '')}
+                        data-pillar={p.pillarKey}
+                        title={`${p.pillar} · ${p.format}\n${p.idea}`}
+                        onClick={() => setSelected(selected?.i === i ? null : { p, i })}
+                      >
+                        <span className="cal-ev-dot" />
+                        <span className="cal-ev-txt">{p.idea || p.pillar}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* Détail de la publication choisie : mêmes actions que la liste,
+                  affichées sous la grille pour garder les cellules lisibles. */}
+              {selected && (() => { const { p, i } = selected; return (
+                <div className="pad cal-detail">
+                  <div className="cal-detail-head">
+                    <span className="cal-ev-dot" data-pillar={p.pillarKey} />
+                    <strong style={{ textTransform: 'capitalize' }}>{p.label}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>· {p.pillar} · {p.format}</span>
+                    <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setSelected(null)} aria-label="Fermer le détail">
+                      <Icon name="close" />
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45, margin: '8px 0 10px' }}>{p.idea}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 11, color: 'var(--tx-3)' }}>Diffuser sur :</span>
+                    {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
+                      <button
+                        key={id} type="button"
+                        className={'plat-chip sm' + (netsFor(p, i).includes(id) ? ' on' : '')}
+                        title={netLabel[id] || id}
+                        onClick={() => toggleNet(p, i, id)}
+                      >
+                        <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button className="btn acc sm" onClick={() => compose(p)}><Icon name="spark" />Composer (AIDA)</button>
+                    <button className="btn outline sm" onClick={() => schedule(p, i)}><Icon name="clock" />Programmer</button>
+                    <button className="btn ghost sm" onClick={() => copyIdea(p)}><Icon name="edit" />Copier</button>
+                    <button className="btn ghost sm" disabled={regenBusy.has(p)} onClick={() => regenerateOne(p)}>
+                      {regenBusy.has(p) ? <span className="spin lt" /> : <RawIcon svg={UI.sparkles2} />}Nouvelle idée
+                    </button>
+                  </div>
+                </div>
+              ); })()}
+            </div>
+          )}
+
+          {view === 'list' && (
+            <div className="card-h" style={{ marginTop: 16, border: '1px solid var(--line)', borderRadius: 'var(--r-card) var(--r-card) 0 0', borderBottom: 'none' }}>
+              <div className="sub">Vue liste</div>
+              <div style={{ flex: 1 }} />
+              <div className="seg">
+                <button type="button" className="seg-b" onClick={() => setView('calendar')}>Calendrier</button>
+                <button type="button" className="seg-b on">Liste</button>
+              </div>
+            </div>
+          )}
+
+          {view === 'list' && byMonth.map(([month, posts]) => (
             <div className="card" style={{ marginTop: 16 }} key={month}>
               <div className="card-h">
                 <h3 style={{ textTransform: 'capitalize' }}>{month}</h3>

@@ -352,6 +352,20 @@ export function planScaffold(opts: { weeks: number; perWeek: number }): PlanSlot
   return slots;
 }
 
+/* Remplit un gabarit d'idée. Certains gabarits encadrent la variable de
+   ponctuation — « votre métier ({secteur}) » — ce qui laissait des parenthèses
+   vides quand le secteur n'est pas renseigné. On nettoie donc les fragments
+   devenus vides plutôt que d'afficher « votre métier () ». */
+function fillTemplate(raw: string, secteur: string, ville: string): string {
+  return raw
+    .replace(/\{secteur\}/g, secteur)
+    .replace(/\{ville\}/g, ville)
+    .replace(/\s*\(\s*\)/g, '')   // parenthèses vidées par une variable absente
+    .replace(/\s{2,}/g, ' ')      // espaces doubles laissés par la suppression
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim();
+}
+
 /* Complète un scaffold avec la banque d'idées locale (par profil de secteur). */
 function applyLocalIdeas(slots: PlanSlot[], sector: string, city?: string): PlanItem[] {
   const profile = profileFor(sector);
@@ -364,7 +378,7 @@ function applyLocalIdeas(slots: PlanSlot[], sector: string, city?: string): Plan
     ideaIdx[k] = ideaIdx[k] ?? 0;
     const raw = bank.length ? bank[ideaIdx[k] % bank.length] : '';
     ideaIdx[k]++;
-    return { ...slot, idea: raw.replace(/\{secteur\}/g, secShort).replace(/\{ville\}/g, cityTxt) };
+    return { ...slot, idea: fillTemplate(raw, secShort, cityTxt) };
   });
 }
 

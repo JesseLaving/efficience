@@ -102,3 +102,79 @@
 
 @media (max-width: 1080px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } .dash-grid { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .kpi-row { grid-template-columns: 1fr; } }
+
+/* ============ Planning éditorial — vue calendrier ============
+   Grille mensuelle façon agenda : le planning s'affichait en liste, qui ne
+   montre ni les jours vides ni le rythme réel des publications. */
+.cal-head { display: flex; align-items: center; gap: 8px; }
+.cal-nav {
+  width: 34px; height: 34px; flex: none; display: grid; place-items: center;
+  border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--canvas);
+  color: var(--tx-2); cursor: pointer; transition: color .15s, border-color .15s;
+}
+.cal-nav:hover:not(:disabled) { color: var(--tx-str); border-color: #c3c7b6; }
+.cal-nav:disabled { opacity: .4; cursor: default; }
+.cal-nav .ic { width: 15px; height: 15px; }
+
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--line-2);
+}
+.cal-dow {
+  padding: 8px 6px; text-align: center; font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--tx-3);
+  border-bottom: 1px solid var(--line-2); background: var(--canvas-2);
+}
+.cal-cell {
+  min-height: 96px; padding: 6px; display: flex; flex-direction: column; gap: 4px;
+  border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);
+  background: var(--canvas);
+}
+.cal-cell:nth-child(7n + 7) { border-right: none; }
+/* Jours des mois voisins : présents pour garder des semaines complètes, mais en retrait. */
+.cal-cell.out { background: var(--canvas-soft); }
+.cal-cell.out .cal-num { opacity: .35; }
+.cal-num { font-size: 12px; font-weight: 600; color: var(--tx-2); padding: 1px 3px; }
+.cal-cell.today .cal-num {
+  background: var(--acc); color: var(--on-acc); border-radius: var(--pill);
+  width: 22px; height: 22px; display: grid; place-items: center; padding: 0;
+}
+
+.cal-ev {
+  display: flex; align-items: center; gap: 5px; width: 100%; text-align: left;
+  padding: 3px 6px; border-radius: 5px; border: 1px solid transparent;
+  background: var(--canvas-soft); color: var(--tx); font: inherit; font-size: 11.5px;
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.cal-ev:hover { border-color: #c3c7b6; }
+.cal-ev.sel { border-color: var(--acc); background: var(--acc-soft); }
+.cal-ev:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.cal-ev-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-ev-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--tx-3); }
+
+/* Une couleur par pilier éditorial : le rééquilibrage du plan se lit d'un
+   coup d'œil sur le mois, ce qu'une liste ne permet pas. */
+.cal-ev[data-pillar="expertise"]  .cal-ev-dot, .cal-ev-dot[data-pillar="expertise"]  { background: #2f6f4e; }
+.cal-ev[data-pillar="preuve"]     .cal-ev-dot, .cal-ev-dot[data-pillar="preuve"]     { background: #1f7fc4; }
+.cal-ev[data-pillar="pratique"]   .cal-ev-dot, .cal-ev-dot[data-pillar="pratique"]   { background: #8a6d2f; }
+.cal-ev[data-pillar="coulisses"]  .cal-ev-dot, .cal-ev-dot[data-pillar="coulisses"]  { background: #a2543b; }
+.cal-ev[data-pillar="actualite"]  .cal-ev-dot, .cal-ev-dot[data-pillar="actualite"]  { background: #5b5fa8; }
+.cal-ev[data-pillar="engagement"] .cal-ev-dot, .cal-ev-dot[data-pillar="engagement"] { background: #b0407a; }
+.cal-ev[data-pillar="offre"]      .cal-ev-dot, .cal-ev-dot[data-pillar="offre"]      { background: #46807f; }
+
+.cal-detail { border-top: 1px solid var(--line-2); }
+.cal-detail-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--tx-str); }
+
+@media (max-width: 720px) {
+  /* L'en-tête (navigation + bascule de vue) ne tient pas sur une ligne :
+     sans retour à la ligne, la bascule était rognée par le bord de la carte. */
+  .cal-head { flex-wrap: wrap; row-gap: 10px; }
+  .cal-head h3 { min-width: 0 !important; flex: 1; }
+  .cal-head .seg { width: 100%; justify-content: center; }
+  /* Sept colonnes deviennent illisibles sur mobile : on garde la grille mais
+     compacte, en masquant le libellé au profit de la pastille de pilier. */
+  .cal-cell { min-height: 62px; padding: 3px; }
+  .cal-ev { padding: 2px; justify-content: center; }
+  .cal-ev-txt { display: none; }
+  .cal-dow { font-size: 9.5px; letter-spacing: .04em; padding: 6px 2px; }
+}
