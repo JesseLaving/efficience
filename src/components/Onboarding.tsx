@@ -140,7 +140,10 @@ export function Onboarding() {
     localStorage.setItem('eff_onboarded', '1');
     localStorage.setItem('eff_guide_connect', '1'); // bannière « connectez vos réseaux » sur l'écran Connexion
     show('connexion');
-    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b> — dernière étape : connectez vos réseaux`);
+    // « dernière étape » était faux : connecter un réseau n'est que la 2e des
+    // trois étapes du parcours (profil → réseau → première publication), que le
+    // guide de prise en main affiche ensuite sur le tableau de bord.
+    showToast(UI.check, `Espace personnalisé pour <b style="margin-left:3px">${prof.name}</b> — étape suivante : connectez un réseau`);
   };
 
   const downloadReport = async () => {

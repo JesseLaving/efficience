@@ -12,6 +12,7 @@ import { KpiModal } from '../components/KpiModal';
 import { useTilt3d } from '../lib/useTilt3d';
 import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
 import { useAuthUser, firstNameOf } from '../state/AuthUserContext';
+import { SetupGuide } from '../components/SetupGuide';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
@@ -228,6 +229,9 @@ export function Dashboard() {
           <button className="btn acc" onClick={() => show('planning')}><span className="ic">✦</span>Générer le mois avec l’IA</button>
         </div>
       </div>
+
+      {/* Fil conducteur tant que la mise en route n'est pas bouclée. */}
+      <SetupGuide />
 
       {state.board.length === 0 ? (
         <div className="crm-empty" style={{ marginBottom: 16 }}>

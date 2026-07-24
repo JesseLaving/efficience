@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
+import { useCalendar } from '../state/CalendarContext';
 import { NETWORKS, type Network, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
@@ -207,6 +208,8 @@ function NetCard({ net, i }: { net: Network; i: number }) {
 
 export function Connexion() {
   const { connectedCount, totalReach, connectAll, metaConnected, metaUser, metaStatus, metaError } = useConnections();
+  const { show } = useEff();
+  const { scheduled } = useCalendar();
   const reachRef = useRef<HTMLSpanElement>(null);
   const [guide, setGuide] = useState(() => localStorage.getItem('eff_guide_connect') === '1');
 
@@ -216,16 +219,38 @@ export function Connexion() {
   useEffect(() => { if (connectedCount > 0 && guide) { localStorage.removeItem('eff_guide_connect'); setGuide(false); } }, [connectedCount, guide]);
   const dismissGuide = () => { localStorage.removeItem('eff_guide_connect'); setGuide(false); };
 
+  /* Le parcours s'arrêtait ici : la bannière disparaissait dès qu'un réseau
+     était connecté, sans dire quoi faire ensuite. On enchaîne donc vers la
+     première publication, tant qu'aucune n'est programmée. */
+  const showNextStep = connectedCount > 0 && scheduled.length === 0;
+
   return (
     <section className="screen show anim">
       {guide && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid var(--acc-soft, rgba(91,117,80,.35))', background: 'var(--acc-soft, rgba(91,117,80,.08))' }}>
           <div className="ns-ic" style={{ flex: 'none' }}><Icon name="link" /></div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Dernière étape de configuration</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Étape 2 sur 3 · Connectez un réseau</div>
             <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>Connectez votre page Facebook, votre compte Instagram rattaché et votre fiche Google pour publier directement depuis Efficience.</div>
           </div>
           <button className="btn ghost sm" onClick={dismissGuide}>Plus tard</button>
+        </div>
+      )}
+
+      {showNextStep && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid var(--acc-soft2)', background: 'var(--acc-soft)' }}>
+          <div className="ns-ic" style={{ flex: 'none' }}><Icon name="check" /></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              {connectedCount} réseau{connectedCount > 1 ? 'x' : ''} connecté{connectedCount > 1 ? 's' : ''} · étape 3 sur 3
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>
+              Générez un planning éditorial, puis programmez votre première publication.
+            </div>
+          </div>
+          <button className="btn acc sm" onClick={() => show('planning')}>
+            <Icon name="calendar" />Créer mon planning
+          </button>
         </div>
       )}
       <div className="page-head">
