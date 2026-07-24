@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useContacts } from '../state/ContactsContext';
 import { useSegments } from '../state/SegmentsContext';
@@ -68,25 +68,40 @@ const SUGGESTS: [string, string][] = [
 ];
 
 /* ---------- typed email body ---------- */
-function TypedBody({ paras, genId }: { paras: string[]; genId: number }) {
-  const [html, setHtml] = useState('');
+/* Aperçu du corps de l'e-mail. La frappe animée ne joue qu'une fois par
+   génération, puis `typed` repasse à null : l'aperçu affiche alors le texte
+   courant, si bien qu'une retouche manuelle s'y voit immédiatement. Sans ça,
+   l'aperçu restait figé sur le texte initial (et vide en rédaction manuelle).
+   Le parent monte ce composant avec key={genId}, donc l'état repart à zéro
+   à chaque nouvelle génération. */
+function TypedBody({ paras }: { paras: string[] }) {
+  const [typed, setTyped] = useState<string | null>('');
+  // Texte figé au montage : l'animation rejoue la version d'origine et ignore
+  // les frappes en cours, sans quoi elle courrait après le texte édité.
+  const source = useRef(paras);
+
   useEffect(() => {
-    const replaced = paras.map((t) => t.replace('{prenom}', 'Prénom'));
+    const replaced = source.current.map((t) => t.replace('{prenom}', 'Prénom'));
     let pi = 0, ci = 0;
     const built: string[] = [];
     const cursor = '<span class="typ-cursor"></span>';
     const id = window.setInterval(() => {
-      if (pi >= replaced.length) { window.clearInterval(id); return; }
+      if (pi >= replaced.length) { window.clearInterval(id); setTyped(null); return; }
       ci += 3;
       const slice = replaced[pi].slice(0, ci);
       const done = built.map((p) => `<p>${p}</p>`).join('');
-      setHtml(done + `<p>${slice}${cursor}</p>`);
-      if (ci >= replaced[pi].length) { built.push(replaced[pi]); pi++; ci = 0; if (pi >= replaced.length) { setHtml(built.map((p) => `<p>${p}</p>`).join('')); window.clearInterval(id); } }
+      setTyped(done + `<p>${slice}${cursor}</p>`);
+      if (ci >= replaced[pi].length) {
+        built.push(replaced[pi]); pi++; ci = 0;
+        // Fin : on rend la main au rendu direct pour refléter les retouches.
+        if (pi >= replaced.length) { window.clearInterval(id); setTyped(null); }
+      }
     }, 16);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genId]);
-  return <div className="ep-body-c" dangerouslySetInnerHTML={{ __html: html }} />;
+  }, []);
+
+  const live = paras.map((t) => `<p>${t.replace('{prenom}', 'Prénom')}</p>`).join('');
+  return <div className="ep-body-c" dangerouslySetInnerHTML={{ __html: typed ?? live }} />;
 }
 
 function StatusPill({ s }: { s: Campaign['status'] }) {
@@ -103,6 +118,10 @@ export function Campagnes() {
   const { campaigns, addCampaign } = useCampaigns();
   const { activeSpaceId } = useSpaces();
   const [view, setView] = useState<'list' | 'builder'>('list');
+  /* L'écran n'offrait que la rédaction par IA. `manual` distingue les deux
+     origines pour n'afficher que ce qui a du sens : pas de « 3 objets
+     proposés » ni de « régénérer » sur un texte écrit à la main. */
+  const [manual, setManual] = useState(false);
   const [sending, setSending] = useState(false);
   const fields = useMemo(() => fieldsFor(contacts), [contacts]);
 
@@ -159,9 +178,29 @@ export function Campagnes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignSeed]);
 
+  /* Rédaction manuelle : on part d'un e-mail vide plutôt que d'un modèle
+     pré-rempli, pour ne rien mettre dans la bouche de l'utilisateur. Le reste
+     du parcours (aperçu, envoi, programmation) est strictement identique — seul
+     le contenu change d'origine. */
+  const startManual = () => {
+    setManual(true);
+    setGen({
+      subjects: [''],
+      pre: '',
+      headline: '',
+      body: [''],
+      cta: 'En savoir plus',
+      segName: seg.name,
+      pct: 0,
+    });
+    setSubject(0);
+    setGenId((g) => g + 1);
+  };
+
   const doGenerate = async () => {
     const p = prompt.trim() || 'Partager une actualité utile à mes contacts cette semaine';
     if (!prompt.trim()) setPrompt(p);
+    setManual(false);
     setGenerating(true); setGen(null);
     // Vraie IA Claude en priorité ; repli sur le moteur de modèles si la clé manque.
     const b = getBusiness();
@@ -194,7 +233,18 @@ export function Campagnes() {
   // Les ouvertures/clics restent à null : aucun fournisseur ne les mesure
   // encore pour cette version (voir la note dans la liste plus bas) — on ne
   // les invente jamais, contrairement à l'ancien comportement de cet écran.
+  /* Un e-mail rédigé à la main peut être laissé vide : on refuse l'envoi plutôt
+     que d'expédier un message sans objet ni contenu à toute une base. */
+  const emptyReason = (): string | null => {
+    if (!gen) return 'Aucun e-mail à envoyer.';
+    if (!gen.subjects[subject]?.trim()) return 'Ajoutez un objet à votre e-mail.';
+    if (!gen.body.join('').trim()) return 'Votre message est vide — écrivez au moins un paragraphe.';
+    return null;
+  };
+
   const finish = async (status: 'sent' | 'sched') => {
+    const blocked = emptyReason();
+    if (blocked) { showToast(UI.close, blocked); return; }
     const name = gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/gu, '').trim();
 
     if (status === 'sched') {
@@ -203,7 +253,7 @@ export function Campagnes() {
       // on enregistre l'intention sans jamais prétendre à un envoi
       // automatique à une date donnée.
       addCampaign({ name, seg: seg.name, status: 'sched', recipients: seg.count, open: null, click: null, when: 'Programmée — envoi manuel à déclencher' });
-      setView('list'); setGen(null); setPrompt('');
+      setView('list'); setGen(null); setPrompt(''); setManual(false);
       showToast(UI.calendar, 'Campagne enregistrée comme programmée. Revenez l’envoyer manuellement le moment venu — l’envoi automatique à date n’est pas encore disponible.');
       return;
     }
@@ -233,14 +283,14 @@ export function Campagnes() {
         name, seg: seg.name, status: 'sent', recipients: res.total || recipients.length,
         open: null, click: null, when: 'Envoyée à l’instant', sentCount: sentN, failedCount: failedN,
       });
-      setView('list'); setGen(null); setPrompt('');
+      setView('list'); setGen(null); setPrompt(''); setManual(false);
       showToast(UI.rocket, failedN ? `Envoyée à ${fr(sentN)} contacts (${failedN} échec${failedN > 1 ? 's' : ''})` : `Campagne envoyée à ${fr(sentN)} contacts`);
     } else {
       addCampaign({
         name, seg: seg.name, status: 'failed', recipients: recipients.length,
         open: null, click: null, when: 'Échec de l’envoi', sendError: res.reason || null,
       });
-      setView('list'); setGen(null); setPrompt('');
+      setView('list'); setGen(null); setPrompt(''); setManual(false);
       showToast(UI.close, res.reason || 'Échec de l’envoi de la campagne.');
     }
   };
@@ -250,7 +300,7 @@ export function Campagnes() {
       <section className="screen show anim">
         <div className="page-head" style={{ marginBottom: 20 }}>
           <div>
-            <div className="eyebrow">Nouvelle campagne · assistée par IA</div>
+            <div className="eyebrow">Nouvelle campagne · {manual ? 'rédaction manuelle' : 'assistée par IA'}</div>
             <h1>Composez votre e-mail en 3 étapes</h1>
           </div>
           <button className="btn outline" onClick={() => setView('list')}><Icon name="arrowleft" />Retour aux campagnes</button>
@@ -261,7 +311,7 @@ export function Campagnes() {
             <div className="cb-steps">
               <div className={'cb-step ' + (gen ? 'done' : 'on')}><span className="num">{gen ? '✓' : '1'}</span>Cible &amp; objectif</div>
               <span className="cb-step-sep" />
-              <div className={'cb-step ' + (gen ? 'on' : '')}><span className="num">2</span>Génération IA</div>
+              <div className={'cb-step ' + (gen ? 'on' : '')}><span className="num">2</span>{manual ? 'Rédaction' : 'Génération IA'}</div>
               <span className="cb-step-sep" />
               <div className="cb-step"><span className="num">3</span>Envoi</div>
             </div>
@@ -289,6 +339,12 @@ export function Campagnes() {
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 9 }}>
                       {SUGGESTS.map(([label, full]) => <button key={label} className="fmt-chip" style={{ cursor: 'pointer' }} onClick={() => setPrompt(full)}>{label}</button>)}
                     </div>
+                    <div className="cb-manual">
+                      <span>Vous préférez écrire vous-même ?</span>
+                      <button className="btn outline sm" onClick={startManual}>
+                        <Icon name="edit" />Rédiger l’e-mail à la main
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -300,18 +356,64 @@ export function Campagnes() {
               )}
               {gen && !generating && (
                 <div className="ai-block">
-                  <p className="ai-lbl"><RawIcon svg={UI.sparkles2} />3 objets proposés — choisissez le vôtre</p>
-                  {gen.subjects.map((s, i) => (
-                    <div key={i} className={'subj-opt' + (i === subject ? ' on' : '')} onClick={() => setSubject(i)}>
-                      <div className="so-radio" />
-                      <div><div className="so-t">{s}</div><div className="so-m">{['Recommandé · le plus ouvert', 'Variante directe', 'Variante courte'][i]} · {28 + (s.length % 9)} caractères</div></div>
-                    </div>
-                  ))}
-                  <div className="field" style={{ marginTop: 18 }}>
-                    <label className="field-lbl">Texte d’aperçu (pré-en-tête)</label>
-                    <input className="inp" value={gen.pre} onChange={(e) => setGen({ ...gen, pre: e.target.value })} />
+                  {/* Plusieurs objets à comparer : uniquement quand l'IA en a
+                      proposé plusieurs. À la main, on écrit le sien. */}
+                  {!manual && gen.subjects.length > 1 && (
+                    <>
+                      <p className="ai-lbl"><RawIcon svg={UI.sparkles2} />{gen.subjects.length} objets proposés — choisissez le vôtre</p>
+                      {gen.subjects.map((s, i) => (
+                        <div key={i} className={'subj-opt' + (i === subject ? ' on' : '')} onClick={() => setSubject(i)}>
+                          <div className="so-radio" />
+                          <div><div className="so-t">{s}</div><div className="so-m">{['Recommandé · le plus ouvert', 'Variante directe', 'Variante courte'][i]} · {28 + (s.length % 9)} caractères</div></div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Champs éditables : le texte produit par l'IA n'était
+                      modifiable nulle part (seul le pré-en-tête l'était), ce qui
+                      obligeait à régénérer pour changer un mot. */}
+                  <div className="field" style={{ marginTop: !manual && gen.subjects.length > 1 ? 18 : 0 }}>
+                    <label className="field-lbl" htmlFor="cb-subject">Objet de l’e-mail</label>
+                    <input
+                      id="cb-subject" className="inp" placeholder="Ex : Votre offre de rentrée"
+                      value={gen.subjects[subject] || ''}
+                      onChange={(e) => {
+                        const next = [...gen.subjects];
+                        next[subject] = e.target.value;
+                        setGen({ ...gen, subjects: next });
+                      }}
+                    />
                   </div>
-                  <button className="btn ghost sm" style={{ marginTop: 14 }} onClick={doGenerate}><Icon name="refresh" />Régénérer une autre version</button>
+                  <div className="field">
+                    <label className="field-lbl" htmlFor="cb-pre">Texte d’aperçu (pré-en-tête)</label>
+                    <input id="cb-pre" className="inp" placeholder="La phrase visible après l’objet dans la boîte de réception" value={gen.pre} onChange={(e) => setGen({ ...gen, pre: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label className="field-lbl" htmlFor="cb-headline">Titre dans le message</label>
+                    <input id="cb-headline" className="inp" placeholder="Reprend l’objet si laissé vide" value={gen.headline} onChange={(e) => setGen({ ...gen, headline: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label className="field-lbl" htmlFor="cb-body">Message</label>
+                    <textarea
+                      id="cb-body" className="inp" rows={9}
+                      placeholder={'Bonjour {prenom},\n\nUne ligne vide sépare deux paragraphes.'}
+                      value={gen.body.join('\n\n')}
+                      onChange={(e) => setGen({ ...gen, body: e.target.value.split(/\n{2,}/) })}
+                      style={{ resize: 'vertical', lineHeight: 1.6 }}
+                    />
+                    <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginTop: 6 }}>
+                      <code>{'{prenom}'}</code> est remplacé par le prénom de chaque destinataire. Une ligne vide crée un paragraphe.
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-lbl" htmlFor="cb-cta">Texte du bouton</label>
+                    <input id="cb-cta" className="inp" placeholder="Ex : Découvrir l’offre" value={gen.cta} onChange={(e) => setGen({ ...gen, cta: e.target.value })} />
+                  </div>
+
+                  {!manual && (
+                    <button className="btn ghost sm" style={{ marginTop: 4 }} onClick={doGenerate}><Icon name="refresh" />Régénérer une autre version</button>
+                  )}
                 </div>
               )}
             </div>
@@ -353,7 +455,7 @@ export function Campagnes() {
                   <div className="ep-subj-line">{gen.subjects[subject]}</div>
                   <div style={{ fontSize: 12, color: '#999', padding: '4px 20px 0' }}>{gen.pre}</div>
                   <div className="ep-head-band"><img src={MAIL_LOGO} alt="Logo" /><div className="ehb-t">{gen.headline.replace('{prenom}', 'Prénom')}</div></div>
-                  <TypedBody paras={gen.body} genId={genId} />
+                  <TypedBody key={genId} paras={gen.body} />
                   <div className="ep-cta-wrap"><a className="ep-cta" href="#">{gen.cta}</a></div>
                   <div className="ep-foot">
                     <div className="ef-social">{SOCIAL.map((s) => <span key={s}><Brand name={s} /></span>)}</div>
@@ -389,7 +491,9 @@ export function Campagnes() {
           <h1>Des campagnes qui convertissent, sans Brevo</h1>
           <p>Décrivez votre objectif en une phrase : l’IA rédige l’e-mail, choisit l’objet le plus percutant et l’adresse au bon segment de votre base clients.</p>
         </div>
-        <button className="btn acc" onClick={() => openBuilder()}><Icon name="sparkles2" />Nouvelle campagne IA</button>
+        {/* Plus « IA » dans le libellé : le parcours mène aussi bien à une
+            rédaction manuelle qu'à une génération. */}
+        <button className="btn acc" onClick={() => openBuilder()}><Icon name="plus" />Nouvelle campagne</button>
       </div>
 
       <div className="crm-stats" style={{ marginBottom: 18 }}>

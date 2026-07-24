@@ -344,3 +344,12 @@ textarea.inp { resize: none; line-height: 1.55; }
   .camp-stats { justify-content: flex-start; flex-wrap: wrap; gap: 16px; }
   .crit-row select.inp, .crit-row .inp { font-size: 16px; }
 }
+
+/* Passage en rédaction manuelle depuis l'étape « objectif ». L'écran n'offrait
+   que la génération par IA : cette porte de sortie mène au même parcours
+   (aperçu, envoi, programmation) avec un e-mail vide à remplir. */
+.cb-manual {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line);
+}
+.cb-manual > span { font-size: 12.5px; color: var(--tx-3); flex: 1; min-width: 0; }
