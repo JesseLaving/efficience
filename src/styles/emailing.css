@@ -175,9 +175,23 @@ textarea.inp { resize: none; line-height: 1.55; }
 
 /* empty / building state */
 .crm-empty { display: grid; place-items: center; min-height: 280px; text-align: center; padding: 30px; }
-.crm-empty .ce-ic { width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 14px; display: grid; place-items: center;
-  color: var(--tx-3); background: var(--canvas-soft); border: 1px solid var(--line); }
-.crm-empty .ce-ic .ic { width: 26px; height: 26px; }
+/* L'icône était grise sur gris : un écran vide ressemblait à une panne plutôt
+   qu'à un point de départ. Halo de marque + entrée en douceur, et une lueur
+   qui respire pour signaler que l'écran est vivant, pas figé. */
+.crm-empty .ce-ic {
+  position: relative; width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 16px;
+  display: grid; place-items: center;
+  color: var(--acc); background: var(--acc-soft); border: 1px solid var(--acc-soft2);
+  animation: ce-in .5s var(--ease-out) backwards;
+}
+.crm-empty .ce-ic::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 20px;
+  background: var(--acc-soft); opacity: .5; z-index: -1;
+  animation: ce-halo 3.2s var(--ease-in-out) infinite;
+}
+.crm-empty .ce-ic .ic { width: 27px; height: 27px; }
+@keyframes ce-in { from { opacity: 0; transform: scale(.7) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes ce-halo { 0%, 100% { transform: scale(.92); opacity: .35; } 50% { transform: scale(1.06); opacity: .6; } }
 .crm-empty .ce-t { font-size: 15px; font-weight: 600; color: var(--tx); }
 .crm-empty p { color: var(--tx-3); font-size: 13px; margin: 8px 0 0; max-width: 300px; }
 
