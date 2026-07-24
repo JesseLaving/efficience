@@ -11,6 +11,7 @@ import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } 
 import { KpiModal } from '../components/KpiModal';
 import { useTilt3d } from '../lib/useTilt3d';
 import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
+import { useAuthUser, firstNameOf } from '../state/AuthUserContext';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
@@ -160,6 +161,7 @@ function Chart({ series }: { series: MetaSeries | null }) {
 }
 
 export function Dashboard() {
+  const greetName = firstNameOf(useAuthUser());
   const { show } = useEff();
   const { totalReach, metaStats } = useConnections();
   const { scheduled } = useCalendar();
@@ -215,7 +217,10 @@ export function Dashboard() {
       <div className="page-head">
         <div>
           <div className="eyebrow">Vue d’ensemble</div>
-          <h1>Bonjour Jesse 👋 — votre tableau de bord</h1>
+          {/* Nom de la personne connectée, jamais un nom en dur : sans ça, tout
+              utilisateur était accueilli sous l'identité du compte d'origine.
+              Sans nom connu, on salue sans nom plutôt que d'en inventer un. */}
+          <h1>{greetName ? `Bonjour ${greetName} 👋 — votre tableau de bord` : 'Votre tableau de bord'}</h1>
           <p>Connectez vos réseaux, importez votre base clients et créez vos campagnes : vos indicateurs se rempliront avec vos vraies données.</p>
         </div>
         <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>

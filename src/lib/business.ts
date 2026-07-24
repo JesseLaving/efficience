@@ -1,21 +1,26 @@
 /* ============================================================
-   Identity fallback (Efficience Marketing — Jesse's own real data).
-   For multi-user spaces the active identity comes from the per-space profile
-   captured at onboarding; getBusiness() merges it over this fallback.
-   Metrics (followers, contacts, stats) stay 0/empty: the app starts vide and
-   is populated by the user's real actions — no invented data.
+   Identité de repli, utilisée tant que l'espace n'a pas de profil.
+   L'identité réelle vient du profil par espace capturé à l'onboarding ;
+   getBusiness() le fusionne par-dessus ce repli.
+
+   Ce repli est volontairement NEUTRE : il servait auparavant les coordonnées
+   réelles du compte d'origine (nom, e-mail, ville), si bien que tout autre
+   utilisateur n'ayant pas terminé l'onboarding voyait — et publiait sous —
+   l'identité de quelqu'un d'autre. Aucune donnée personnelle ici.
+
+   Les métriques (abonnés, contacts, stats) restent à 0/vide : l'app démarre
+   vierge et se remplit avec les actions réelles de l'utilisateur.
    ============================================================ */
 import { loadProfile } from './profile';
 
 export const BUSINESS = {
-  name: 'Efficience Marketing',
-  owner: 'Jesse Laving',
-  initials: 'EM',
-  email: 'js.laving@gmail.com',
-  city: 'Avignon',
-  region: 'Vaucluse · Provence',
-  addressLine: 'Avignon · Vaucluse',
-  sector: 'Conseil & formation — stratégie commerciale, marketing & communication',
+  name: 'Votre entreprise',
+  initials: '—',
+  email: '',
+  city: '',
+  region: '',
+  addressLine: '',
+  sector: '',
 };
 
 export type Business = typeof BUSINESS;

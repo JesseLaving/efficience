@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getSpaceData, saveSpaceData } from '../lib/auth';
 import { SpaceProvider, useSpaces } from '../state/SpaceContext';
+import { AuthUserProvider } from '../state/AuthUserContext';
 import { LoginScreen } from './LoginScreen';
 import { SpaceSelector } from './SpaceSelector';
 import { ProfileMenu } from './ProfileMenu';
@@ -143,9 +144,11 @@ export function AuthWrapper() {
      hauteur écran) affichant deux fois le nom du client. */
   if (activeSpaceId && !activating) {
     return (
-      <SpaceProvider activeSpaceId={activeSpaceId} onActiveSpaceDeleted={handleActiveSpaceDeleted}>
-        <App headerLeft={spaceSelector} headerRight={profileMenu} />
-      </SpaceProvider>
+      <AuthUserProvider user={user}>
+        <SpaceProvider activeSpaceId={activeSpaceId} onActiveSpaceDeleted={handleActiveSpaceDeleted}>
+          <App headerLeft={spaceSelector} headerRight={profileMenu} />
+        </SpaceProvider>
+      </AuthUserProvider>
     );
   }
 
