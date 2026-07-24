@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
+import { useAuthUser } from '../state/AuthUserContext';
 import { useContacts } from '../state/ContactsContext';
 import { useSegments } from '../state/SegmentsContext';
 import { useCampaigns } from '../state/CampaignsContext';
@@ -113,6 +114,11 @@ function StatusPill({ s }: { s: Campaign['status'] }) {
 
 export function Campagnes() {
   const { campaignSeed, clearCampaignSeed } = useEff();
+  const authUser = useAuthUser();
+  /* Adresse qui recevra les réponses : le compte connecté d'abord, puis le
+     profil d'espace. Calculée une seule fois ici pour que ce qui est annoncé
+     dans l'interface soit exactement ce qui part au serveur. */
+  const replyTo = authUser?.email || getBusiness().email || '';
   const { contacts } = useContacts();
   const { savedSegments, groups } = useSegments();
   const { campaigns, addCampaign } = useCampaigns();
@@ -267,7 +273,7 @@ export function Campagnes() {
     const b = getBusiness();
     const res = await sendCampaignEmail({
       spaceId: activeSpaceId,
-      business: { name: b.name, email: b.email, addressLine: b.addressLine },
+      business: { name: b.name, email: replyTo, addressLine: b.addressLine },
       subject: gen!.subjects[subject],
       preheader: gen!.pre,
       headline: gen!.headline || gen!.subjects[subject],
@@ -409,6 +415,22 @@ export function Campagnes() {
                   <div className="field">
                     <label className="field-lbl" htmlFor="cb-cta">Texte du bouton</label>
                     <input id="cb-cta" className="inp" placeholder="Ex : Découvrir l’offre" value={gen.cta} onChange={(e) => setGen({ ...gen, cta: e.target.value })} />
+                  </div>
+
+                  {/* Ce que verra le destinataire : l'en-tête From reste sur le
+                      domaine vérifié d'Efficience (obligatoire pour que l'e-mail
+                      passe les contrôles SPF/DKIM), mais les réponses arrivent
+                      sur l'adresse ci-dessous, également affichée en pied de mail. */}
+                  <div className="cb-sender">
+                    <Icon name="mail" />
+                    <div>
+                      <div className="cbs-t">Réponses envoyées à {replyTo || <em>aucune adresse</em>}</div>
+                      <div className="cbs-s">
+                        {replyTo
+                          ? <>L’expéditeur affiché reste <b>{getBusiness().name || 'votre entreprise'} via Efficience</b> — nécessaire pour la délivrabilité — et cette adresse apparaît en pied de message.</>
+                          : <>Renseignez une adresse dans le Configurateur : sans elle, vos destinataires ne pourront pas vous répondre.</>}
+                      </div>
+                    </div>
                   </div>
 
                   {!manual && (

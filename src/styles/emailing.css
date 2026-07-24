@@ -353,3 +353,16 @@ textarea.inp { resize: none; line-height: 1.55; }
   margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line);
 }
 .cb-manual > span { font-size: 12.5px; color: var(--tx-3); flex: 1; min-width: 0; }
+
+/* Rappel de l'adresse de réponse avant envoi. L'en-tête From reste sur le
+   domaine vérifié d'Efficience (SPF/DKIM) : sans ce bloc, rien n'indiquait où
+   atterrissent les réponses des destinataires. */
+.cb-sender {
+  display: flex; align-items: flex-start; gap: 11px;
+  margin-top: 4px; padding: 12px 14px; border-radius: var(--r-btn);
+  border: 1px solid var(--line); background: var(--canvas-soft);
+}
+.cb-sender > .ic { width: 17px; height: 17px; flex: none; margin-top: 1px; color: var(--acc); }
+.cb-sender .cbs-t { font-size: 13px; font-weight: 600; color: var(--tx-str); }
+.cb-sender .cbs-t em { font-style: normal; color: var(--danger); }
+.cb-sender .cbs-s { font-size: 11.5px; color: var(--tx-3); margin-top: 3px; line-height: 1.5; }

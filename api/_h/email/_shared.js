@@ -94,6 +94,12 @@ export function buildEmailHtml({ host, business, subject, preheader, headline, b
   const logo = `https://${host}/assets/logo-white.png`;
   const paras = bodyParagraphs.map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#292b25;">${p}</p>`).join('');
   const addr = [business.name, business.addressLine].filter(Boolean).join(' · ');
+  /* Adresse de contact affichée en pied : l'en-tête From reste sur le domaine
+     vérifié (contrainte SPF/DKIM), donc sans cette ligne le destinataire ne
+     voyait jamais à qui il s'adresse réellement. C'est aussi le Reply-To. */
+  const contact = business.email
+    ? `<br>Écrire à <a href="mailto:${escapeHtml(business.email)}" style="color:#5b7550;">${escapeHtml(business.email)}</a>`
+    : '';
   return `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f6f7f2;font-family:Arial,Helvetica,sans-serif;">
@@ -108,7 +114,7 @@ ${paras}
 ${cta ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 6px;"><tr><td style="border-radius:6px;background:#5b7550;"><a href="${escapeHtml(ctaUrl || '#')}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;">${escapeHtml(cta)}</a></td></tr></table>` : ''}
 </td></tr>
 <tr><td style="padding:20px 32px;border-top:1px solid #e0e3d9;font-size:12px;line-height:1.6;color:#71755f;">
-${escapeHtml(addr)}<br>
+${escapeHtml(addr)}${contact}<br>
 Vous recevez cet e-mail car vous êtes client·e de ${escapeHtml(business.name)}.
 <a href="${unsubUrl}" style="color:#5b7550;">Se désinscrire</a>
 </td></tr>
@@ -122,7 +128,9 @@ export function buildEmailText({ business, headline, bodyParagraphs, cta, ctaUrl
   const addr = [business.name, business.addressLine].filter(Boolean).join(' · ');
   const lines = [headline, '', ...bodyParagraphs.map((p) => p.replace(/<[^>]+>/g, '')), ''];
   if (cta) lines.push(`${cta} : ${ctaUrl || ''}`, '');
-  lines.push('—', addr, `Vous recevez cet e-mail car vous êtes client·e de ${business.name}.`, `Se désinscrire : ${unsubUrl}`);
+  lines.push('—', addr);
+  if (business.email) lines.push(`Écrire à : ${business.email}`);
+  lines.push(`Vous recevez cet e-mail car vous êtes client·e de ${business.name}.`, `Se désinscrire : ${unsubUrl}`);
   return lines.join('\n');
 }
 
