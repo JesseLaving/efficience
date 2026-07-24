@@ -134,30 +134,39 @@ export function AuthWrapper() {
     return <LoginScreen />;
   }
 
+  const spaceSelector = <SpaceSelector selectedSpaceId={activeSpaceId ?? undefined} onSelect={activateSpace} />;
+  const profileMenu = <ProfileMenu name={user?.name} email={user?.email} />;
+
+  /* Un espace est actif → l'App fournit la seule barre d'en-tête, dans laquelle
+     on injecte le sélecteur d'espace et le menu profil. Auparavant cette barre
+     s'ajoutait à celle de l'App : deux bandeaux empilés (133 px, 15 % de la
+     hauteur écran) affichant deux fois le nom du client. */
+  if (activeSpaceId && !activating) {
+    return (
+      <SpaceProvider activeSpaceId={activeSpaceId} onActiveSpaceDeleted={handleActiveSpaceDeleted}>
+        <App headerLeft={spaceSelector} headerRight={profileMenu} />
+      </SpaceProvider>
+    );
+  }
+
+  /* Aucun espace actif (ou bascule en cours) : l'App n'est pas montée, donc on
+     garde une barre autonome pour permettre de choisir ou créer un espace. */
   return (
     <SpaceProvider activeSpaceId={activeSpaceId} onActiveSpaceDeleted={handleActiveSpaceDeleted}>
       <div className="auth-layout">
         <header className="auth-header">
           <div className="auth-header-left">
             <img src={`${import.meta.env.BASE_URL}assets/logo-green.png`} alt="Efficience" style={{ height: 24, width: 'auto' }} />
-            <h1>Efficience</h1>
+            {/* Marque, pas titre de page : un h1 ici en créait un second, en
+                concurrence avec le titre réel de l'écran. */}
+            <span className="auth-brand">Efficience</span>
           </div>
-          <div className="auth-header-center">
-            <SpaceSelector selectedSpaceId={activeSpaceId ?? undefined} onSelect={activateSpace} />
-          </div>
-          <div className="auth-header-right">
-            <ProfileMenu name={user?.name} email={user?.email} />
-          </div>
+          <div className="auth-header-center">{spaceSelector}</div>
+          <div className="auth-header-right">{profileMenu}</div>
         </header>
 
         <div className="auth-content">
-          {activating ? (
-            <div className="auth-loading">Chargement de l'espace…</div>
-          ) : activeSpaceId ? (
-            <App />
-          ) : (
-            <NoActiveSpace />
-          )}
+          {activating ? <div className="auth-loading">Chargement de l'espace…</div> : <NoActiveSpace />}
         </div>
       </div>
     </SpaceProvider>

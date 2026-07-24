@@ -80,8 +80,11 @@ export function GlobalSearch() {
 
   return (
     <>
-      <button type="button" className="search" onClick={() => setOpen(true)}>
-        <Icon name="search" />Rechercher un post, un client, un mot-clé…<kbd>⌘K</kbd>
+      {/* Libellé court et tronqué : l'ancien ("Rechercher un post, un client,
+          un mot-clé…") se repliait sur trois lignes dans la barre unique et
+          l'épaississait d'autant. */}
+      <button type="button" className="search" onClick={() => setOpen(true)} aria-label="Rechercher un post, un client ou un mot-clé">
+        <Icon name="search" /><span className="search-lbl">Rechercher…</span><kbd>⌘K</kbd>
       </button>
       {open && createPortal(
         <div className="search-modal" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>

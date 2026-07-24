@@ -45,11 +45,14 @@ const PLACEHOLDERS: Record<string, { icon: UIName; title: string; sub: string }>
   help: { icon: 'help', title: 'Aide & support', sub: 'Le centre d’aide arrive prochainement. En attendant, contactez-nous directement pour toute question.' },
 };
 
-export function App() {
-  const { screen, show, client } = useEff();
-  const { connectedCount, accountFor } = useConnections();
+/* headerLeft / headerRight : emplacements pour le sélecteur d'espace et le menu
+   profil, qui vivaient dans une seconde barre au-dessus de celle-ci. Les deux
+   barres affichaient le même nom de client via deux sélecteurs différents ;
+   elles sont désormais fusionnées en une seule. */
+export function App({ headerLeft, headerRight }: { headerLeft?: React.ReactNode; headerRight?: React.ReactNode } = {}) {
+  const { screen, show } = useEff();
+  const { connectedCount } = useConnections();
   const { contacts } = useContacts();
-  const fbPicture = accountFor('facebook')?.picture;
   const [navOpen, setNavOpen] = useState(false);
 
   // First connection: open the Configurateur so the real analysis runs.
@@ -117,20 +120,17 @@ export function App() {
           <button type="button" className="nav-toggle" aria-label="Ouvrir le menu" onClick={() => setNavOpen((v) => !v)}>
             <Icon name="menu" />
           </button>
-          <button type="button" className="client-sw" title="Modifier le profil d’entreprise" onClick={() => show('config')}>
-            {fbPicture
-              ? <img className="ava" src={fbPicture} alt="" style={{ objectFit: 'cover' }} />
-              : <div className="ava" style={{ borderRadius: 6 }}>{client.initials}</div>}
-            <div className="cs-txt">
-              <div className="cs-t">{client.name}</div>
-              <div className="cs-s">Client actif</div>
-            </div>
-            <Icon name="chevdown" />
-          </button>
+          <img
+            className="topbar-logo"
+            src={`${import.meta.env.BASE_URL}assets/logo-green.png`}
+            alt="Efficience"
+          />
+          {headerLeft}
           <GlobalSearch />
           <div className="top-r">
             <button className="btn acc sm" onClick={() => show('studio')}><Icon name="plus" />Créer</button>
             <NotificationBell />
+            {headerRight}
           </div>
         </header>
 

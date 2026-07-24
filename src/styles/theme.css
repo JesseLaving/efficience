@@ -122,6 +122,8 @@ body {
 
 /* ---------- topbar ---------- */
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+/* Logo dans la barre unique (la seconde barre, qui le portait, a été fusionnée ici). */
+.topbar-logo { height: 26px; width: auto; flex: none; display: block; }
 .topbar {
   display: flex; align-items: center; gap: 14px; padding: 12px 26px;
   border-bottom: 1px solid var(--line-2); background: var(--canvas-2);
@@ -139,11 +141,12 @@ body {
 .client-sw .ic { width: 15px; height: 15px; color: var(--tx-3); margin-left: 2px; }
 
 .search {
-  flex: 1; max-width: 440px; display: flex; align-items: center; gap: 10px;
+  flex: 1; min-width: 0; max-width: 440px; display: flex; align-items: center; gap: 10px;
   padding: 9px 14px; border-radius: var(--r-btn); border: 1px solid var(--line);
   background: var(--canvas-soft); color: var(--tx-3); font-size: 13.5px; cursor: pointer;
-  transition: border-color .15s; font-family: inherit; text-align: left;
+  transition: border-color .15s; font-family: inherit; text-align: left; white-space: nowrap;
 }
+.search .search-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search:hover { border-color: #c3c7b6; }
 .search .ic { width: 16px; height: 16px; }
 .search kbd { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: var(--r-chip); border: 1px solid var(--line); color: var(--tx-3); }
@@ -369,6 +372,14 @@ body {
   .nav-scrim { display: block; }
   .nav-scrim:not(.show) { pointer-events: none; }
   .search { display: none; }
+  /* Barre unique sur mobile : le bouton menu identifie déjà l'app, et le nom
+     de l'espace doit pouvoir rétrécir — sans ça « Créer », la cloche et
+     l'avatar débordaient hors de l'écran. */
+  .topbar { gap: 10px; padding: 12px 16px; }
+  .topbar-logo { display: none; }
+  .topbar .space-selector-wrapper { min-width: 0; }
+  .topbar .space-selector-trigger { max-width: 100%; }
+  .topbar .space-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .screen { padding: 22px 18px 60px; }
   /* 16px minimum prevents iOS Safari auto-zoom on input focus. */
   .inp, select.inp, textarea.inp { font-size: 16px; }

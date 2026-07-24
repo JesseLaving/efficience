@@ -11,9 +11,13 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #fafafa;
+  background: var(--canvas);
 }
 
+/* Barre autonome affichée uniquement quand aucun espace n'est actif : dès
+   qu'un espace est ouvert, c'est la topbar de l'App qui sert d'en-tête unique.
+   Alignée sur les tokens du thème plutôt que sur des couleurs en dur, pour ne
+   pas diverger du reste de l'application. */
 .auth-header {
   height: 56px;
   display: flex;
@@ -21,9 +25,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 0 20px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: var(--canvas-2);
+  border-bottom: 1px solid var(--line-2);
 }
 
 .auth-header-left {
@@ -33,11 +36,10 @@
   flex-shrink: 0;
 }
 
-.auth-header-left h1 {
-  margin: 0;
+.auth-brand {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--tx-str);
   letter-spacing: -0.2px;
 }
 
