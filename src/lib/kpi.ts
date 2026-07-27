@@ -8,7 +8,8 @@ export interface KpiDef {
   val: number;
   /** Hook to a real, computed value. Keys map to live Meta aggregates in the Dashboard.
    *  'reach' is kept as an alias of 'followers' for backward-compat with persisted state. */
-  live?: 'reach' | 'followers' | 'engagementRate' | 'totalEngagement' | 'reachInsights' | 'postsMonth';
+  live?: 'reach' | 'followers' | 'engagementRate' | 'totalEngagement' | 'reachInsights' | 'postsMonth'
+    | 'emailOpenRate' | 'emailClicks' | 'emailUnsubscribes';
   fmt: string;
   trend?: Trend;
   suggested?: boolean;
@@ -46,7 +47,9 @@ export const CATALOG: Record<string, KpiDef> = {
   gViews: { label: 'Visites fiche Google', icon: 'eye', src: 'google', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Référencement local' },
   orders: { label: 'Demandes / leads', icon: 'clipboard', src: 'site', val: 0, fmt: 'int', trend: NT, suggested: true, why: 'Activité conseil & formation' },
   basket: { label: 'Panier moyen', icon: 'euro', src: 'crm', val: 0, fmt: 'eur', trend: NT, suggested: true, why: 'Issu de votre CRM' },
-  emailOpen: { label: 'Taux d’ouverture e-mail', icon: 'mailopen', src: 'email', val: 0, fmt: 'pct', trend: NT, suggested: true, why: 'Vos campagnes' },
+  emailOpen: { label: 'Taux d’ouverture e-mail', icon: 'mailopen', src: 'email', val: 0, live: 'emailOpenRate', fmt: 'pct', trend: NT, suggested: true, why: 'Vos campagnes' },
+  emailClicks: { label: 'Clics e-mail', icon: 'cursor', src: 'email', val: 0, live: 'emailClicks', fmt: 'int', trend: NT, suggested: true, why: 'Destinataires ayant cliqué' },
+  emailUnsub: { label: 'Désinscriptions', icon: 'shield', src: 'email', val: 0, live: 'emailUnsubscribes', fmt: 'int', trend: NT, suggested: true, why: 'Suivi de vos campagnes' },
 
   newSubs: { label: 'Nouveaux abonnés · 30j', icon: 'users', src: 'global', val: 0, fmt: 'int', trend: NT },
   siteClicks: { label: 'Clics vers le site', icon: 'cursor', src: 'site', val: 0, fmt: 'int', trend: NT },

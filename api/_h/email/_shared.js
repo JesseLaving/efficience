@@ -82,9 +82,14 @@ export function personalize(text, contact) {
   return String(text || '').replaceAll('{prenom}', first);
 }
 
-export function unsubscribeUrl(host, spaceId, email) {
+/* `campaignId` sert uniquement à imputer la désinscription à la campagne qui
+   l'a déclenchée. Il reste HORS du jeton signé : le jeton n'atteste que du
+   couple (espace, destinataire), et l'opposition doit rester valable même si
+   ce paramètre est modifié ou absent — se désinscrire ne doit jamais échouer. */
+export function unsubscribeUrl(host, spaceId, email, campaignId) {
   const token = makeUnsubToken(spaceId, email);
-  return `https://${host}/api/email/unsubscribe?s=${spaceId}&e=${encodeURIComponent(email)}&t=${token}`;
+  const c = campaignId ? `&c=${encodeURIComponent(campaignId)}` : '';
+  return `https://${host}/api/email/unsubscribe?s=${spaceId}&e=${encodeURIComponent(email)}&t=${token}${c}`;
 }
 
 /* Self-contained HTML e-mail — table layout + inline styles throughout

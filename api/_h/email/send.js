@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { ok: false, reason: 'POST requis' });
 
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
-  const { spaceId, business, subject, preheader, headline, bodyParagraphs, cta, ctaUrl, contacts } = body || {};
+  const { spaceId, business, subject, preheader, headline, bodyParagraphs, cta, ctaUrl, contacts, campaignId } = body || {};
   if (!spaceId || !business?.name || !subject || !headline || !Array.isArray(bodyParagraphs) || !bodyParagraphs.length) {
     return json(res, 400, { ok: false, reason: 'spaceId, business, subject, headline et bodyParagraphs sont requis.' });
   }
@@ -54,6 +54,10 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: false, reason: `Quota d'envoi quotidien atteint (${quota.limit} e-mails/jour). Réessayez demain.` });
     }
 
+    /* Resend n'accepte que [A-Za-z0-9_-] dans une valeur de tag : on filtre au
+       lieu de faire confiance au client, sinon un identifiant exotique ferait
+       échouer tout l'envoi et pas seulement le suivi. */
+    const safeCampaignId = String(campaignId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
     const bizName = sanitizeHeaderValue(business.name);
     const from = `${bizName} via Efficience <campagnes@${process.env.EMAIL_FROM_DOMAIN}>`;
     const replyTo = business.email && EMAIL_RE.test(business.email) ? business.email : undefined;
@@ -62,7 +66,7 @@ export default async function handler(req, res) {
     const results = [];
     for (const group of chunk(recipients, EMAIL_BATCH_SIZE)) {
       const emails = group.map((c) => {
-        const unsubUrl = unsubscribeUrl(host, spaceId, c.email);
+        const unsubUrl = unsubscribeUrl(host, spaceId, c.email, safeCampaignId);
         const paras = bodyParagraphs.map((p) => personalize(p, c));
         return {
           from, to: [c.email], reply_to: replyTo,
@@ -70,6 +74,14 @@ export default async function handler(req, res) {
           html: buildEmailHtml({ host, business, subject, preheader, headline: personalize(headline, c), bodyParagraphs: paras, cta, ctaUrl, unsubUrl }),
           text: buildEmailText({ business, headline: personalize(headline, c), bodyParagraphs: paras, cta, ctaUrl, unsubUrl }),
           headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+          /* Marquage : c'est par ces tags que le webhook rattache une ouverture
+             ou un clic à sa campagne. Sans eux, l'événement arrive orphelin et
+             n'est comptabilisé nulle part. Resend restreint les valeurs de tag
+             à [A-Za-z0-9_-], d'où l'identifiant déjà normalisé côté client. */
+          ...(safeCampaignId ? { tags: [
+            { name: 'space_id', value: String(spaceId) },
+            { name: 'campaign_id', value: safeCampaignId },
+          ] } : {}),
         };
       });
       try {

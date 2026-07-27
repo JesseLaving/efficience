@@ -72,6 +72,30 @@ export function ensureSchema() {
           unsubscribed_at TIMESTAMPTZ DEFAULT NOW(),
           PRIMARY KEY (space_id, email)
         )`);
+      /* Événements d'e-mail rapportés par Resend (ouverture, clic, échec…).
+         La clé primaire porte le destinataire ET le type d'événement : un même
+         contact qui rouvre dix fois compte pour une seule ouverture. C'est la
+         mesure honnête — un compteur brut serait gonflé par les rechargements
+         d'images et les caches de messagerie.
+         L'adresse est conservée pour dédupliquer, jamais affichée telle quelle. */
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS app_email_events (
+          space_id INTEGER NOT NULL REFERENCES app_spaces(id) ON DELETE CASCADE,
+          campaign_id VARCHAR(64) NOT NULL,
+          email VARCHAR(320) NOT NULL,
+          event VARCHAR(32) NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          PRIMARY KEY (space_id, campaign_id, email, event)
+        )`);
+      await p.query(`
+        CREATE INDEX IF NOT EXISTS app_email_events_space_campaign
+          ON app_email_events (space_id, campaign_id)`);
+      /* La désinscription est déjà stockée par espace ; on retient en plus la
+         campagne d'origine pour pouvoir l'imputer, sans dupliquer la source de
+         vérité de l'opposition (app_email_unsubscribes reste la référence). */
+      await p.query(`
+        ALTER TABLE app_email_unsubscribes
+          ADD COLUMN IF NOT EXISTS campaign_id VARCHAR(64)`);
     })().catch((e) => { schemaReady = null; throw e; });
   }
   return schemaReady;
@@ -160,12 +184,63 @@ export async function getUnsubscribedSet(spaceId, emails) {
     return new Set();
   }
 }
-export async function addUnsubscribe(spaceId, email) {
+export async function addUnsubscribe(spaceId, email, campaignId = null) {
   await query(
-    `INSERT INTO app_email_unsubscribes (space_id, email) VALUES ($1, $2)
+    `INSERT INTO app_email_unsubscribes (space_id, email, campaign_id) VALUES ($1, $2, $3)
      ON CONFLICT (space_id, email) DO NOTHING`,
-    [spaceId, (email || '').toLowerCase()]
+    [spaceId, (email || '').toLowerCase(), campaignId]
   );
+}
+
+/* ---- statistiques de campagne (événements rapportés par Resend) ---- */
+
+/* Enregistre un événement. ON CONFLICT DO NOTHING : la clé primaire
+   (espace, campagne, destinataire, type) rend l'opération idempotente, ce qui
+   couvre les renvois de webhook — Resend réessaie en cas d'erreur, et un même
+   destinataire peut rouvrir un e-mail plusieurs fois. */
+export async function recordEmailEvent(spaceId, campaignId, email, event) {
+  await query(
+    `INSERT INTO app_email_events (space_id, campaign_id, email, event)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (space_id, campaign_id, email, event) DO NOTHING`,
+    [spaceId, campaignId, (email || '').toLowerCase(), event]
+  );
+}
+
+/* Compteurs par campagne pour un espace : { [campaignId]: { opened, clicked,
+   bounced, complained, unsubscribed } }. Les valeurs sont des destinataires
+   DISTINCTS, jamais des occurrences brutes. Renvoie {} en cas d'erreur —
+   l'écran affiche alors « — » plutôt qu'un chiffre faux. */
+export async function getCampaignStats(spaceId) {
+  try {
+    const { rows } = await query(
+      `SELECT campaign_id, event, COUNT(*)::int AS n
+         FROM app_email_events WHERE space_id = $1
+        GROUP BY campaign_id, event`,
+      [spaceId]
+    );
+    const out = {};
+    for (const r of rows) {
+      if (!out[r.campaign_id]) out[r.campaign_id] = {};
+      out[r.campaign_id][r.event] = r.n;
+    }
+    // Les désinscriptions vivent dans leur propre table (source de vérité de
+    // l'opposition) : on les rattache ici pour l'affichage.
+    const { rows: unsub } = await query(
+      `SELECT campaign_id, COUNT(*)::int AS n
+         FROM app_email_unsubscribes
+        WHERE space_id = $1 AND campaign_id IS NOT NULL
+        GROUP BY campaign_id`,
+      [spaceId]
+    );
+    for (const r of unsub) {
+      if (!out[r.campaign_id]) out[r.campaign_id] = {};
+      out[r.campaign_id].unsubscribed = r.n;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 /* ---- unsubscribe link signing (HMAC, same secret as sessions) ----

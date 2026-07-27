@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useConnections } from '../state/ConnectionsContext';
 import { useCalendar } from '../state/CalendarContext';
@@ -12,6 +12,9 @@ import { KpiModal } from '../components/KpiModal';
 import { useTilt3d } from '../lib/useTilt3d';
 import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
 import { useAuthUser, firstNameOf } from '../state/AuthUserContext';
+import { useSpaces } from '../state/SpaceContext';
+import { useCampaigns } from '../state/CampaignsContext';
+import { fetchCampaignStats } from '../lib/email';
 import { SetupGuide } from '../components/SetupGuide';
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
@@ -164,6 +167,9 @@ function Chart({ series }: { series: MetaSeries | null }) {
 export function Dashboard() {
   const greetName = firstNameOf(useAuthUser());
   const { show } = useEff();
+  const { activeSpaceId } = useSpaces();
+  const { campaigns } = useCampaigns();
+  const [emailStats, setEmailStats] = useState<Record<string, Record<string, number>>>({});
   const { totalReach, metaStats } = useConnections();
   const { scheduled } = useCalendar();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
@@ -183,6 +189,30 @@ export function Dashboard() {
 
   const update = (next: KpiState) => { setState(next); saveKpiState(next); };
   const def = (id: string): KpiDef | undefined => CATALOG[id] || state.custom[id];
+  useEffect(() => {
+    if (activeSpaceId == null) return;
+    let alive = true;
+    fetchCampaignStats(activeSpaceId).then((s) => { if (alive) setEmailStats(s); });
+    return () => { alive = false; };
+  }, [activeSpaceId]);
+
+  /* Agrégats e-mail issus des événements réels (webhook Resend). Le taux
+     d'ouverture rapporte les ouvertures uniques au nombre de destinataires
+     effectivement servis, sur les seules campagnes suivies — une campagne
+     antérieure au suivi ne tire donc pas la moyenne vers le bas. */
+  const emailAgg = useMemo(() => {
+    let recipients = 0, opened = 0, clicked = 0, unsubscribed = 0;
+    for (const c of campaigns) {
+      const st = c.id ? emailStats[c.id] : undefined;
+      if (!st) continue;
+      recipients += c.sentCount ?? c.recipients;
+      opened += st.opened || 0;
+      clicked += st.clicked || 0;
+      unsubscribed += st.unsubscribed || 0;
+    }
+    return { recipients, opened, clicked, unsubscribed, openRate: recipients ? (opened / recipients) * 100 : 0 };
+  }, [campaigns, emailStats]);
+
   const rawVal = (d: KpiDef): number => {
     switch (d.live) {
       case 'reach':
@@ -191,6 +221,9 @@ export function Dashboard() {
       case 'totalEngagement': return agg.totalEngagement;
       case 'reachInsights': return agg.reach ?? 0;
       case 'postsMonth': return agg.postsMonth;
+      case 'emailOpenRate': return emailAgg.openRate;
+      case 'emailClicks': return emailAgg.clicked;
+      case 'emailUnsubscribes': return emailAgg.unsubscribed;
       default: return d.val;
     }
   };

@@ -5,6 +5,8 @@ export interface EmailBusiness { name: string; email?: string; addressLine?: str
 
 export interface SendCampaignPayload {
   spaceId: number;
+  /** Rattache les ouvertures/clics à cette campagne via les tags Resend. */
+  campaignId?: string;
   business: EmailBusiness;
   subject: string;
   preheader?: string;
@@ -13,6 +15,20 @@ export interface SendCampaignPayload {
   cta?: string;
   ctaUrl?: string;
   contacts: EmailRecipient[];
+}
+
+/* Statistiques réelles rapportées par Resend, par identifiant de campagne.
+   Une campagne absente n'a simplement aucun événement : l'appelant doit
+   afficher « — », jamais 0 — l'absence de mesure n'est pas une mesure nulle. */
+export async function fetchCampaignStats(spaceId: number): Promise<Record<string, Record<string, number>>> {
+  try {
+    const r = await fetch(`${API_BASE}/email/stats?spaceId=${spaceId}`);
+    if (!r.ok) return {};
+    const d = await r.json();
+    return (d && d.stats) || {};
+  } catch {
+    return {};
+  }
 }
 
 export interface SendCampaignResultItem { email: string; ok: boolean; id?: string; reason?: string; }

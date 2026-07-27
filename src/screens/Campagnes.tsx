@@ -12,9 +12,9 @@ import { showToast } from '../lib/toast';
 import { segmentInfos, SEGMENTS, fieldsFor, matchCriteria, type SegmentInfo, type Contact } from '../lib/population';
 import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
-import { sendCampaignEmail } from '../lib/email';
+import { sendCampaignEmail, fetchCampaignStats } from '../lib/email';
 import { AiLoader } from '../components/AiLoader';
-import type { Campaign } from '../lib/campaigns';
+import { newCampaignId, type Campaign } from '../lib/campaigns';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
@@ -123,6 +123,10 @@ export function Campagnes() {
   const { savedSegments, groups } = useSegments();
   const { campaigns, addCampaign } = useCampaigns();
   const { activeSpaceId } = useSpaces();
+  /* Ouvertures/clics/désinscriptions par campagne, servis par le webhook Resend.
+     Rechargés à chaque retour sur la liste : les événements arrivent en continu
+     après l'envoi, pas au moment où on quitte l'écran. */
+  const [stats, setStats] = useState<Record<string, Record<string, number>>>({});
   const [view, setView] = useState<'list' | 'builder'>('list');
   /* L'écran n'offrait que la rédaction par IA. `manual` distingue les deux
      origines pour n'afficher que ce qui a du sens : pas de « 3 objets
@@ -183,6 +187,15 @@ export function Campagnes() {
     if (campaignSeed) { openBuilder(campaignSeed.seg); clearCampaignSeed(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignSeed]);
+
+  /* Chargement des statistiques réelles. Relancé au retour sur la liste, car
+     les ouvertures et clics continuent d'arriver bien après l'envoi. */
+  useEffect(() => {
+    if (view !== 'list' || activeSpaceId == null) return;
+    let alive = true;
+    fetchCampaignStats(activeSpaceId).then((s) => { if (alive) setStats(s); });
+    return () => { alive = false; };
+  }, [view, activeSpaceId, campaigns.length]);
 
   /* Rédaction manuelle : on part d'un e-mail vide plutôt que d'un modèle
      pré-rempli, pour ne rien mettre dans la bouche de l'utilisateur. Le reste
@@ -271,8 +284,13 @@ export function Campagnes() {
 
     setSending(true);
     const b = getBusiness();
+    /* Identifiant créé AVANT l'envoi : c'est lui qui part dans les tags Resend
+       et qui est ensuite enregistré avec la campagne, sinon les événements
+       reçus par le webhook ne pourraient être rattachés à rien. */
+    const campaignId = newCampaignId();
     const res = await sendCampaignEmail({
       spaceId: activeSpaceId,
+      campaignId,
       business: { name: b.name, email: replyTo, addressLine: b.addressLine },
       subject: gen!.subjects[subject],
       preheader: gen!.pre,
@@ -286,6 +304,7 @@ export function Campagnes() {
     if (res.ok) {
       const sentN = res.sent || 0, failedN = res.failed || 0;
       addCampaign({
+        id: campaignId,
         name, seg: seg.name, status: 'sent', recipients: res.total || recipients.length,
         open: null, click: null, when: 'Envoyée à l’instant', sentCount: sentN, failedCount: failedN,
       });
@@ -293,6 +312,7 @@ export function Campagnes() {
       showToast(UI.rocket, failedN ? `Envoyée à ${fr(sentN)} contacts (${failedN} échec${failedN > 1 ? 's' : ''})` : `Campagne envoyée à ${fr(sentN)} contacts`);
     } else {
       addCampaign({
+        id: campaignId,
         name, seg: seg.name, status: 'failed', recipients: recipients.length,
         open: null, click: null, when: 'Échec de l’envoi', sendError: res.reason || null,
       });
@@ -495,15 +515,24 @@ export function Campagnes() {
   }
 
   // ---------- list ----------
-  // L'envoi e-mail réel (et donc le suivi ouvertures/clics) n'est pas encore
-  // branché — `open`/`click` restent à null pour toute campagne envoyée
-  // depuis cette version. Les agrégats ne portent donc que sur les
-  // campagnes où une vraie mesure existerait un jour, jamais une moyenne
-  // sur 0 déguisée en donnée réelle.
+  /* Statistiques réelles rapportées par Resend (webhook → base), rattachées à
+     chaque campagne par son identifiant. Une campagne sans identifiant (créée
+     avant le suivi) ou sans événement reste à « — » : l'absence de mesure
+     n'est pas une mesure nulle. */
   const sent = campaigns.filter((c) => c.status === 'sent');
-  const tracked = sent.filter((c) => c.open != null);
-  const avgOpen = tracked.length ? tracked.reduce((s, c) => s + (c.open || 0), 0) / tracked.length : null;
-  const clicks = tracked.length ? tracked.reduce((s, c) => s + Math.round((c.recipients * (c.click || 0)) / 100), 0) : null;
+  const statsOf = (c: Campaign) => (c.id ? stats[c.id] : undefined);
+  const tracked = sent.filter((c) => statsOf(c));
+
+  const totalRecipients = tracked.reduce((s, c) => s + (c.sentCount ?? c.recipients), 0);
+  const totalOpened = tracked.reduce((s, c) => s + (statsOf(c)?.opened || 0), 0);
+  const totalClicked = tracked.reduce((s, c) => s + (statsOf(c)?.clicked || 0), 0);
+  const totalUnsub = sent.reduce((s, c) => s + (statsOf(c)?.unsubscribed || 0), 0);
+  // Taux global = ouvertures uniques / destinataires réellement servis, et non
+  // moyenne des taux par campagne (qui donnerait le même poids à un envoi de
+  // 5 contacts et à un envoi de 5 000).
+  const avgOpen = totalRecipients ? (totalOpened / totalRecipients) * 100 : null;
+
+  const pct = (n: number, of: number) => (of ? ((n / of) * 100).toFixed(1).replace('.', ',') + ' %' : '—');
 
   return (
     <section className="screen show anim">
@@ -520,9 +549,9 @@ export function Campagnes() {
 
       <div className="crm-stats" style={{ marginBottom: 18 }}>
         <div className="crm-stat"><div className="cs-l"><Icon name="send" />Campagnes</div><div className="cs-v">{campaigns.length}</div><div className="cs-f">tous statuts</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="mailopen" />Taux d’ouverture moyen</div><div className="cs-v">{avgOpen != null ? avgOpen.toFixed(1).replace('.', ',') + ' %' : '—'}</div><div className="cs-f">{avgOpen != null ? 'sur les 30 derniers jours' : 'à venir prochainement — envoi e-mail non connecté'}</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="cursor" />Clics générés</div><div className="cs-v">{clicks != null ? fr(clicks) : '—'}</div><div className="cs-f">{clicks != null ? 'sur les 30 derniers jours' : 'à venir prochainement — envoi e-mail non connecté'}</div></div>
-        <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Désinscriptions</div><div className="cs-v">—</div><div className="cs-f">conforme RGPD</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="mailopen" />Taux d’ouverture</div><div className="cs-v">{avgOpen != null ? avgOpen.toFixed(1).replace('.', ',') + ' %' : '—'}</div><div className="cs-f">{avgOpen != null ? `${fr(totalOpened)} sur ${fr(totalRecipients)} destinataires` : 'aucune campagne suivie pour l’instant'}</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="cursor" />Clics</div><div className="cs-v">{tracked.length ? fr(totalClicked) : '—'}</div><div className="cs-f">{tracked.length ? `${pct(totalClicked, totalRecipients)} des destinataires` : 'aucune campagne suivie pour l’instant'}</div></div>
+        <div className="crm-stat"><div className="cs-l"><Icon name="shield" />Désinscriptions</div><div className="cs-v">{sent.length ? fr(totalUnsub) : '—'}</div><div className="cs-f">{sent.length ? 'depuis vos campagnes' : 'conforme RGPD'}</div></div>
       </div>
 
       <div className="camp-list">
@@ -536,12 +565,23 @@ export function Campagnes() {
               </div>
             </div>
             <div className="camp-stats">
-              {c.open != null ? (
-                <>
-                  <div className="camp-metric"><div className="cm-v">{c.open.toFixed(1).replace('.', ',')}%</div><div className="cm-l">ouvertures</div></div>
-                  <div className="camp-metric"><div className="cm-v">{(c.click || 0).toFixed(1).replace('.', ',')}%</div><div className="cm-l">clics</div></div>
-                </>
-              ) : c.status === 'sent' && c.sentCount != null ? (
+              {statsOf(c) ? (() => {
+                const st = statsOf(c)!;
+                const base = c.sentCount ?? c.recipients;
+                return (
+                  <>
+                    <div className="camp-metric" title={`${st.opened || 0} destinataire(s) distinct(s)`}>
+                      <div className="cm-v">{pct(st.opened || 0, base)}</div><div className="cm-l">ouvertures</div>
+                    </div>
+                    <div className="camp-metric" title={`${st.clicked || 0} destinataire(s) distinct(s)`}>
+                      <div className="cm-v">{pct(st.clicked || 0, base)}</div><div className="cm-l">clics</div>
+                    </div>
+                    {!!st.unsubscribed && (
+                      <div className="camp-metric"><div className="cm-v" style={{ color: 'var(--warn)' }}>{fr(st.unsubscribed)}</div><div className="cm-l">désinscrits</div></div>
+                    )}
+                  </>
+                );
+              })() : c.status === 'sent' && c.sentCount != null ? (
                 <>
                   <div className="camp-metric"><div className="cm-v">{fr(c.sentCount)}</div><div className="cm-l">envoyés</div></div>
                   {!!c.failedCount && <div className="camp-metric"><div className="cm-v" style={{ color: 'var(--warn)' }}>{fr(c.failedCount)}</div><div className="cm-l">échecs</div></div>}

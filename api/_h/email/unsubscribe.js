@@ -39,7 +39,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    await addUnsubscribe(spaceId, email);
+    /* La campagne d'origine n'est qu'une information d'attribution, non signée
+       (voir unsubscribeUrl) : on la nettoie au même format que les tags, et son
+       absence n'empêche jamais la désinscription. */
+    const campaignId = String(getParam(req, 'c') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null;
+    await addUnsubscribe(spaceId, email, campaignId);
   } catch {
     if (req.method === 'POST') { res.statusCode = 200; res.end(); return; }
     return html(500, 'Erreur', 'Une erreur est survenue. Réessayez plus tard.');
