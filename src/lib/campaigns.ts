@@ -12,6 +12,13 @@ export interface Campaign {
   id?: string;
   name: string; seg: string; status: 'sent' | 'sched' | 'draft' | 'failed';
   recipients: number; open: number | null; click: number | null; when: string;
+  /** Identifiant du segment ciblé, pour rouvrir la campagne sur la bonne
+   *  audience (le nom seul ne suffit pas à la retrouver). */
+  segId?: string;
+  /** Contenu rédigé, conservé pour pouvoir rouvrir et modifier la campagne.
+   *  Sans lui, une campagne programmée était une impasse : le message invitait
+   *  à « revenir l'envoyer » alors que le texte n'était nulle part. */
+  content?: CampaignContent;
   /** Résultat réel du dernier envoi (Resend) — absent pour les campagnes
    *  programmées ou antérieures à la mise en place de l'envoi réel. */
   sentCount?: number; failedCount?: number; sendError?: string | null;
@@ -25,6 +32,17 @@ const LS = 'eff_campaigns_v1';
 export function newCampaignId(): string {
   const rnd = Math.random().toString(36).slice(2, 8);
   return `c${Date.now().toString(36)}${rnd}`;
+}
+
+/* Contenu éditable d'une campagne. `subject` est l'objet retenu (et non la
+   liste des propositions IA) : une fois la campagne enregistrée, seul le choix
+   final compte pour la rouvrir. */
+export interface CampaignContent {
+  subject: string;
+  pre: string;
+  headline: string;
+  body: string[];
+  cta: string;
 }
 
 export interface CampaignStats {

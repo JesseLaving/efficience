@@ -14,7 +14,7 @@ import { getBusiness } from '../lib/business';
 import { generateEmail } from '../lib/ai';
 import { sendCampaignEmail, fetchCampaignStats } from '../lib/email';
 import { AiLoader } from '../components/AiLoader';
-import { newCampaignId, type Campaign } from '../lib/campaigns';
+import { newCampaignId, type Campaign, type CampaignContent } from '../lib/campaigns';
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ['linkedin', 'instagram', 'facebook'];
@@ -121,12 +121,15 @@ export function Campagnes() {
   const replyTo = authUser?.email || getBusiness().email || '';
   const { contacts } = useContacts();
   const { savedSegments, groups } = useSegments();
-  const { campaigns, addCampaign } = useCampaigns();
+  const { campaigns, addCampaign, updateCampaign } = useCampaigns();
   const { activeSpaceId } = useSpaces();
   /* Ouvertures/clics/désinscriptions par campagne, servis par le webhook Resend.
      Rechargés à chaque retour sur la liste : les événements arrivent en continu
      après l'envoi, pas au moment où on quitte l'écran. */
   const [stats, setStats] = useState<Record<string, Record<string, number>>>({});
+  /* Campagne en cours de modification. Non nul → l'enregistrement met à jour
+     l'existante au lieu d'en créer une nouvelle. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'builder'>('list');
   /* L'écran n'offrait que la rédaction par IA. `manual` distingue les deux
      origines pour n'afficher que ce qui a du sens : pas de « 3 objets
@@ -179,8 +182,26 @@ export function Campagnes() {
 
   const openBuilder = (segId?: string) => {
     setSeg(segs.find((s) => s.id === segId) || segs[0]);
-    setGen(null); setGenerating(false); setSubject(0);
+    setGen(null); setGenerating(false); setSubject(0); setEditingId(null);
     setView('builder');
+  };
+
+  /* Rouvre une campagne enregistrée dans l'éditeur, contenu compris. Les
+     campagnes créées avant la conservation du contenu n'en ont pas : on ouvre
+     alors l'éditeur vide plutôt que de prétendre restaurer un texte perdu. */
+  const editCampaign = (c: Campaign) => {
+    if (!c.id) { showToast(UI.close, 'Cette campagne est antérieure à l’édition — recréez-la.'); return; }
+    setSeg(segs.find((s) => s.id === c.segId) || segs.find((s) => s.name === c.seg) || segs[0]);
+    setEditingId(c.id);
+    setGenerating(false);
+    setSubject(0);
+    setManual(true); // texte existant : on n'affiche pas l'UI de génération
+    setGen(c.content
+      ? { subjects: [c.content.subject], pre: c.content.pre, headline: c.content.headline, body: c.content.body, cta: c.content.cta, segName: c.seg, pct: 0 }
+      : { subjects: [''], pre: '', headline: '', body: [''], cta: 'En savoir plus', segName: c.seg, pct: 0 });
+    setGenId((g) => g + 1);
+    setView('builder');
+    if (!c.content) showToast(UI.close, 'Contenu non conservé pour cette campagne — à ressaisir.');
   };
 
   useEffect(() => {
@@ -261,6 +282,21 @@ export function Campagnes() {
     return null;
   };
 
+  /* Contenu tel qu'il sera rouvert plus tard. Il n'était pas conservé : une
+     campagne programmée ne gardait que son nom, si bien que l'invitation à
+     « revenir l'envoyer » menait à une impasse — le texte n'existait plus. */
+  const contentOf = (): CampaignContent => ({
+    subject: gen!.subjects[subject],
+    pre: gen!.pre,
+    headline: gen!.headline,
+    body: gen!.body,
+    cta: gen!.cta,
+  });
+
+  const closeBuilder = () => {
+    setView('list'); setGen(null); setPrompt(''); setManual(false); setEditingId(null);
+  };
+
   const finish = async (status: 'sent' | 'sched') => {
     const blocked = emptyReason();
     if (blocked) { showToast(UI.close, blocked); return; }
@@ -271,9 +307,20 @@ export function Campagnes() {
       // place), aucun moteur de programmation d'e-mails n'existe encore —
       // on enregistre l'intention sans jamais prétendre à un envoi
       // automatique à une date donnée.
-      addCampaign({ name, seg: seg.name, status: 'sched', recipients: seg.count, open: null, click: null, when: 'Programmée — envoi manuel à déclencher' });
-      setView('list'); setGen(null); setPrompt(''); setManual(false);
-      showToast(UI.calendar, 'Campagne enregistrée comme programmée. Revenez l’envoyer manuellement le moment venu — l’envoi automatique à date n’est pas encore disponible.');
+      const patch = {
+        name, seg: seg.name, segId: seg.id, status: 'sched' as const,
+        recipients: seg.count, open: null, click: null,
+        when: 'Programmée — envoi manuel à déclencher',
+        content: contentOf(),
+      };
+      // Réédition d'une campagne existante : on la met à jour au lieu d'en
+      // créer un doublon à chaque enregistrement.
+      if (editingId) updateCampaign(editingId, patch);
+      else addCampaign({ id: newCampaignId(), ...patch });
+      closeBuilder();
+      showToast(UI.calendar, editingId
+        ? 'Modifications enregistrées. Revenez l’envoyer le moment venu.'
+        : 'Campagne enregistrée comme programmée. Revenez l’envoyer manuellement le moment venu — l’envoi automatique à date n’est pas encore disponible.');
       return;
     }
 
@@ -287,7 +334,14 @@ export function Campagnes() {
     /* Identifiant créé AVANT l'envoi : c'est lui qui part dans les tags Resend
        et qui est ensuite enregistré avec la campagne, sinon les événements
        reçus par le webhook ne pourraient être rattachés à rien. */
-    const campaignId = newCampaignId();
+    /* Réutiliser l'identifiant d'une campagne jamais envoyée (programmée ou en
+       échec) garde son historique intact. En revanche, réenvoyer une campagne
+       DÉJÀ envoyée crée forcément un nouvel identifiant : conserver l'ancien
+       fusionnerait les ouvertures des deux envois en un seul total, ce qui
+       serait faux. */
+    const edited = editingId ? campaigns.find((c) => c.id === editingId) : undefined;
+    const reuseId = edited && edited.status !== 'sent' ? edited.id : undefined;
+    const campaignId = reuseId || newCampaignId();
     const res = await sendCampaignEmail({
       spaceId: activeSpaceId,
       campaignId,
@@ -303,20 +357,28 @@ export function Campagnes() {
 
     if (res.ok) {
       const sentN = res.sent || 0, failedN = res.failed || 0;
-      addCampaign({
-        id: campaignId,
-        name, seg: seg.name, status: 'sent', recipients: res.total || recipients.length,
-        open: null, click: null, when: 'Envoyée à l’instant', sentCount: sentN, failedCount: failedN,
-      });
-      setView('list'); setGen(null); setPrompt(''); setManual(false);
+      const record = {
+        name, seg: seg.name, segId: seg.id, status: 'sent' as const,
+        recipients: res.total || recipients.length,
+        open: null, click: null, when: 'Envoyée à l’instant',
+        sentCount: sentN, failedCount: failedN, sendError: null,
+        content: contentOf(),
+      };
+      if (reuseId) updateCampaign(reuseId, record);
+      else addCampaign({ id: campaignId, ...record });
+      closeBuilder();
       showToast(UI.rocket, failedN ? `Envoyée à ${fr(sentN)} contacts (${failedN} échec${failedN > 1 ? 's' : ''})` : `Campagne envoyée à ${fr(sentN)} contacts`);
     } else {
-      addCampaign({
-        id: campaignId,
-        name, seg: seg.name, status: 'failed', recipients: recipients.length,
-        open: null, click: null, when: 'Échec de l’envoi', sendError: res.reason || null,
-      });
-      setView('list'); setGen(null); setPrompt(''); setManual(false);
+      const record = {
+        name, seg: seg.name, segId: seg.id, status: 'failed' as const,
+        recipients: recipients.length,
+        open: null, click: null, when: 'Échec de l’envoi',
+        sendError: res.reason || null,
+        content: contentOf(),
+      };
+      if (reuseId) updateCampaign(reuseId, record);
+      else addCampaign({ id: campaignId, ...record });
+      closeBuilder();
       showToast(UI.close, res.reason || 'Échec de l’envoi de la campagne.');
     }
   };
@@ -326,10 +388,12 @@ export function Campagnes() {
       <section className="screen show anim">
         <div className="page-head" style={{ marginBottom: 20 }}>
           <div>
-            <div className="eyebrow">Nouvelle campagne · {manual ? 'rédaction manuelle' : 'assistée par IA'}</div>
-            <h1>Composez votre e-mail en 3 étapes</h1>
+            <div className="eyebrow">
+              {editingId ? 'Modifier la campagne' : `Nouvelle campagne · ${manual ? 'rédaction manuelle' : 'assistée par IA'}`}
+            </div>
+            <h1>{editingId ? 'Modifiez votre e-mail' : 'Composez votre e-mail en 3 étapes'}</h1>
           </div>
-          <button className="btn outline" onClick={() => setView('list')}><Icon name="arrowleft" />Retour aux campagnes</button>
+          <button className="btn outline" onClick={closeBuilder}><Icon name="arrowleft" />Retour aux campagnes</button>
         </div>
 
         <div className="cb">
@@ -592,6 +656,16 @@ export function Campagnes() {
                 <div className="camp-metric"><div className="cm-v" style={{ color: 'var(--tx-3)' }}>—</div><div className="cm-l">en attente</div></div>
               )}
               <StatusPill s={c.status} />
+              {/* Toute campagne enregistrée peut être rouverte et modifiée —
+                  y compris envoyée : la modifier prépare simplement le
+                  prochain envoi, sans réécrire les e-mails déjà partis. */}
+              <button
+                className="btn ghost sm"
+                title={c.status === 'sent' ? 'Modifier et renvoyer' : 'Modifier cette campagne'}
+                onClick={() => editCampaign(c)}
+              >
+                <Icon name="edit" />{c.status === 'sent' ? 'Dupliquer' : 'Modifier'}
+              </button>
             </div>
           </div>
         ))}
