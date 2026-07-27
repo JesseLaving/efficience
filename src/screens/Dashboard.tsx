@@ -12,6 +12,7 @@ import { KpiModal } from '../components/KpiModal';
 import { useTilt3d } from '../lib/useTilt3d';
 import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
 import { useAuthUser, firstNameOf } from '../state/AuthUserContext';
+import { loadProfile } from '../lib/profile';
 import { useSpaces } from '../state/SpaceContext';
 import { useCampaigns } from '../state/CampaignsContext';
 import { fetchCampaignStats } from '../lib/email';
@@ -166,6 +167,11 @@ function Chart({ series }: { series: MetaSeries | null }) {
 
 export function Dashboard() {
   const greetName = firstNameOf(useAuthUser());
+  /* Nom RÉEL de l'entreprise, lu depuis le profil de l'espace et non via
+     getBusiness() : ce dernier retombe sur « Votre entreprise », un texte de
+     remplissage qui donnerait « tableau de bord de Votre entreprise ». Tant
+     qu'aucun profil n'est enregistré, on garde donc la formule générique. */
+  const company = loadProfile()?.name?.trim() || null;
   const { show } = useEff();
   const { activeSpaceId } = useSpaces();
   const { campaigns } = useCampaigns();
@@ -254,7 +260,14 @@ export function Dashboard() {
           {/* Nom de la personne connectée, jamais un nom en dur : sans ça, tout
               utilisateur était accueilli sous l'identité du compte d'origine.
               Sans nom connu, on salue sans nom plutôt que d'en inventer un. */}
-          <h1>{greetName ? `Bonjour ${greetName} 👋 — votre tableau de bord` : 'Votre tableau de bord'}</h1>
+          {/* Quatre combinaisons possibles selon ce qui est réellement connu :
+              on ne complète jamais un nom manquant par un texte générique. */}
+          <h1>
+            {greetName && company ? `Bonjour ${greetName} 👋 — le tableau de bord de ${company}`
+              : company ? `Le tableau de bord de ${company}`
+              : greetName ? `Bonjour ${greetName} 👋 — votre tableau de bord`
+              : 'Votre tableau de bord'}
+          </h1>
           <p>Connectez vos réseaux, importez votre base clients et créez vos campagnes : vos indicateurs se rempliront avec vos vraies données.</p>
         </div>
         <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>
