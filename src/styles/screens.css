@@ -178,3 +178,57 @@
   .cal-ev-txt { display: none; }
   .cal-dow { font-size: 9.5px; letter-spacing: .04em; padding: 6px 2px; }
 }
+
+/* ============ Analyse — détail des tâches ============
+   Remplace le loader à phrases tournantes : on voit ce qui est fait, ce qui
+   reste, et le verdict réel de chaque tâche une fois l'analyse terminée. */
+.ana-progress { padding: 18px 20px; }
+.ap-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.ap-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--tx-str); }
+.ap-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--tx-3); }
+.ap-pct { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--acc); flex: none; }
+.ap-pct span { font-size: 13px; color: var(--tx-3); }
+
+/* Anneau repris du loader IA, pour rester dans le même langage visuel. */
+.ap-orb { position: relative; width: 38px; height: 38px; flex: none; display: grid; place-items: center; }
+.ap-ring {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0%, var(--acc-soft2) 45%, var(--acc) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: spin .9s linear infinite;
+}
+
+.ap-bar { height: 3px; border-radius: var(--pill); background: var(--canvas-soft); overflow: hidden; margin-bottom: 16px; }
+.ap-bar > i { display: block; height: 100%; border-radius: var(--pill); background: var(--acc); transition: width .45s var(--ease-out); }
+
+.ap-groups { display: grid; gap: 14px; }
+.ap-group { border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--canvas-soft); padding: 12px 14px; }
+.ap-gt { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--tx-str); margin-bottom: 8px; }
+.ap-gt .ic { width: 15px; height: 15px; color: var(--acc); }
+.ap-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+
+.apt { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--tx-2); }
+.apt-mark { width: 16px; height: 16px; flex: none; display: grid; place-items: center; }
+.apt-mark .ic { width: 13px; height: 13px; }
+.apt-mark .spin { width: 12px; height: 12px; }
+.apt-l { flex: 1; min-width: 0; }
+.apt-d { font-family: var(--mono); font-size: 11px; color: var(--tx-3); flex: none; }
+/* Tiret : tâche sans résultat — distinct d'un échec, et signalé autrement
+   que par la seule couleur. */
+.apt-dash { width: 9px; height: 1.5px; background: var(--tx-3); border-radius: 1px; }
+.apt-ok .apt-mark { color: var(--acc); }
+.apt-ok .apt-l { color: var(--tx); }
+.apt-failed .apt-mark { color: var(--danger); }
+.apt-failed .apt-d { color: var(--danger); }
+.apt-empty .apt-l { color: var(--tx-3); }
+.apt-running .apt-l { color: var(--tx); }
+/* Entrée décalée : les tâches apparaissent l'une après l'autre. */
+@media (prefers-reduced-motion: no-preference) {
+  .apt { animation: apt-in .35s var(--ease-out) backwards; }
+  .ap-tasks .apt:nth-child(2) { animation-delay: .05s; }
+  .ap-tasks .apt:nth-child(3) { animation-delay: .1s; }
+  .ap-tasks .apt:nth-child(4) { animation-delay: .15s; }
+  .ap-tasks .apt:nth-child(5) { animation-delay: .2s; }
+}
+@keyframes apt-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }

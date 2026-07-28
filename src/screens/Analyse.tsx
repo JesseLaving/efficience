@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { fr } from '../lib/format';
 import { analyzeCompany, analyzeSite, type CompanyResult, type SiteResponse, type Audit } from '../lib/api';
 import { loadProfile } from '../lib/profile';
-import { AiLoader } from '../components/AiLoader';
+import { AnalysisProgress, type AnalysisGroup } from '../components/AnalysisProgress';
 
 const frDate = (s: string | null) => {
   if (!s) return '—';
@@ -80,25 +80,118 @@ export function Analyse() {
   const [siteRes, setSiteRes] = useState<SiteResponse | null>(null);
   const [err, setErr] = useState<{ company?: string; site?: string }>({});
 
+  /* Avancement par appel, et non global : les deux analyses partent en
+     parallèle et ne se terminent pas ensemble. Un Promise.allSettled unique
+     masquait celle déjà revenue jusqu'à ce que l'autre finisse. */
+  const [busy, setBusy] = useState<{ company: boolean; site: boolean }>({ company: false, site: false });
+  /* Le récapitulatif survit à la fin de l'analyse : c'est lui qui explique un
+     résultat partiel. Il s'efface à la relance suivante. */
+  const [justRan, setJustRan] = useState(false);
+
   const run = async () => {
+    const wantCompany = !!siret.trim();
+    const wantSite = !!site.trim();
     setLoading(true); setErr({}); setCompany(null); setPick(0); setSiteRes(null);
-    const [c, s] = await Promise.allSettled([
-      siret.trim() ? analyzeCompany(siret.trim()) : Promise.reject(new Error('vide')),
-      site.trim() ? analyzeSite(site.trim()) : Promise.reject(new Error('vide')),
-    ]);
-    if (c.status === 'fulfilled') {
-      // Les entreprises encore actives passent devant : l'API classe par
-      // pertinence textuelle et remonte parfois une société cessée en premier.
-      const list = [...(c.value.results || [])].sort(
-        (a, z) => (z.etatAdministratif === 'A' ? 1 : 0) - (a.etatAdministratif === 'A' ? 1 : 0),
-      );
-      if (list.length) setCompany({ total: c.value.total, results: list });
-      else setErr((e) => ({ ...e, company: 'Aucune entreprise trouvée pour cette recherche.' }));
-    } else setErr((e) => ({ ...e, company: c.reason?.message || 'Erreur' }));
-    if (s.status === 'fulfilled') setSiteRes(s.value);
-    else setErr((e) => ({ ...e, site: s.reason?.message || 'Erreur' }));
+    setBusy({ company: wantCompany, site: wantSite });
+    setJustRan(true);
+
+    const pCompany = wantCompany
+      ? analyzeCompany(siret.trim())
+        .then((v) => {
+          // Les entreprises encore actives passent devant : l'API classe par
+          // pertinence textuelle et remonte parfois une société cessée en premier.
+          const list = [...(v.results || [])].sort(
+            (a, z) => (z.etatAdministratif === 'A' ? 1 : 0) - (a.etatAdministratif === 'A' ? 1 : 0),
+          );
+          if (list.length) setCompany({ total: v.total, results: list });
+          else setErr((e) => ({ ...e, company: 'Aucune entreprise trouvée pour cette recherche.' }));
+        })
+        .catch((e) => setErr((x) => ({ ...x, company: e?.message || 'Erreur' })))
+        .finally(() => setBusy((b) => ({ ...b, company: false })))
+      : Promise.resolve();
+
+    const pSite = wantSite
+      ? analyzeSite(site.trim())
+        .then((v) => setSiteRes(v))
+        .catch((e) => setErr((x) => ({ ...x, site: e?.message || 'Erreur' })))
+        .finally(() => setBusy((b) => ({ ...b, site: false })))
+      : Promise.resolve();
+
+    await Promise.all([pCompany, pSite]);
     setLoading(false);
   };
+
+  /* Tâches affichées pendant l'analyse. Leur verdict est TIRÉ DES DONNÉES
+     revenues (identité trouvée, page jointe, scores disponibles…) et jamais
+     d'un minuteur : une tâche ne peut donc pas s'annoncer réussie si le
+     résultat correspondant est absent. */
+  const progressGroups = useMemo((): AnalysisGroup[] => {
+    const gs: AnalysisGroup[] = [];
+
+    if (siret.trim()) {
+      const running = busy.company;
+      const found = company?.results.length ?? 0;
+      gs.push({
+        title: 'Identité légale — INSEE / SIRENE',
+        done: !running,
+        tasks: [
+          {
+            label: 'Recherche dans le répertoire SIRENE',
+            state: running ? 'running' : err.company ? 'failed' : found ? 'ok' : 'empty',
+            detail: running ? null : err.company ? 'échec' : found ? `${found} résultat${found > 1 ? 's' : ''}` : 'aucun résultat',
+          },
+          {
+            label: 'Dirigeants, effectif et comptes publiés',
+            state: running ? 'running' : found ? (company!.results[0].dirigeants.length || company!.results[0].finances ? 'ok' : 'empty') : 'empty',
+            detail: running || !found ? null
+              : company!.results[0].dirigeants.length ? `${company!.results[0].dirigeants.length} dirigeant(s)` : 'non publiés',
+          },
+        ],
+      });
+    }
+
+    if (site.trim()) {
+      const running = busy.site;
+      const b = siteRes?.basic;
+      const ps = siteRes?.pagespeed;
+      const brand = siteRes?.brand;
+      const legal = b?.legal;
+      const legalCount = legal ? Object.values(legal).filter(Boolean).length : 0;
+      gs.push({
+        title: 'Site internet — contenu, charte et performance',
+        done: !running,
+        tasks: [
+          {
+            label: 'Connexion au site et en-têtes HTTP',
+            state: running ? 'running' : err.site || b?.error ? 'failed' : b?.status ? 'ok' : 'empty',
+            detail: running ? null : b?.status ? `HTTP ${b.status}${b.https ? ' · HTTPS' : ''}` : 'injoignable',
+          },
+          {
+            label: 'Lecture du contenu et des balises SEO',
+            state: running ? 'running' : b?.title ? 'ok' : 'empty',
+            detail: running ? null : b?.title ? `${b.keywords?.length || 0} mots-clés` : 'titre absent',
+          },
+          {
+            label: 'Extraction de la charte graphique',
+            state: running ? 'running' : brand?.available ? 'ok' : 'empty',
+            detail: running ? null : brand?.available ? `${brand.palette.length} couleurs` : 'non détectée',
+          },
+          {
+            label: 'Détection des mentions légales',
+            state: running ? 'running' : legalCount ? 'ok' : 'empty',
+            detail: running ? null : legalCount ? `${legalCount} page(s)` : 'aucune trouvée',
+          },
+          {
+            label: 'Audit Lighthouse (perf, SEO, accessibilité)',
+            state: running ? 'running' : ps?.available ? 'ok' : 'empty',
+            detail: running ? null : ps?.available ? 'scores calculés' : (siteRes && !siteRes.psiKeyConfigured ? 'clé non configurée' : 'indisponible'),
+          },
+        ],
+      });
+    }
+
+    return gs;
+  }, [siret, site, busy, company, siteRes, err]);
 
   const ps = siteRes?.pagespeed;
   const b = siteRes?.basic;
@@ -150,12 +243,12 @@ export function Analyse() {
         </div>
       </div>
 
-      {loading && (
+      {/* Reste affiché quelques instants après la fin : chaque tâche montre
+          alors son verdict réel, ce qui explique d'emblée un résultat partiel
+          (clé Lighthouse absente, charte non détectée…). */}
+      {(loading || justRan) && progressGroups.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <AiLoader
-            lead="Analyse en cours"
-            phrases={['Interrogation de l’INSEE (SIRENE)…', 'Audit technique du site (Lighthouse)…', 'Calcul des scores et recommandations…']}
-          />
+          <AnalysisProgress groups={progressGroups} />
         </div>
       )}
 
