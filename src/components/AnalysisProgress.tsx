@@ -9,7 +9,9 @@
    disponibles…), jamais d'un minuteur. Tant que l'appel est en vol, les tâches
    de ce groupe sont annoncées « en cours » sans prétendre savoir laquelle est
    terminée — le serveur ne renvoie ses résultats qu'en une fois. */
+import { useState } from 'react';
 import { Icon } from '../lib/Icon';
+import { Confetti } from './Confetti';
 
 export type TaskState = 'running' | 'ok' | 'empty' | 'failed';
 
@@ -46,16 +48,49 @@ export function AnalysisProgress({ groups }: { groups: AnalysisGroup[] }) {
   const all = groups.flatMap((g) => g.tasks);
   const settled = all.filter((t) => t.state !== 'running').length;
   const pct = all.length ? Math.round((settled / all.length) * 100) : 0;
+  const finished = all.length > 0 && settled === all.length;
+
+  // Bilan tiré des verdicts réels, pour dire ce qui a abouti et ce qui n'a
+  // rien donné plutôt que d'annoncer « terminé » sans nuance.
+  const ok = all.filter((t) => t.state === 'ok').length;
+  const failed = all.filter((t) => t.state === 'failed').length;
+  const empty = all.filter((t) => t.state === 'empty').length;
+
+  /* Célébration au passage à l'état terminé, une seule fois : sans mémoriser
+     la transition, le moindre re-rendu relancerait la salve. Ajustement
+     pendant le rendu plutôt que dans un effet, qui provoquerait un rendu en
+     cascade (react-hooks/set-state-in-effect). */
+  const [party, setParty] = useState(false);
+  const [wasFinished, setWasFinished] = useState(finished);
+  if (finished !== wasFinished) {
+    if (finished) setParty(true);
+    setWasFinished(finished); // repasse à false à la relance
+  }
 
   return (
-    <div className="ana-progress" role="status" aria-live="polite">
+    <div className={'ana-progress' + (finished ? ' ap-done' : '')} role="status" aria-live="polite">
+      {party && <Confetti onDone={() => setParty(false)} />}
       <div className="ap-head">
-        <div className="ap-orb"><div className="ap-ring" /></div>
+        {/* L'anneau tournait en boucle même à 100 % : arrivé au bout, il cède
+            la place à une pastille de validation. */}
+        {finished
+          ? <div className="ap-check"><Icon name="check" /></div>
+          : <div className="ap-orb"><div className="ap-ring" /></div>}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h3>Analyse en cours</h3>
-          <p>{settled} tâche{settled > 1 ? 's' : ''} sur {all.length} terminée{settled > 1 ? 's' : ''}</p>
+          <h3>{finished ? 'Analyse terminée' : 'Analyse en cours'}</h3>
+          <p>
+            {finished
+              ? [
+                  ok ? `${ok} tâche${ok > 1 ? 's' : ''} aboutie${ok > 1 ? 's' : ''}` : null,
+                  empty ? `${empty} sans résultat` : null,
+                  failed ? `${failed} en échec` : null,
+                ].filter(Boolean).join(' · ')
+              : `${settled} tâche${settled > 1 ? 's' : ''} sur ${all.length} terminée${settled > 1 ? 's' : ''}`}
+          </p>
         </div>
-        <div className="ap-pct">{pct}<span>%</span></div>
+        {finished
+          ? <div className="ap-badge">Terminé</div>
+          : <div className="ap-pct">{pct}<span>%</span></div>}
       </div>
       <div className="ap-bar"><i style={{ width: pct + '%' }} /></div>
 
