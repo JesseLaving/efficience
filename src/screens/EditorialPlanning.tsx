@@ -9,7 +9,7 @@ import { showToast } from '../lib/toast';
 import {
   DURATIONS, SECTOR_PRESETS, PILLARS, planScaffold, applyIdeas, planToCsv, type PlanItem,
 } from '../lib/editorial';
-import { generateAiPlanIdeas, sampleRecentCaptions, type AiContext } from '../lib/ai';
+import { generateAiPlanIdeas, generatePost, sampleRecentCaptions, type AiContext } from '../lib/ai';
 import { loadStrategy } from '../lib/strategy';
 import { buildAidaPost } from '../lib/aida';
 import { defaultDateTime, publishedCaptions } from '../lib/calendar';
@@ -201,7 +201,44 @@ export function EditorialPlanning() {
 
   // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
   const aidaFor = (p: PlanItem) => { const b = getBusiness(); return buildAidaPost(p, { sector: sector.trim() || b.sector, name: b.name, city: b.city }); };
-  const compose = (p: PlanItem) => seedStudio(aidaFor(p));
+
+  /* Rédige le post À PARTIR du sujet du planning.
+
+     buildAidaPost n'injecte le sujet que dans l'accroche : tout le corps vient
+     de banques de phrases indexées sur le pilier et le secteur, sans lien avec
+     le sujet. Un sujet « choisir sa farine bio » produisait ainsi un texte
+     parlant de montée en compétences et de places limitées. Le gabarit ne sert
+     donc plus que de repli quand l'IA est indisponible — et on le dit. */
+  const [composing, setComposing] = useState<PlanItem | null>(null);
+
+  /* Rédaction partagée par « Rédiger le post » et « Programmer » : les deux
+     produisaient le même texte de gabarit hors sujet. Renvoie aussi la
+     provenance, pour dire honnêtement quand c'est un brouillon type. */
+  const writePost = async (p: PlanItem): Promise<{ text: string; ai: boolean; reason?: string }> => {
+    try {
+      const sec = sector.trim() || getBusiness().sector;
+      const res = await generatePost(p.idea, {
+        ...buildCtx(sec),
+        network: netLabel[p.network] || p.network,
+        pillar: p.pillar,
+      });
+      const text = res.available ? (res.variants?.[0] || res.text || '') : '';
+      if (text.trim()) return { text: text.trim(), ai: true };
+      return { text: aidaFor(p), ai: false, reason: res.reason || 'erreur' };
+    } catch (e) {
+      return { text: aidaFor(p), ai: false, reason: String((e as Error).message || e) };
+    }
+  };
+
+  const compose = async (p: PlanItem) => {
+    setComposing(p);
+    const { text, ai, reason } = await writePost(p);
+    seedStudio(text);
+    setComposing(null);
+    showToast(ai ? UI.check : UI.wand, ai
+      ? 'Post rédigé sur ce sujet — ouvrez le Studio pour l’ajuster'
+      : `IA indisponible (${reason}) — brouillon type à personnaliser.`);
+  };
 
   const keyFor = (p: PlanItem, i: number) => p.date + '-' + i;
   // Réseaux effectivement sélectionnés pour une publication : ceux choisis
@@ -216,7 +253,17 @@ export function EditorialPlanning() {
     setNetSel((s) => ({ ...s, [k]: next }));
   };
 
-  const schedule = (p: PlanItem, i: number) => addToCalendar({ dateTime: defaultDateTime(p.date, 9), text: aidaFor(p), networks: netsFor(p, i), photoUrl: null, pillar: p.pillar });
+  /* Programmer enregistrait lui aussi le texte de gabarit : la publication
+     partait au calendrier avec un contenu sans rapport avec son sujet. */
+  const schedule = async (p: PlanItem, i: number) => {
+    setComposing(p);
+    const { text, ai, reason } = await writePost(p);
+    addToCalendar({ dateTime: defaultDateTime(p.date, 9), text, networks: netsFor(p, i), photoUrl: null, pillar: p.pillar });
+    setComposing(null);
+    // addToCalendar confirme déjà l'ajout : on ne signale ici que le repli,
+    // sinon deux messages se superposeraient pour la même action.
+    if (!ai) showToast(UI.wand, `Brouillon type utilisé (IA indisponible : ${reason}) — à personnaliser.`);
+  };
   const copyIdea = (p: PlanItem) => {
     navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Sujet copié'), () => {});
   };
@@ -404,7 +451,10 @@ export function EditorialPlanning() {
                     ))}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <button className="btn acc sm" onClick={() => compose(p)}><Icon name="spark" />Composer (AIDA)</button>
+                    <button className="btn acc sm" disabled={!!composing} onClick={() => compose(p)}>
+                      {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
+                      {composing === p ? 'Rédaction…' : 'Rédiger le post'}
+                    </button>
                     <button className="btn outline sm" onClick={() => schedule(p, i)}><Icon name="clock" />Programmer</button>
                     <button className="btn ghost sm" onClick={() => copyIdea(p)}><Icon name="edit" />Copier</button>
                     <button className="btn ghost sm" disabled={regenBusy.has(p)} onClick={() => regenerateOne(p)}>
@@ -460,8 +510,9 @@ export function EditorialPlanning() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      <button className="btn acc sm" title="Rédiger un brouillon AIDA dans le Studio" onClick={() => compose(p)}>
-                        <Icon name="spark" />Composer (AIDA)
+                      <button className="btn acc sm" title="Rédiger ce post par IA dans le Studio" disabled={!!composing} onClick={() => compose(p)}>
+                        {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
+                        {composing === p ? 'Rédaction…' : 'Rédiger le post'}
                       </button>
                       <button className="btn outline sm" title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés" onClick={() => schedule(p, i)}>
                         <Icon name="clock" />Programmer
