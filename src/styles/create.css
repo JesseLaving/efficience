@@ -72,8 +72,29 @@
 /* variantes IA (choix entre 2 versions générées) */
 .ai-variants { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-btn); border: 1px solid var(--acc-soft2); background: var(--acc-soft); display: grid; gap: 10px; }
 .ai-variants-lbl { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
-.ai-variant { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--canvas); }
-.ai-variant-txt { flex: 1; font-size: 13px; line-height: 1.5; color: var(--tx); white-space: pre-wrap; }
+/* Variante IA : en-tête (numéro + longueur), texte, actions. Auparavant un
+   simple bloc de texte brut sans indication de longueur — on pouvait retenir
+   une version dépassant la limite du réseau sans s'en apercevoir. */
+.ai-variant { display: grid; gap: 8px; padding: 11px 13px; border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--canvas); }
+.ai-variant.ai-v-warn { border-color: rgba(143,100,35,.4); }
+.ai-variant.ai-v-over { border-color: rgba(179,69,59,.45); }
+.ai-v-head { display: flex; align-items: center; gap: 10px; }
+.ai-v-n { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tx-3); }
+.ai-v-len { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--tx-3); }
+.ai-v-len.warn { color: var(--warn); }
+.ai-v-len.over { color: var(--danger); font-weight: 600; }
+/* Hauteur bornée : une version longue occupait tout l'écran et repoussait la
+   suivante hors de vue, ce qui rendait la comparaison impossible — l'objet même
+   de l'affichage en variantes. Le texte reste intégralement lisible en
+   défilant dans le bloc, rien n'est tronqué. */
+.ai-variant-txt {
+  font-size: 13px; line-height: 1.55; color: var(--tx); white-space: pre-wrap;
+  max-height: 210px; overflow-y: auto; overscroll-behavior: contain;
+}
+/* Hashtags et mentions détachés du corps, pour juger d'un coup d'œil combien
+   une version en porte et où elle les place. */
+.ai-variant-txt .ai-tag { color: var(--acc); font-weight: 600; }
+.ai-v-actions { display: flex; gap: 8px; align-items: center; }
 
 /* media spec + dropzone */
 .spec-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-bottom: 12px; }

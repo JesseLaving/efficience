@@ -72,6 +72,22 @@ function FlashBtn({ className, label, flash, onClick }: { className: string; lab
   return <button className={className} onClick={() => { onClick?.(); setTxt(flash); setTimeout(() => setTxt(label), 1200); }}>{txt}</button>;
 }
 
+/* Rend un texte de publication en distinguant hashtags et mentions du corps.
+   Les variantes IA s'affichaient en bloc uniforme : impossible de repérer d'un
+   coup d'œil combien de hashtags une version portait, ni où elle les plaçait.
+   Purement visuel — le texte retenu reste rigoureusement celui qui a été
+   généré, à l'octet près. */
+function PostText({ text }: { text: string }) {
+  const parts = text.split(/([#@][\p{L}\p{N}_]+)/gu);
+  return (
+    <>
+      {parts.map((p, i) => (
+        /^[#@]/.test(p) ? <span className="ai-tag" key={i}>{p}</span> : <span key={i}>{p}</span>
+      ))}
+    </>
+  );
+}
+
 export function Studio() {
   const { studioSeed, clearStudioSeed } = useEff();
   const { isConnected, metaStats, tiktokVideos } = useConnections();
@@ -349,13 +365,45 @@ export function Studio() {
                   </div>
                   {variants && (
                     <div className="ai-variants">
-                      <div className="ai-variants-lbl"><RawIcon svg={UI.sparkles2} style={{ width: 13, height: 13, display: 'inline-grid' }} />Choisissez une version</div>
-                      {variants.map((v, i) => (
-                        <div className="ai-variant" key={i}>
-                          <div className="ai-variant-txt">{v}</div>
-                          <button className="btn outline sm" onClick={() => pickVariant(v)}><Icon name="check" />Utiliser</button>
-                        </div>
-                      ))}
+                      <div className="ai-variants-lbl">
+                        <RawIcon svg={UI.sparkles2} style={{ width: 13, height: 13, display: 'inline-grid' }} />
+                        Choisissez une version
+                      </div>
+                      {variants.map((v, i) => {
+                        /* Longueur comparée à la limite du réseau : c'est
+                           l'information décisive pour choisir, et elle
+                           n'apparaissait nulle part — on pouvait retenir une
+                           version trop longue sans le voir. */
+                        const lim = curLimit();
+                        const len = v.length;
+                        const st = lim && len > lim ? 'over' : lim && len > lim * 0.85 ? 'warn' : 'ok';
+                        return (
+                          <div className={'ai-variant ai-v-' + st} key={i}>
+                            <div className="ai-v-head">
+                              <span className="ai-v-n">Version {i + 1}</span>
+                              {lim ? (
+                                <span className={'ai-v-len ' + st}>
+                                  {fr(len)} / {fr(lim)}
+                                  {len > lim && <> · {fr(len - lim)} en trop</>}
+                                </span>
+                              ) : <span className="ai-v-len">{fr(len)} caractères</span>}
+                            </div>
+                            <div className="ai-variant-txt"><PostText text={v} /></div>
+                            <div className="ai-v-actions">
+                              <button className="btn outline sm" onClick={() => pickVariant(v)}>
+                                <Icon name="check" />Utiliser
+                              </button>
+                              <button
+                                className="btn ghost sm"
+                                title="Copier ce texte"
+                                onClick={() => { navigator.clipboard?.writeText(v); showToast(UI.check, 'Version copiée'); }}
+                              >
+                                <Icon name="clipboard" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                       <button className="btn ghost sm" onClick={() => setVariants(null)}>Ignorer</button>
                     </div>
                   )}
