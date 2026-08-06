@@ -11,7 +11,7 @@ import { getBusiness } from '../lib/business';
 import { syncPostsToCalendar } from '../lib/googleCalendar';
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from '../lib/schedule';
 import { PublishPanel } from '../components/PublishPanel';
-import type { ScheduledPost } from '../lib/calendar';
+import { nowLocalIso, toIcs, type ScheduledPost } from '../lib/calendar';
 
 const NETS = ['instagram', 'facebook', 'linkedin', 'google'];
 
@@ -32,7 +32,7 @@ export function Calendar() {
   const { show } = useEff();
   const { scheduled, updateCalendar, removeFromCalendar } = useCalendar();
   const {
-    isConnected, metaToken, linkedinToken, googleToken, googleAccounts,
+    isConnected, metaToken, linkedinToken, googleToken, googleAccounts, metaStats,
     gcalConnected, gcalToken, gcalCalendarId, gcalCalendarName,
     connectGcal, disconnectGcal, refreshGcalToken, createGcalCalendar,
   } = useConnections();
@@ -75,11 +75,43 @@ export function Calendar() {
     if (failCount) showToast(UI.close, `${failCount} échec${failCount > 1 ? 's' : ''} de synchronisation`);
   };
 
+  /* À venir : les publications déjà effectuées quittent la liste de
+     programmation et rejoignent l'historique en bas de page. */
+  const pending = useMemo(() => scheduled.filter((p) => p.status !== 'published'), [scheduled]);
   const byDay = useMemo(() => {
     const m = new Map<string, ScheduledPost[]>();
-    for (const p of scheduled) { const k = dayKey(p.dateTime); if (!m.has(k)) m.set(k, []); m.get(k)!.push(p); }
+    for (const p of pending) { const k = dayKey(p.dateTime); if (!m.has(k)) m.set(k, []); m.get(k)!.push(p); }
     return Array.from(m.entries());
-  }, [scheduled]);
+  }, [pending]);
+
+  /* Historique : publications réellement effectuées — celles publiées via
+     l'app (statut « publié ») et celles lues directement sur les réseaux
+     connectés (posts Facebook/Instagram réels). Dédoublonnage même jour +
+     même début de texte : un post publié via l'app remonte aussi dans les
+     stats Meta. */
+  const history = useMemo(() => {
+    const rows: { key: string; dateTime: string; text: string; networks: string[]; image: string | null; permalink: string | null; appId: string | null }[] = [];
+    for (const p of scheduled) {
+      if (p.status !== 'published') continue;
+      rows.push({ key: p.id, dateTime: p.dateTime, text: p.text, networks: p.networks, image: p.photoUrl || null, permalink: null, appId: p.id });
+    }
+    const sigs = new Set(rows.map((r) => dayKey(r.dateTime) + '|' + r.text.trim().slice(0, 80)));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    for (const acc of metaStats || []) {
+      for (const mp of acc.posts || []) {
+        if (!mp.date) continue;
+        const d = new Date(mp.date);
+        if (isNaN(d.getTime())) continue;
+        const dt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const sig = dayKey(dt) + '|' + (mp.caption || '').trim().slice(0, 80);
+        if (sigs.has(sig)) continue;
+        sigs.add(sig);
+        rows.push({ key: `${acc.network}-${mp.id}`, dateTime: dt, text: mp.caption || '', networks: [acc.network], image: mp.image || null, permalink: mp.permalink || null, appId: null });
+      }
+    }
+    rows.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+    return rows;
+  }, [scheduled, metaStats]);
 
   // Synchronise les statuts depuis le serveur (le cron a pu publier des posts armés).
   useEffect(() => {
@@ -140,6 +172,22 @@ export function Calendar() {
     }
   };
 
+  /* « Enregistrer le calendrier » : fichier .ics téléchargeable, importable
+     dans Google Agenda, Outlook ou Apple Calendar — indépendant de la
+     synchronisation Google ci-dessous. */
+  const exportIcs = () => {
+    const blob = new Blob([toIcs(scheduled)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'calendrier-efficience.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast(UI.check, 'Calendrier exporté (.ics)');
+  };
+
   return (
     <section className="screen show anim">
       <div className="page-head">
@@ -148,7 +196,10 @@ export function Calendar() {
           <h1>Vos publications programmées</h1>
           <p>Les posts ajoutés depuis le <b style={{ color: 'var(--tx-2)' }}>Planning éditorial</b> arrivent ici. Choisissez la date, l’heure et les réseaux, puis publiez en un clic le moment venu.</p>
         </div>
-        <button className="btn outline" onClick={() => show('planning')}><Icon name="calendar" />Planning éditorial</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn outline" disabled={!scheduled.length} onClick={exportIcs} title="Télécharger le calendrier au format .ics (Google Agenda, Outlook, Apple Calendar)"><Icon name="download" />Exporter (.ics)</button>
+          <button className="btn outline" onClick={() => show('planning')}><Icon name="calendar" />Planning éditorial</button>
+        </div>
       </div>
 
       <div style={{ padding: '12px 16px', borderRadius: 'var(--r-card)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', color: 'var(--tx-2)', fontSize: 12.5, marginBottom: 16 }}>
@@ -187,7 +238,7 @@ export function Calendar() {
         </div>
       </div>
 
-      {!scheduled.length ? (
+      {!pending.length ? (
         <div className="net-summary">
           <div className="ns-ic"><Icon name="calendar" /></div>
           <div>
@@ -212,6 +263,8 @@ export function Calendar() {
                       : <div style={{ width: 56, height: 56, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--canvas)', color: 'var(--tx-3)', flexShrink: 0 }}><Icon name="image" /></div>}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                        <input type="date" value={dayKey(p.dateTime)} onChange={(e) => e.target.value && updateCalendar(p.id, { dateTime: e.target.value + 'T' + fmtTime(p.dateTime) })}
+                          className="inp" style={{ width: 145, padding: '5px 8px', fontSize: 13 }} title="Déplacer à une autre date" />
                         <input type="time" value={fmtTime(p.dateTime)} onChange={(e) => updateCalendar(p.id, { dateTime: dayKey(p.dateTime) + 'T' + (e.target.value || '09:00') })}
                           className="inp" style={{ width: 110, padding: '5px 8px', fontSize: 13 }} />
                         <StatusBadge s={p.status} />
@@ -274,12 +327,52 @@ export function Calendar() {
         ))
       )}
 
+      {history.length > 0 && (
+        <div className="card" style={{ marginTop: 4 }}>
+          <div className="card-h">
+            <h3>Publications effectuées</h3>
+            <div className="sub">{history.length} publication{history.length > 1 ? 's' : ''} — publiées via l’app ou lues sur vos réseaux connectés</div>
+          </div>
+          <div className="pad" style={{ display: 'grid', gap: 10 }}>
+            {history.map((h) => (
+              <div key={h.key} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--r-btn)', border: '1px solid var(--line)', background: 'var(--canvas-soft)' }}>
+                {h.image
+                  ? <img src={h.image} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                  : <div style={{ width: 48, height: 48, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--canvas)', color: 'var(--tx-3)', flexShrink: 0 }}><Icon name="image" /></div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--tx-3)', textTransform: 'capitalize' }}>{fmtDay(h.dateTime)}{fmtTime(h.dateTime) !== '00:00' ? ` · ${fmtTime(h.dateTime)}` : ''}</span>
+                    {h.networks.map((n) => (
+                      <span key={n} title={netName(n)} style={{ width: 14, height: 14, display: 'inline-grid', color: 'var(--tx-3)' }}><Brand name={n as BrandName} /></span>
+                    ))}
+                    <StatusBadge s="published" />
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', maxHeight: 60, overflow: 'hidden', lineHeight: 1.4 }}>{h.text || <span style={{ color: 'var(--tx-3)' }}>(sans texte)</span>}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {h.permalink && <a className="btn ghost sm" href={h.permalink} target="_blank" rel="noopener noreferrer"><Icon name="link" />Voir</a>}
+                  {h.appId && <button className="btn ghost sm" title="Retirer de l’historique" onClick={() => removeFromCalendar(h.appId!)}><Icon name="trash" /></button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {publishing && (
         <PublishPanel
           text={publishing.text}
           platforms={publishing.networks}
           localMedia={false}
           defaultPhotoUrl={publishing.photoUrl || null}
+          onPublished={() => {
+            /* Le post programmé devient une publication effectuée : statut
+               « publié », daté du moment réel de diffusion. Si l'auto-publication
+               était armée côté serveur, on la coupe — sinon le même texte
+               repartirait tout seul à l'heure prévue. */
+            updateCalendar(publishing.id, { status: 'published', dateTime: nowLocalIso(), auto: false });
+            if (publishing.auto) disarmAutoPublish(publishing.id);
+          }}
           onClose={() => setPublishing(null)}
         />
       )}

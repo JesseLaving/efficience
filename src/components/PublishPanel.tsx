@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useConnections } from '../state/ConnectionsContext';
+import { useCalendar } from '../state/CalendarContext';
+import { nowLocalIso } from '../lib/calendar';
 import { Icon, Brand, RawIcon } from '../lib/Icon';
 import { UI, type BrandName } from '../lib/icons';
 import { netName, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks';
@@ -10,14 +12,25 @@ import { publishLinkedInPost } from '../lib/linkedin';
 import { publishGooglePost } from '../lib/google';
 import { friendlyError, extractMessage } from '../lib/errors';
 
-interface Props { text: string; platforms: string[]; localMedia: boolean; defaultPhotoUrl?: string | null; onClose: () => void; }
+interface Props {
+  text: string;
+  platforms: string[];
+  localMedia: boolean;
+  defaultPhotoUrl?: string | null;
+  onClose: () => void;
+  /** Si fourni, remplace l'enregistrement par défaut dans l'historique du
+   *  calendrier — le Calendrier s'en sert pour marquer le post programmé
+   *  d'origine comme publié plutôt que d'en créer un doublon. */
+  onPublished?: (okNetworks: string[]) => void;
+}
 
 interface Row { id: string; label: string; status: 'pending' | 'ok' | 'error'; reason?: string | null; url?: string | null; }
 
 const META_NETS = ['instagram', 'facebook'];
 
-export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onClose }: Props) {
+export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onClose, onPublished }: Props) {
   const { metaToken, metaAccounts, linkedinToken, googleToken, googleAccounts } = useConnections();
+  const { recordPublished } = useCalendar();
   const [photoUrl, setPhotoUrl] = useState(defaultPhotoUrl || '');
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -93,7 +106,14 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
 
     setRows(out);
     setBusy(false);
-    if (out.some((r) => r.status === 'ok')) showToast(UI.check, `Publié sur ${out.filter((r) => r.status === 'ok').length} réseau(x)`);
+    const okNets = [...new Set(out.filter((r) => r.status === 'ok').map((r) => r.id))];
+    if (okNets.length) {
+      // Trace la publication dans l'historique du calendrier — seuls les
+      // réseaux ayant réellement accepté le post sont enregistrés.
+      if (onPublished) onPublished(okNets);
+      else recordPublished({ dateTime: nowLocalIso(), text: text.trim(), networks: okNets, photoUrl: photo || null, pillar: null, planKey: null });
+      showToast(UI.check, `Publié sur ${okNets.length} réseau(x)`);
+    }
   };
 
   const done = rows && !busy;

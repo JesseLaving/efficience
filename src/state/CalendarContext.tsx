@@ -14,6 +14,7 @@ interface CalendarCtx {
   addToCalendar: (p: Omit<ScheduledPost, 'id' | 'createdAt' | 'status'>) => void;
   updateCalendar: (id: string, patch: Partial<ScheduledPost>) => void;
   removeFromCalendar: (id: string) => void;
+  recordPublished: (p: Omit<ScheduledPost, 'id' | 'createdAt' | 'status'>) => void;
 }
 
 const Ctx = createContext<CalendarCtx | null>(null);
@@ -28,9 +29,16 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     show('calendar');
   }, [show]);
   const updateCalendar = useCallback((id: string, patch: Partial<ScheduledPost>) => { setScheduled((list) => updateScheduled(list, id, patch)); }, []);
+  /* Publication immédiate (Studio → « Publier maintenant ») : entre dans
+     l'historique avec le statut « publié », sans toast ni navigation — la
+     publication elle-même a déjà son retour visuel. Sans cet enregistrement,
+     un post publié directement n'existait plus nulle part dans l'app. */
+  const recordPublished = useCallback((p: Omit<ScheduledPost, 'id' | 'createdAt' | 'status'>) => {
+    setScheduled((list) => addScheduled(list, { ...p, status: 'published' }));
+  }, []);
   const removeFromCalendar = useCallback((id: string) => { setScheduled((list) => removeScheduled(list, id)); }, []);
 
-  const value: CalendarCtx = { scheduled, addToCalendar, updateCalendar, removeFromCalendar };
+  const value: CalendarCtx = { scheduled, addToCalendar, updateCalendar, removeFromCalendar, recordPublished };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
