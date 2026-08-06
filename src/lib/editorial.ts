@@ -292,6 +292,11 @@ function sectorShort(sector: string): string {
    ou, en mode IA, sujets Gemini). Sépare la logique déterministe (dates,
    équilibre des piliers) de la source des idées. */
 export interface PlanSlot {
+  /** Identifiant stable de la publication dans le plan. Les vues utilisaient
+   *  l'index de rendu comme clé — index LOCAL au mois dans la liste mais
+   *  GLOBAL dans la grille calendrier, si bien que le même sujet portait deux
+   *  identités selon la vue (et la sélection de réseaux divergeait). */
+  id: string;
   date: string;        // ISO yyyy-mm-dd
   label: string;       // "lun. 24 juin"
   monthLabel: string;  // "juin 2026"
@@ -304,6 +309,39 @@ export interface PlanSlot {
 
 export interface PlanItem extends PlanSlot {
   idea: string;
+  /** Un brouillon a été rédigé pour ce sujet (action réelle de l'utilisateur,
+   *  jamais déduit) — permet de voir d'un coup d'œil ce qui reste à traiter. */
+  drafted?: boolean;
+}
+
+/* ---------- persistance du plan ----------
+   Le plan vivait dans l'état local de l'écran : « Rédiger le post » navigue
+   vers le Studio, et au retour le plan avait disparu — tout le travail de
+   génération était perdu à chaque aller-retour. Persisté en localStorage, il
+   est synchronisé par espace comme le calendrier et les campagnes. */
+export interface PlanState {
+  items: PlanItem[];
+  sector: string;
+  durKey: string;
+  perWeek: number;
+}
+
+const PLAN_LS = 'eff_plan_v1';
+
+export function loadPlan(): PlanState | null {
+  try {
+    const raw = localStorage.getItem(PLAN_LS);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PlanState;
+    // Un plan sans items ou d'une forme antérieure (items sans id) est ignoré
+    // plutôt que de faire planter les vues qui reposent sur l'identifiant.
+    if (!Array.isArray(p.items) || p.items.some((i) => !i.id)) return null;
+    return p;
+  } catch { return null; }
+}
+
+export function savePlan(state: PlanState): void {
+  try { localStorage.setItem(PLAN_LS, JSON.stringify(state)); } catch { /* ignore */ }
 }
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -338,6 +376,9 @@ export function planScaffold(opts: { weeks: number; perWeek: number }): PlanSlot
       const pillar = PILLARS[pillarCounter % PILLARS.length];
       pillarCounter++;
       slots.push({
+        // Date + rang de création : stable tant que le plan n'est pas régénéré,
+        // et unique même avec plusieurs publications le même jour.
+        id: `${iso(d)}-${slots.length}`,
         date: iso(d),
         label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }),
         monthLabel: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),

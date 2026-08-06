@@ -38,6 +38,11 @@ export function Calendar() {
   } = useConnections();
   const [publishing, setPublishing] = useState<ScheduledPost | null>(null);
   const [arming, setArming] = useState<string | null>(null);
+  /* Édition du texte d'une publication programmée : l'heure et les réseaux
+     étaient modifiables, mais pas le contenu — il fallait supprimer la
+     publication et tout recréer pour corriger une phrase. */
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
   const [creatingCal, setCreatingCal] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -118,6 +123,23 @@ export function Calendar() {
     showToast(UI.check, 'Auto-publication désactivée');
   };
 
+  const saveText = async (p: ScheduledPost) => {
+    const text = editText.trim();
+    if (!text) { showToast(UI.close, 'Le texte ne peut pas être vide.'); return; }
+    updateCalendar(p.id, { text });
+    setEditId(null);
+    /* L'auto-publication a été armée côté serveur avec l'ANCIEN texte : sans
+       désarmement, c'est lui qui partirait à l'heure prévue. On la coupe et on
+       invite à la réactiver — jamais de publication d'un texte périmé. */
+    if (p.auto) {
+      await disarmAutoPublish(p.id);
+      updateCalendar(p.id, { auto: false });
+      showToast(UI.warning, 'Texte mis à jour — auto-publication désactivée. Réactivez-la pour armer le nouveau texte.');
+    } else {
+      showToast(UI.check, 'Texte mis à jour');
+    }
+  };
+
   return (
     <section className="screen show anim">
       <div className="page-head">
@@ -195,7 +217,21 @@ export function Calendar() {
                         <StatusBadge s={p.status} />
                         {p.pillar && <span style={{ fontSize: 11, color: 'var(--acc)' }}>· {p.pillar}</span>}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', maxHeight: 96, overflow: 'hidden', lineHeight: 1.4 }}>{p.text}</div>
+                      {editId === p.id ? (
+                        <>
+                          <textarea
+                            className="inp" rows={5} value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            style={{ resize: 'vertical', lineHeight: 1.5, fontSize: 13 }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className="btn acc sm" onClick={() => saveText(p)}><Icon name="check" />Enregistrer</button>
+                            <button className="btn ghost sm" onClick={() => setEditId(null)}>Annuler</button>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', maxHeight: 96, overflow: 'hidden', lineHeight: 1.4 }}>{p.text}</div>
+                      )}
                       {p.lastResult && <div style={{ fontSize: 11.5, color: 'var(--warn)', marginTop: 6 }}>{p.lastResult}</div>}
                     </div>
                   </div>
@@ -213,6 +249,10 @@ export function Calendar() {
                       );
                     })}
                     <span style={{ flex: 1 }} />
+                    {/* Le texte d'un post déjà publié est un fait accompli : pas d'édition. */}
+                    {p.status !== 'published' && editId !== p.id && (
+                      <button className="btn ghost sm" onClick={() => { setEditId(p.id); setEditText(p.text); }} title="Modifier le texte"><Icon name="edit" /></button>
+                    )}
                     <button className="btn ghost sm" onClick={() => removeFromCalendar(p.id)} title="Supprimer"><Icon name="trash" /></button>
                     {p.auto ? (
                       <button className="btn outline sm" disabled={arming === p.id} onClick={() => disarm(p)} title="Désactiver l'auto-publication">

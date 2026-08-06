@@ -256,3 +256,21 @@
 }
 /* Barre pleine : on fige la teinte accent, sans pulsation résiduelle. */
 .ap-done .ap-bar > i { background: var(--acc); }
+
+/* ---- statut des sujets du plan ----
+   « Programmée » est dérivé du calendrier réel (planKey) ; « Brouillon
+   rédigé » trace une action réelle de l'utilisateur. */
+.plan-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: var(--pill); flex: none;
+}
+.plan-badge .ic { width: 11px; height: 11px; }
+.plan-badge.sched { color: var(--acc); background: var(--acc-soft); border: 1px solid var(--acc-soft2); }
+.plan-badge.draft { color: var(--tx-2); background: var(--canvas); border: 1px solid var(--line); }
+
+/* Sujet déjà programmé, dans la grille : teinte accomplie, distincte de la
+   sélection (bordure) et lisible sans dépendre de la seule couleur (le badge
+   du panneau de détail porte le libellé). */
+.cal-ev.done { background: var(--acc-soft); border-color: var(--acc-soft2); }
+.cal-ev.done .cal-ev-txt { color: var(--tx-2); }

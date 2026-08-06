@@ -12,6 +12,10 @@ export interface ScheduledPost {
   networks: string[];      // instagram | facebook | linkedin | google
   photoUrl?: string | null;
   pillar?: string | null;
+  /** Publication issue du planning éditorial : id de l'item d'origine. C'est
+   *  par ce lien que le plan sait qu'un sujet est déjà programmé — statut
+   *  dérivé du calendrier réel, jamais coché à la main. */
+  planKey?: string | null;
   status: SchedStatus;
   createdAt: string;
   lastResult?: string | null;
@@ -47,6 +51,7 @@ export function addScheduled(list: ScheduledPost[], p: Omit<ScheduledPost, 'id' 
     networks: p.networks || [],
     photoUrl: p.photoUrl ?? null,
     pillar: p.pillar ?? null,
+    planKey: p.planKey ?? null,
     lastResult: null,
   };
   const next = [...list, item].sort((a, b) => a.dateTime.localeCompare(b.dateTime));

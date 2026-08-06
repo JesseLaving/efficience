@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEff } from '../state/EffContext';
 import { useCalendar } from '../state/CalendarContext';
 import { useConnections } from '../state/ConnectionsContext';
@@ -7,7 +7,7 @@ import { UI, type BrandName } from '../lib/icons';
 import { getBusiness } from '../lib/business';
 import { showToast } from '../lib/toast';
 import {
-  DURATIONS, SECTOR_PRESETS, PILLARS, planScaffold, applyIdeas, planToCsv, type PlanItem,
+  DURATIONS, SECTOR_PRESETS, PILLARS, planScaffold, applyIdeas, planToCsv, loadPlan, savePlan, type PlanItem,
 } from '../lib/editorial';
 import { generateAiPlanIdeas, generatePost, sampleRecentCaptions, type AiContext } from '../lib/ai';
 import { loadStrategy } from '../lib/strategy';
@@ -37,21 +37,38 @@ function downloadCsv(items: PlanItem[]) {
 }
 
 export function EditorialPlanning() {
-  const { client, seedStudio } = useEff();
+  const { client, seedStudio, show } = useEff();
   const { scheduled, addToCalendar } = useCalendar();
   const { isConnected, metaStats, tiktokVideos } = useConnections();
-  const [sector, setSector] = useState(() => getBusiness().sector);
-  const [durKey, setDurKey] = useState('1m');
-  const [perWeek, setPerWeek] = useState(3);
-  const [plan, setPlan] = useState<PlanItem[] | null>(null);
+  /* Plan et réglages restaurés à l'ouverture : le plan vivait dans l'état
+     local, si bien que « Rédiger le post » (qui navigue vers le Studio)
+     faisait perdre tout le planning généré à chaque aller-retour. */
+  const [savedPlan] = useState(() => loadPlan());
+  const [sector, setSector] = useState(() => savedPlan?.sector || getBusiness().sector);
+  const [durKey, setDurKey] = useState(savedPlan?.durKey || '1m');
+  const [perWeek, setPerWeek] = useState(savedPlan?.perWeek ?? 3);
+  const [plan, setPlan] = useState<PlanItem[] | null>(savedPlan?.items ?? null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [regenBusy, setRegenBusy] = useState<Set<PlanItem>>(new Set());
   // Réseaux sélectionnés pour la multidiffusion, par publication du planning
-  // (clé = date + index). Par défaut : tous les réseaux connectés parmi
+  // (clé = id de l'item). Par défaut : tous les réseaux connectés parmi
   // ceux que les piliers couvrent, sinon le réseau suggéré par le pilier.
   const [netSel, setNetSel] = useState<Record<string, string[]>>({});
   const connectedPlanNetworks = useMemo(() => PLAN_NETWORKS.filter(isConnected), [isConnected]);
+
+  // Persiste le plan à chaque évolution (génération, nouveau sujet, brouillon).
+  useEffect(() => {
+    if (plan && plan.length) savePlan({ items: plan, sector, durKey, perWeek });
+  }, [plan, sector, durKey, perWeek]);
+
+  /* Sujets déjà programmés — dérivé du calendrier RÉEL via le planKey posé à
+     la programmation, jamais d'un drapeau coché à la main : supprimer la
+     publication du calendrier rouvre automatiquement le sujet dans le plan. */
+  const scheduledKeys = useMemo(
+    () => new Set(scheduled.map((s) => s.planKey).filter(Boolean)),
+    [scheduled],
+  );
 
   const weeks = DURATIONS.find((d) => d.key === durKey)?.weeks ?? 4;
 
@@ -70,6 +87,10 @@ export function EditorialPlanning() {
   };
 
   const generate = async () => {
+    /* Régénérer remplace le plan courant, jusque-là écrasé sans prévenir. Les
+       publications déjà programmées restent au calendrier (données réelles),
+       mais les brouillons rédigés et le lien plan→calendrier seraient perdus. */
+    if (plan && plan.length && !window.confirm('Remplacer le planning actuel ? Les publications déjà programmées restent au calendrier.')) return;
     const b = getBusiness();
     const sec = sector.trim() || b.sector;
     setAiNote(null);
@@ -233,6 +254,12 @@ export function EditorialPlanning() {
   const compose = async (p: PlanItem) => {
     setComposing(p);
     const { text, ai, reason } = await writePost(p);
+    /* Trace le fait réel qu'un brouillon a été rédigé pour ce sujet. Persisté
+       immédiatement (et non via l'effet) : seedStudio navigue vers le Studio
+       et démonte l'écran avant que l'effet de sauvegarde ne s'exécute. */
+    const next = (plan ?? []).map((item) => (item.id === p.id ? { ...item, drafted: true } : item));
+    setPlan(next);
+    if (next.length) savePlan({ items: next, sector, durKey, perWeek });
     seedStudio(text);
     setComposing(null);
     showToast(ai ? UI.check : UI.wand, ai
@@ -240,25 +267,30 @@ export function EditorialPlanning() {
       : `IA indisponible (${reason}) — brouillon type à personnaliser.`);
   };
 
-  const keyFor = (p: PlanItem, i: number) => p.date + '-' + i;
+  /* Identité par p.id, plus jamais par index de rendu : l'index était local au
+     mois dans la liste mais global dans la grille, si bien que le même sujet
+     portait deux identités selon la vue — la sélection de réseaux divergeait. */
   // Réseaux effectivement sélectionnés pour une publication : ceux choisis
   // manuellement, sinon tous les réseaux connectés couverts par le planning,
   // sinon (rien de connecté) le réseau suggéré par le pilier — jamais vide.
-  const netsFor = (p: PlanItem, i: number): string[] => netSel[keyFor(p, i)] ?? (connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]);
-  const toggleNet = (p: PlanItem, i: number, id: string) => {
-    const k = keyFor(p, i);
-    const cur = netsFor(p, i);
+  const netsFor = (p: PlanItem): string[] => netSel[p.id] ?? (connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]);
+  const toggleNet = (p: PlanItem, id: string) => {
+    const cur = netsFor(p);
     const next = cur.includes(id) ? cur.filter((n) => n !== id) : [...cur, id];
     if (!next.length) return; // toujours au moins un réseau sélectionné
-    setNetSel((s) => ({ ...s, [k]: next }));
+    setNetSel((s) => ({ ...s, [p.id]: next }));
   };
 
   /* Programmer enregistrait lui aussi le texte de gabarit : la publication
      partait au calendrier avec un contenu sans rapport avec son sujet. */
-  const schedule = async (p: PlanItem, i: number) => {
+  const schedule = async (p: PlanItem) => {
+    // Déjà programmée : un second clic créerait un doublon au calendrier.
+    if (scheduledKeys.has(p.id)) { showToast(UI.calendar, 'Ce sujet est déjà programmé — retrouvez-le dans le Calendrier.'); return; }
     setComposing(p);
     const { text, ai, reason } = await writePost(p);
-    addToCalendar({ dateTime: defaultDateTime(p.date, 9), text, networks: netsFor(p, i), photoUrl: null, pillar: p.pillar });
+    // planKey relie la publication à son sujet d'origine : c'est ce lien qui
+    // marque le sujet « programmé » dans le plan.
+    addToCalendar({ dateTime: defaultDateTime(p.date, 9), text, networks: netsFor(p), photoUrl: null, pillar: p.pillar, planKey: p.id });
     setComposing(null);
     // addToCalendar confirme déjà l'ajout : on ne signale ici que le repli,
     // sinon deux messages se superposeraient pour la même action.
@@ -409,9 +441,9 @@ export function EditorialPlanning() {
                     <div className="cal-num">{c.day}</div>
                     {c.items.map(({ p, i }) => (
                       <button
-                        key={p.date + '-' + i}
+                        key={p.id}
                         type="button"
-                        className={'cal-ev' + (selected?.i === i ? ' sel' : '')}
+                        className={'cal-ev' + (selected?.i === i ? ' sel' : '') + (scheduledKeys.has(p.id) ? ' done' : '')}
                         data-pillar={p.pillarKey}
                         title={`${p.pillar} · ${p.format}\n${p.idea}`}
                         onClick={() => setSelected(selected?.i === i ? null : { p, i })}
@@ -426,12 +458,15 @@ export function EditorialPlanning() {
 
               {/* Détail de la publication choisie : mêmes actions que la liste,
                   affichées sous la grille pour garder les cellules lisibles. */}
-              {selected && (() => { const { p, i } = selected; return (
+              {selected && (() => { const { p } = selected; return (
                 <div className="pad cal-detail">
                   <div className="cal-detail-head">
                     <span className="cal-ev-dot" data-pillar={p.pillarKey} />
                     <strong style={{ textTransform: 'capitalize' }}>{p.label}</strong>
                     <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>· {p.pillar} · {p.format}</span>
+                    {scheduledKeys.has(p.id)
+                      ? <span className="plan-badge sched"><Icon name="check" />Programmée</span>
+                      : p.drafted && <span className="plan-badge draft"><Icon name="edit" />Brouillon rédigé</span>}
                     <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setSelected(null)} aria-label="Fermer le détail">
                       <Icon name="close" />
                     </button>
@@ -442,9 +477,9 @@ export function EditorialPlanning() {
                     {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
                       <button
                         key={id} type="button"
-                        className={'plat-chip sm' + (netsFor(p, i).includes(id) ? ' on' : '')}
+                        className={'plat-chip sm' + (netsFor(p).includes(id) ? ' on' : '')}
                         title={netLabel[id] || id}
-                        onClick={() => toggleNet(p, i, id)}
+                        onClick={() => toggleNet(p, id)}
                       >
                         <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
                       </button>
@@ -453,9 +488,11 @@ export function EditorialPlanning() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     <button className="btn acc sm" disabled={!!composing} onClick={() => compose(p)}>
                       {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
-                      {composing === p ? 'Rédaction…' : 'Rédiger le post'}
+                      {composing === p ? 'Rédaction…' : p.drafted ? 'Rédiger à nouveau' : 'Rédiger le post'}
                     </button>
-                    <button className="btn outline sm" onClick={() => schedule(p, i)}><Icon name="clock" />Programmer</button>
+                    {scheduledKeys.has(p.id)
+                      ? <button className="btn outline sm" onClick={() => show('calendar')}><Icon name="check" />Voir au calendrier</button>
+                      : <button className="btn outline sm" disabled={!!composing} onClick={() => schedule(p)}><Icon name="clock" />Programmer</button>}
                     <button className="btn ghost sm" onClick={() => copyIdea(p)}><Icon name="edit" />Copier</button>
                     <button className="btn ghost sm" disabled={regenBusy.has(p)} onClick={() => regenerateOne(p)}>
                       {regenBusy.has(p) ? <span className="spin lt" /> : <RawIcon svg={UI.sparkles2} />}Nouvelle idée
@@ -484,8 +521,8 @@ export function EditorialPlanning() {
                 <div className="sub">{posts.length} publication{posts.length > 1 ? 's' : ''}</div>
               </div>
               <div className="pad" style={{ display: 'grid', gap: 10 }}>
-                {posts.map((p, i) => (
-                  <div key={p.date + '-' + i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--r-btn)', border: '1px solid var(--line)', background: 'var(--canvas-soft)' }}>
+                {posts.map((p) => (
+                  <div key={p.id} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--r-btn)', border: '1px solid var(--line)', background: 'var(--canvas-soft)' }}>
                     <div style={{ minWidth: 92, fontSize: 12.5, color: 'var(--tx-2)', fontWeight: 600, textTransform: 'capitalize', paddingTop: 2 }}>{p.label}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 5 }}>
@@ -493,6 +530,9 @@ export function EditorialPlanning() {
                           <RawIcon svg={UI.dot} style={{ width: 12, height: 12, display: 'inline-grid' }} />{p.pillar}
                         </span>
                         <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>· {p.format}</span>
+                        {scheduledKeys.has(p.id)
+                          ? <span className="plan-badge sched"><Icon name="check" />Programmée</span>
+                          : p.drafted && <span className="plan-badge draft"><Icon name="edit" />Brouillon rédigé</span>}
                       </div>
                       <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45, marginBottom: 8 }}>{p.idea}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -500,9 +540,9 @@ export function EditorialPlanning() {
                         {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
                           <button
                             key={id} type="button"
-                            className={'plat-chip sm' + (netsFor(p, i).includes(id) ? ' on' : '')}
+                            className={'plat-chip sm' + (netsFor(p).includes(id) ? ' on' : '')}
                             title={netLabel[id] || id}
-                            onClick={() => toggleNet(p, i, id)}
+                            onClick={() => toggleNet(p, id)}
                           >
                             <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
                           </button>
@@ -512,11 +552,17 @@ export function EditorialPlanning() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                       <button className="btn acc sm" title="Rédiger ce post par IA dans le Studio" disabled={!!composing} onClick={() => compose(p)}>
                         {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
-                        {composing === p ? 'Rédaction…' : 'Rédiger le post'}
+                        {composing === p ? 'Rédaction…' : p.drafted ? 'Rédiger à nouveau' : 'Rédiger le post'}
                       </button>
-                      <button className="btn outline sm" title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés" onClick={() => schedule(p, i)}>
-                        <Icon name="clock" />Programmer
-                      </button>
+                      {scheduledKeys.has(p.id) ? (
+                        <button className="btn outline sm" title="Ce sujet est déjà programmé" onClick={() => show('calendar')}>
+                          <Icon name="check" />Voir au calendrier
+                        </button>
+                      ) : (
+                        <button className="btn outline sm" title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés" disabled={!!composing} onClick={() => schedule(p)}>
+                          <Icon name="clock" />Programmer
+                        </button>
+                      )}
                       <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>
                         <Icon name="edit" />Copier
                       </button>
