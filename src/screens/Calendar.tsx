@@ -29,7 +29,7 @@ function StatusBadge({ s }: { s: ScheduledPost['status'] }) {
 }
 
 export function Calendar() {
-  const { show } = useEff();
+  const { show, editPostInStudio } = useEff();
   const { scheduled, updateCalendar, removeFromCalendar } = useCalendar();
   const {
     isConnected, metaToken, linkedinToken, googleToken, googleAccounts, metaStats,
@@ -294,7 +294,13 @@ export function Calendar() {
                     <span style={{ flex: 1 }} />
                     {/* Le texte d'un post déjà publié est un fait accompli : pas d'édition. */}
                     {p.status !== 'published' && editId !== p.id && (
-                      <button className="btn ghost sm" onClick={() => { setEditId(p.id); setEditText(p.text); }} title="Modifier le texte"><Icon name="edit" /></button>
+                      <>
+                        <button className="btn ghost sm" onClick={() => { setEditId(p.id); setEditText(p.text); }} title="Modification rapide du texte"><Icon name="edit" />Modifier</button>
+                        <button className="btn ghost sm" title="Retravailler ce post dans le Studio : texte, visuel, outils IA — puis « Mettre à jour »"
+                          onClick={() => editPostInStudio({ id: p.id, text: p.text, photoUrl: p.photoUrl || null, networks: p.networks, dateTime: p.dateTime })}>
+                          <Icon name="wand" />Studio
+                        </button>
+                      </>
                     )}
                     <button className="btn ghost sm" onClick={() => removeFromCalendar(p.id)} title="Supprimer"><Icon name="trash" /></button>
                     {p.auto ? (

@@ -11,6 +11,7 @@ import { netName, PUBLISH_STATUS, PUBLISH_STATUS_REASON } from '../lib/networks'
 import { getBusiness } from '../lib/business';
 import { generatePost, improvePost, generateHashtags, sampleRecentCaptions } from '../lib/ai';
 import { publishedCaptions } from '../lib/calendar';
+import { disarmAutoPublish } from '../lib/schedule';
 import { TONES, loadStrategy } from '../lib/strategy';
 import { PublishPanel } from '../components/PublishPanel';
 import { VisualGenerator } from '../components/VisualGenerator';
@@ -89,11 +90,16 @@ function PostText({ text }: { text: string }) {
 }
 
 export function Studio() {
-  const { studioSeed, clearStudioSeed } = useEff();
+  const { studioSeed, clearStudioSeed, show } = useEff();
   const { isConnected, metaStats, tiktokVideos } = useConnections();
-  const { scheduled, addToCalendar } = useCalendar();
+  const { scheduled, addToCalendar, updateCalendar } = useCalendar();
   const [type, setType] = useState<ComposeType>('post');
-  const [text, setText] = useState(studioSeed || '');
+  const [text, setText] = useState(studioSeed?.text || '');
+  /* Mode édition : le Studio a été ouvert depuis le Calendrier sur un post
+     déjà programmé. « Programmer » mettra à jour cette entrée au lieu d'en
+     créer une nouvelle. L'info est capturée au montage — le seed du contexte
+     est consommé (une seule fois) juste en dessous. */
+  const [editingId, setEditingId] = useState<string | null>(studioSeed?.editId || null);
 
   // Le Studio peut être ouvert pré-rempli depuis le Planning éditorial.
   // On consomme le seed une seule fois (le texte reste éditable ensuite).
@@ -123,7 +129,13 @@ export function Studio() {
     return { sel: s, active: a, ratio: r };
   };
 
-  const [{ sel, active }, setSelState] = useState(() => { const x = initSel('post'); return { sel: x.sel, active: x.active }; });
+  const [{ sel, active }, setSelState] = useState(() => {
+    // Un post ouvert en édition arrive avec ses réseaux déjà choisis.
+    const seedNets = studioSeed?.networks?.filter((n) => Object.keys(SPECS.post).includes(n));
+    if (seedNets && seedNets.length) return { sel: seedNets, active: seedNets[0] };
+    const x = initSel('post');
+    return { sel: x.sel, active: x.active };
+  });
 
   const switchType = (t: ComposeType) => {
     setType(t);
@@ -224,17 +236,36 @@ export function Studio() {
   const [dragMedia, setDragMedia] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [visualOpen, setVisualOpen] = useState(false);
-  const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
+  const [publicImageUrl, setPublicImageUrl] = useState<string | null>(studioSeed?.photoUrl || null);
   const anyConnected = sel.some((id) => isConnected(id));
 
   // Programmation au calendrier — même file que le Planning éditorial
   // (src/state/CalendarContext.tsx), pour que "Publier" / "Auto-publier"
   // fonctionnent à l'identique quelle que soit l'origine du post.
   const [schedOpen, setSchedOpen] = useState(false);
-  const [schedAt, setSchedAt] = useState(() => nextHourIso());
+  const [schedAt, setSchedAt] = useState(() => studioSeed?.dateTime || nextHourIso());
   const schedule = () => {
     if (!text.trim() || !sel.length) return;
-    addToCalendar({ dateTime: schedAt, text, networks: sel, photoUrl: publicImageUrl, pillar: null });
+    const prev = editingId ? scheduled.find((p) => p.id === editingId) : undefined;
+    if (editingId && prev) {
+      /* Mise à jour du post programmé d'origine — pas de nouvelle entrée.
+         Si l'auto-publication était armée côté serveur, elle l'a été avec
+         l'ancien contenu : on la coupe pour ne jamais publier un texte
+         périmé, et on invite à la réactiver. */
+      updateCalendar(editingId, { dateTime: schedAt, text, networks: sel, photoUrl: publicImageUrl, auto: false });
+      if (prev?.auto) {
+        disarmAutoPublish(editingId);
+        showToast(UI.warning, 'Post mis à jour — auto-publication désactivée. Réactivez-la au calendrier pour armer le nouveau contenu.');
+      } else {
+        showToast(UI.check, 'Post mis à jour au calendrier');
+      }
+      setEditingId(null);
+      show('calendar');
+    } else {
+      // editingId sans post correspondant = supprimé entre-temps → création.
+      if (editingId) setEditingId(null);
+      addToCalendar({ dateTime: schedAt, text, networks: sel, photoUrl: publicImageUrl, pillar: null });
+    }
     setSchedOpen(false);
   };
 
@@ -472,11 +503,21 @@ export function Studio() {
                 </div>
               </div>
 
+              {editingId && (
+                <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 14px', borderRadius: 'var(--r-btn)', border: '1px solid rgba(143,100,35,.3)', background: 'rgba(143,100,35,.07)', fontSize: 12.5, color: 'var(--tx-2)' }}>
+                  <Icon name="edit" />
+                  <span style={{ flex: 1, minWidth: 200 }}>
+                    <b style={{ color: 'var(--acc)' }}>Modification d’un post programmé</b> — « Mettre à jour » remplacera son contenu au calendrier.
+                  </span>
+                  <button className="btn ghost sm" onClick={() => setEditingId(null)}>Créer un nouveau post à la place</button>
+                </div>
+              )}
+
               {schedOpen && (
                 <div className="ce-sec" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <label className="field-lbl" style={{ margin: 0, flexShrink: 0 }}>Programmer pour</label>
+                  <label className="field-lbl" style={{ margin: 0, flexShrink: 0 }}>{editingId ? 'Reprogrammer pour' : 'Programmer pour'}</label>
                   <input type="datetime-local" className="inp" style={{ width: 220 }} value={schedAt} onChange={(e) => setSchedAt(e.target.value)} />
-                  <button className="btn acc sm" disabled={!text.trim() || !sel.length} onClick={schedule}><Icon name="check" />Confirmer</button>
+                  <button className="btn acc sm" disabled={!text.trim() || !sel.length} onClick={schedule}><Icon name="check" />{editingId ? 'Mettre à jour' : 'Confirmer'}</button>
                   <button className="btn ghost sm" onClick={() => setSchedOpen(false)}>Annuler</button>
                 </div>
               )}
@@ -510,7 +551,7 @@ export function Studio() {
                 </div>
                 {!anyConnected && <span style={{ fontSize: 12, color: 'var(--tx-3)', whiteSpace: 'nowrap' }}>Reliez un réseau pour publier.</span>}
                 <span style={{ flex: 1 }} />
-                <button className="btn outline" disabled={!text.trim() || !sel.length} onClick={() => setSchedOpen((v) => !v)}><Icon name="clock" />Programmer</button>
+                <button className="btn outline" disabled={!text.trim() || !sel.length} onClick={() => setSchedOpen((v) => !v)}><Icon name="clock" />{editingId ? 'Mettre à jour' : 'Programmer'}</button>
                 <button className="btn acc" disabled={!text.trim() || !anyConnected} onClick={() => setPublishOpen(true)}><Icon name="send" />Publier maintenant</button>
               </div>
             </>

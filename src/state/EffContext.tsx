@@ -22,10 +22,23 @@ interface EffCtx {
   campaignSeed: { seg: string } | null;
   newCampaign: (seg: string) => void;
   clearCampaignSeed: () => void;
-  /* --- Studio prefill (depuis le Planning éditorial) --- */
-  studioSeed: string | null;
+  /* --- Studio prefill (depuis le Planning éditorial ou le Calendrier) --- */
+  studioSeed: StudioSeed | null;
   seedStudio: (text: string) => void;
+  /* Ouvre un post déjà programmé dans le Studio pour l'y retravailler
+     (texte, visuel, IA) : « Programmer » mettra à jour l'entrée existante
+     du calendrier au lieu d'en créer une nouvelle. */
+  editPostInStudio: (p: { id: string; text: string; photoUrl: string | null; networks: string[]; dateTime: string }) => void;
   clearStudioSeed: () => void;
+}
+
+export interface StudioSeed {
+  text: string;
+  /* id de l'entrée du calendrier à mettre à jour — null = nouvelle création */
+  editId: string | null;
+  photoUrl: string | null;
+  networks: string[] | null;
+  dateTime: string | null;
 }
 
 const Ctx = createContext<EffCtx | null>(null);
@@ -39,7 +52,7 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
     return { name: b.name, initials: b.initials };
   });
   const [campaignSeed, setCampaignSeed] = useState<{ seg: string } | null>(null);
-  const [studioSeed, setStudioSeed] = useState<string | null>(null);
+  const [studioSeed, setStudioSeed] = useState<StudioSeed | null>(null);
 
   const show = useCallback((id: ScreenId) => {
     setScreen(id);
@@ -49,14 +62,21 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   const newCampaign = useCallback((seg: string) => { setCampaignSeed({ seg }); show('campagnes'); }, [show]);
   const clearCampaignSeed = useCallback(() => setCampaignSeed(null), []);
 
-  const seedStudio = useCallback((t: string) => { setStudioSeed(t); show('studio'); }, [show]);
+  const seedStudio = useCallback((t: string) => {
+    setStudioSeed({ text: t, editId: null, photoUrl: null, networks: null, dateTime: null });
+    show('studio');
+  }, [show]);
+  const editPostInStudio = useCallback((p: { id: string; text: string; photoUrl: string | null; networks: string[]; dateTime: string }) => {
+    setStudioSeed({ text: p.text, editId: p.id, photoUrl: p.photoUrl, networks: p.networks, dateTime: p.dateTime });
+    show('studio');
+  }, [show]);
   const clearStudioSeed = useCallback(() => setStudioSeed(null), []);
 
   const value: EffCtx = {
     screen, show,
     client, setClient,
     campaignSeed, newCampaign, clearCampaignSeed,
-    studioSeed, seedStudio, clearStudioSeed,
+    studioSeed, seedStudio, editPostInStudio, clearStudioSeed,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
