@@ -11,7 +11,7 @@ import { getBusiness } from '../lib/business';
 import { syncPostsToCalendar } from '../lib/googleCalendar';
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from '../lib/schedule';
 import { PublishPanel } from '../components/PublishPanel';
-import { nowLocalIso, toIcs, type ScheduledPost } from '../lib/calendar';
+import { nowLocalIso, type ScheduledPost } from '../lib/calendar';
 
 const NETS = ['instagram', 'facebook', 'linkedin', 'google'];
 
@@ -172,22 +172,6 @@ export function Calendar() {
     }
   };
 
-  /* « Enregistrer le calendrier » : fichier .ics téléchargeable, importable
-     dans Google Agenda, Outlook ou Apple Calendar — indépendant de la
-     synchronisation Google ci-dessous. */
-  const exportIcs = () => {
-    const blob = new Blob([toIcs(scheduled)], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'calendrier-efficience.ics';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast(UI.check, 'Calendrier exporté (.ics)');
-  };
-
   return (
     <section className="screen show anim">
       <div className="page-head">
@@ -196,9 +180,15 @@ export function Calendar() {
           <h1>Vos publications programmées</h1>
           <p>Les posts ajoutés depuis le <b style={{ color: 'var(--tx-2)' }}>Planning éditorial</b> arrivent ici. Choisissez la date, l’heure et les réseaux, puis publiez en un clic le moment venu.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn outline" disabled={!scheduled.length} onClick={exportIcs} title="Télécharger le calendrier au format .ics (Google Agenda, Outlook, Apple Calendar)"><Icon name="download" />Exporter (.ics)</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           <button className="btn outline" onClick={() => show('planning')}><Icon name="calendar" />Planning éditorial</button>
+          {/* Le calendrier vit dans le profil : chaque modification part dans
+              l'espace côté serveur (autosave AuthWrapper) et revient à la
+              connexion, sur n'importe quel appareil. */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--tx-3)' }}>
+            <RawIcon svg={UI.check} style={{ width: 12, height: 12, display: 'inline-grid' }} />
+            Enregistré automatiquement dans votre espace
+          </span>
         </div>
       </div>
 

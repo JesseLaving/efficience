@@ -71,32 +71,6 @@ export function nowLocalIso(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/* Export .ics du calendrier — importable dans Google Agenda, Outlook ou Apple
-   Calendar. Heures « flottantes » (sans fuseau) : les horaires saisis sont
-   locaux, et un post prévu à 9h doit rester à 9h où que le fichier soit
-   importé. */
-export function toIcs(list: ScheduledPost[]): string {
-  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
-  const stamp = (iso: string) => iso.replace(/[-:]/g, '') + '00'; // 2026-08-06T09:00 → 20260806T090000
-  const plus30 = (iso: string) => {
-    const d = new Date(iso);
-    d.setMinutes(d.getMinutes() + 30);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-  };
-  const events = list.map((p) => [
-    'BEGIN:VEVENT',
-    `UID:${p.id}@efficience`,
-    `DTSTAMP:${stamp((p.createdAt || p.dateTime).slice(0, 16))}`,
-    `DTSTART:${stamp(p.dateTime)}`,
-    `DTEND:${plus30(p.dateTime)}`,
-    `SUMMARY:${esc((p.text.split('\n')[0] || 'Publication').slice(0, 80))}`,
-    `DESCRIPTION:${esc(p.text)}\\n\\nRéseaux : ${esc(p.networks.join(', '))}`,
-    `STATUS:${p.status === 'published' ? 'CONFIRMED' : 'TENTATIVE'}`,
-    'END:VEVENT',
-  ].join('\r\n'));
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Efficience//Calendrier editorial//FR', ...events, 'END:VCALENDAR'].join('\r\n');
-}
 export function removeScheduled(list: ScheduledPost[], id: string): ScheduledPost[] {
   const next = list.filter((x) => x.id !== id);
   saveScheduled(next);
