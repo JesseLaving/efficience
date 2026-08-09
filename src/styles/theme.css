@@ -1227,6 +1227,74 @@ body {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* ---------- fil de production (see components/FlowNav.tsx) ---------- */
+.flow-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--canvas);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.flow-nav::-webkit-scrollbar {
+  display: none;
+}
+.flow-nav > span > .icon,
+.flow-nav > span > svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--tx-3);
+  opacity: 0.6;
+}
+.flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-btn);
+  background: none;
+  color: var(--tx-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.flow-step:hover {
+  background: var(--canvas-soft);
+  color: var(--tx-str);
+}
+.flow-step .icon,
+.flow-step svg {
+  width: 14px;
+  height: 14px;
+}
+.flow-step .fs-l {
+  font-weight: 600;
+}
+.flow-step .fs-c {
+  font-size: 11px;
+  color: var(--tx-3);
+  font-variant-numeric: tabular-nums;
+}
+.flow-step.on {
+  background: var(--acc-soft);
+  border-color: var(--acc-soft2);
+  color: var(--acc);
+}
+.flow-step.on .fs-c {
+  color: var(--acc);
+  opacity: 0.75;
+}
+
 /* ---------- squelettes de chargement (see components/Skeleton.tsx) ---------- */
 .skel {
   position: relative;

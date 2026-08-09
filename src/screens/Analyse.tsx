@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useEff } from "../state/EffContext";
 import { Icon, RawIcon } from "../lib/Icon";
 import { UI } from "../lib/icons";
 import { fr } from "../lib/format";
@@ -134,6 +135,7 @@ function IssueList({ title, items }: { title: string; items: Audit[] }) {
 }
 
 export function Analyse() {
+  const { show } = useEff();
   const prof = loadProfile();
   const [siret, setSiret] = useState(prof?.siret || prof?.siren || "");
   const [site, setSite] = useState(prof?.domain || "");
@@ -402,6 +404,37 @@ export function Analyse() {
               "Les scores de vitesse viennent de Google PageSpeed — sa réponse peut prendre un moment.",
             ]}
           />
+        </div>
+      )}
+
+      {/* L'analyse terminée était un cul-de-sac : on lisait le rapport, puis
+          rien. Ces deux passerelles mènent aux outils que les résultats
+          alimentent réellement (charte → Studio, secteur → Planning). */}
+      {!loading && (company || siteRes) && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div
+            className="pad"
+            style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}
+          >
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--tx-str)" }}>
+                Et maintenant ?
+              </div>
+              <div style={{ fontSize: 12, color: "var(--tx-3)", marginTop: 3 }}>
+                Ces résultats alimentent directement vos outils de création.
+              </div>
+            </div>
+            {siteRes?.brand?.available && (
+              <button className="btn outline" onClick={() => show("studio")}>
+                <Icon name="spark" />
+                Créer un post avec votre charte
+              </button>
+            )}
+            <button className="btn acc" onClick={() => show("planning")}>
+              <Icon name="calendar" />
+              Générer le planning éditorial
+            </button>
+          </div>
         </div>
       )}
 

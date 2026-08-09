@@ -250,7 +250,7 @@ function StatusPill({ s }: { s: Campaign["status"] }) {
 }
 
 export function Campagnes() {
-  const { campaignSeed, clearCampaignSeed } = useEff();
+  const { campaignSeed, clearCampaignSeed, show } = useEff();
   const authUser = useAuthUser();
   /* Adresse qui recevra les réponses : le compte connecté d'abord, puis le
      profil d'espace. Calculée une seule fois ici pour que ce qui est annoncé
@@ -957,6 +957,14 @@ export function Campagnes() {
                     Programmer
                   </button>
                   <span className="grow" />
+                  {/* Sans destinataire, l'envoi grisé était un cul-de-sac :
+                      on propose l'action qui débloque vraiment (la base). */}
+                  {!sendableCount && !sending && (
+                    <button className="btn outline" onClick={() => show("contacts")}>
+                      <Icon name="users" />
+                      Ajouter des contacts
+                    </button>
+                  )}
                   <button
                     className="btn acc"
                     disabled={sending || !sendableCount}
