@@ -1,38 +1,52 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useEff } from '../state/EffContext';
-import { useCalendar } from '../state/CalendarContext';
-import { useConnections } from '../state/ConnectionsContext';
-import { Icon, Brand, RawIcon } from '../lib/Icon';
-import { UI, type BrandName } from '../lib/icons';
-import { getBusiness } from '../lib/business';
-import { showToast } from '../lib/toast';
+import { useEffect, useMemo, useState } from "react";
+import { useEff } from "../state/EffContext";
+import { useCalendar } from "../state/CalendarContext";
+import { useConnections } from "../state/ConnectionsContext";
+import { Icon, Brand, RawIcon } from "../lib/Icon";
+import { UI, type BrandName } from "../lib/icons";
+import { getBusiness } from "../lib/business";
+import { showToast } from "../lib/toast";
 import {
-  DURATIONS, SECTOR_PRESETS, PILLARS, planScaffold, applyIdeas, planToCsv, loadPlan, savePlan, type PlanItem,
-} from '../lib/editorial';
-import { generateAiPlanIdeas, generatePost, sampleRecentCaptions, type AiContext } from '../lib/ai';
-import { loadStrategy } from '../lib/strategy';
-import { buildAidaPost } from '../lib/aida';
-import { defaultDateTime, publishedCaptions } from '../lib/calendar';
-import { AiLoader } from '../components/AiLoader';
+  DURATIONS,
+  SECTOR_PRESETS,
+  PILLARS,
+  planScaffold,
+  applyIdeas,
+  planToCsv,
+  loadPlan,
+  savePlan,
+  type PlanItem,
+} from "../lib/editorial";
+import { generateAiPlanIdeas, generatePost, sampleRecentCaptions, type AiContext } from "../lib/ai";
+import { loadStrategy } from "../lib/strategy";
+import { buildAidaPost } from "../lib/aida";
+import { defaultDateTime, publishedCaptions } from "../lib/calendar";
+import { AiLoader } from "../components/AiLoader";
+import { Skel } from "../components/Skeleton";
 
 const AI_MAX_SLOTS = 30;
 
 const netLabel: Record<string, string> = {
-  instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', google: 'Google Business',
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  google: "Google Business",
 };
 
 /* Réseaux proposés pour la multidiffusion d'une publication du planning —
    ceux que les piliers éditoriaux peuvent assigner (voir PILLARS). */
-const PLAN_NETWORKS = ['instagram', 'facebook', 'linkedin', 'google'];
+const PLAN_NETWORKS = ["instagram", "facebook", "linkedin", "google"];
 
 function downloadCsv(items: PlanItem[]) {
   const csv = planToCsv(items);
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'planning-editorial.csv';
-  document.body.appendChild(a); a.click(); a.remove();
+  a.download = "planning-editorial.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -45,7 +59,7 @@ export function EditorialPlanning() {
      faisait perdre tout le planning généré à chaque aller-retour. */
   const [savedPlan] = useState(() => loadPlan());
   const [sector, setSector] = useState(() => savedPlan?.sector || getBusiness().sector);
-  const [durKey, setDurKey] = useState(savedPlan?.durKey || '1m');
+  const [durKey, setDurKey] = useState(savedPlan?.durKey || "1m");
   const [perWeek, setPerWeek] = useState(savedPlan?.perWeek ?? 3);
   const [plan, setPlan] = useState<PlanItem[] | null>(savedPlan?.items ?? null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -80,9 +94,16 @@ export function EditorialPlanning() {
     const b = getBusiness();
     const strat = loadStrategy();
     return {
-      name: b.name, sector: sec, city: b.city,
-      audience: strat?.audience || undefined, products: strat?.products || undefined, goal: strat?.goal || undefined,
-      recentPosts: [...publishedCaptions(scheduled), ...sampleRecentCaptions(metaStats, tiktokVideos)].slice(0, 6),
+      name: b.name,
+      sector: sec,
+      city: b.city,
+      audience: strat?.audience || undefined,
+      products: strat?.products || undefined,
+      goal: strat?.goal || undefined,
+      recentPosts: [
+        ...publishedCaptions(scheduled),
+        ...sampleRecentCaptions(metaStats, tiktokVideos),
+      ].slice(0, 6),
     };
   };
 
@@ -90,33 +111,54 @@ export function EditorialPlanning() {
     /* Régénérer remplace le plan courant, jusque-là écrasé sans prévenir. Les
        publications déjà programmées restent au calendrier (données réelles),
        mais les brouillons rédigés et le lien plan→calendrier seraient perdus. */
-    if (plan && plan.length && !window.confirm('Remplacer le planning actuel ? Les publications déjà programmées restent au calendrier.')) return;
+    if (
+      plan &&
+      plan.length &&
+      !window.confirm(
+        "Remplacer le planning actuel ? Les publications déjà programmées restent au calendrier.",
+      )
+    )
+      return;
     const b = getBusiness();
     const sec = sector.trim() || b.sector;
     setAiNote(null);
 
     const scaffold = planScaffold({ weeks, perWeek });
     if (scaffold.length > AI_MAX_SLOTS) {
-      showToast(UI.close, `Génération IA limitée à ${AI_MAX_SLOTS} publications à la fois — réduisez la durée ou le rythme.`);
+      showToast(
+        UI.close,
+        `Génération IA limitée à ${AI_MAX_SLOTS} publications à la fois — réduisez la durée ou le rythme.`,
+      );
       return;
     }
     setAiBusy(true);
     try {
-      const slots = scaffold.map((s) => ({ pillar: s.pillar, format: s.format, network: s.network }));
+      const slots = scaffold.map((s) => ({
+        pillar: s.pillar,
+        format: s.format,
+        network: s.network,
+      }));
       const res = await generateAiPlanIdeas(buildCtx(sec), slots);
       if (res.available && res.ideas) {
         setPlan(applyIdeas(scaffold, res.ideas, sec, b.city));
         showToast(UI.check, `${scaffold.length} publications proposées par IA`);
       } else {
         setPlan(applyIdeas(scaffold, [], sec, b.city));
-        setAiNote(`Gemini indisponible (${res.reason || 'erreur'}) — sujets génériques utilisés en repli.`);
-        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'} — repli sur les sujets génériques.`);
+        setAiNote(
+          `Gemini indisponible (${res.reason || "erreur"}) — sujets génériques utilisés en repli.`,
+        );
+        showToast(
+          UI.close,
+          `IA indisponible : ${res.reason || "erreur"} — repli sur les sujets génériques.`,
+        );
       }
     } catch (e) {
       setPlan(applyIdeas(scaffold, [], sec, b.city));
-      setAiNote('IA indisponible — sujets génériques utilisés en repli.');
+      setAiNote("IA indisponible — sujets génériques utilisés en repli.");
       showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
-    } finally { setAiBusy(false); }
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   // Régénère le sujet d'UNE seule publication du planning, sans toucher au
@@ -126,18 +168,26 @@ export function EditorialPlanning() {
     setRegenBusy((s) => new Set(s).add(p));
     try {
       const sec = sector.trim() || getBusiness().sector;
-      const res = await generateAiPlanIdeas(buildCtx(sec), [{ pillar: p.pillar, format: p.format, network: p.network }]);
-      const idea = res.available && res.ideas && res.ideas[0] ? res.ideas[0].trim() : '';
+      const res = await generateAiPlanIdeas(buildCtx(sec), [
+        { pillar: p.pillar, format: p.format, network: p.network },
+      ]);
+      const idea = res.available && res.ideas && res.ideas[0] ? res.ideas[0].trim() : "";
       if (idea) {
-        setPlan((prev) => (prev ? prev.map((item) => (item === p ? { ...item, idea } : item)) : prev));
-        showToast(UI.check, 'Nouveau sujet proposé');
+        setPlan((prev) =>
+          prev ? prev.map((item) => (item === p ? { ...item, idea } : item)) : prev,
+        );
+        showToast(UI.check, "Nouveau sujet proposé");
       } else {
-        showToast(UI.close, `IA indisponible : ${res.reason || 'erreur'}`);
+        showToast(UI.close, `IA indisponible : ${res.reason || "erreur"}`);
       }
     } catch (e) {
       showToast(UI.close, `IA : ${String((e as Error).message || e)}`);
     } finally {
-      setRegenBusy((s) => { const n = new Set(s); n.delete(p); return n; });
+      setRegenBusy((s) => {
+        const n = new Set(s);
+        n.delete(p);
+        return n;
+      });
     }
   };
 
@@ -179,13 +229,13 @@ export function EditorialPlanning() {
   // Publication sélectionnée dans la grille → panneau de détail sous le calendrier.
   const [selected, setSelected] = useState<{ p: PlanItem; i: number } | null>(null);
   // La liste reste accessible : elle sert à parcourir tous les sujets d'affilée.
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [view, setView] = useState<"calendar" | "list">("calendar");
 
   /* Cellules du mois affiché : semaines complètes du lundi au dimanche, avec
      les jours des mois voisins en retrait pour ne pas casser la grille. */
   const monthCells = useMemo(() => {
     if (!currentMonth || !plan) return [];
-    const [y, m] = currentMonth.ym.split('-').map(Number);
+    const [y, m] = currentMonth.ym.split("-").map(Number);
     const first = new Date(y, m - 1, 1);
     // getDay : 0 = dimanche. On décale pour une semaine commençant lundi.
     const lead = (first.getDay() + 6) % 7;
@@ -201,7 +251,7 @@ export function EditorialPlanning() {
     // 6 semaines : hauteur constante d'un mois à l'autre, comme un agenda.
     return Array.from({ length: 42 }, (_, k) => {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + k);
-      const dIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       return {
         iso: dIso,
         day: d.getDate(),
@@ -221,7 +271,10 @@ export function EditorialPlanning() {
   }, [plan]);
 
   // Transforme le sujet en brouillon AIDA (Attention · Intérêt · Désir · Action + CTA).
-  const aidaFor = (p: PlanItem) => { const b = getBusiness(); return buildAidaPost(p, { sector: sector.trim() || b.sector, name: b.name, city: b.city }); };
+  const aidaFor = (p: PlanItem) => {
+    const b = getBusiness();
+    return buildAidaPost(p, { sector: sector.trim() || b.sector, name: b.name, city: b.city });
+  };
 
   /* Rédige le post À PARTIR du sujet du planning.
 
@@ -235,7 +288,9 @@ export function EditorialPlanning() {
   /* Rédaction partagée par « Rédiger le post » et « Programmer » : les deux
      produisaient le même texte de gabarit hors sujet. Renvoie aussi la
      provenance, pour dire honnêtement quand c'est un brouillon type. */
-  const writePost = async (p: PlanItem): Promise<{ text: string; ai: boolean; reason?: string }> => {
+  const writePost = async (
+    p: PlanItem,
+  ): Promise<{ text: string; ai: boolean; reason?: string }> => {
     try {
       const sec = sector.trim() || getBusiness().sector;
       const res = await generatePost(p.idea, {
@@ -243,9 +298,9 @@ export function EditorialPlanning() {
         network: netLabel[p.network] || p.network,
         pillar: p.pillar,
       });
-      const text = res.available ? (res.variants?.[0] || res.text || '') : '';
+      const text = res.available ? res.variants?.[0] || res.text || "" : "";
       if (text.trim()) return { text: text.trim(), ai: true };
-      return { text: aidaFor(p), ai: false, reason: res.reason || 'erreur' };
+      return { text: aidaFor(p), ai: false, reason: res.reason || "erreur" };
     } catch (e) {
       return { text: aidaFor(p), ai: false, reason: String((e as Error).message || e) };
     }
@@ -262,9 +317,12 @@ export function EditorialPlanning() {
     if (next.length) savePlan({ items: next, sector, durKey, perWeek });
     seedStudio(text);
     setComposing(null);
-    showToast(ai ? UI.check : UI.wand, ai
-      ? 'Post rédigé sur ce sujet — ouvrez le Studio pour l’ajuster'
-      : `IA indisponible (${reason}) — brouillon type à personnaliser.`);
+    showToast(
+      ai ? UI.check : UI.wand,
+      ai
+        ? "Post rédigé sur ce sujet — ouvrez le Studio pour l’ajuster"
+        : `IA indisponible (${reason}) — brouillon type à personnaliser.`,
+    );
   };
 
   /* Identité par p.id, plus jamais par index de rendu : l'index était local au
@@ -273,7 +331,8 @@ export function EditorialPlanning() {
   // Réseaux effectivement sélectionnés pour une publication : ceux choisis
   // manuellement, sinon tous les réseaux connectés couverts par le planning,
   // sinon (rien de connecté) le réseau suggéré par le pilier — jamais vide.
-  const netsFor = (p: PlanItem): string[] => netSel[p.id] ?? (connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]);
+  const netsFor = (p: PlanItem): string[] =>
+    netSel[p.id] ?? (connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]);
   const toggleNet = (p: PlanItem, id: string) => {
     const cur = netsFor(p);
     const next = cur.includes(id) ? cur.filter((n) => n !== id) : [...cur, id];
@@ -285,19 +344,33 @@ export function EditorialPlanning() {
      partait au calendrier avec un contenu sans rapport avec son sujet. */
   const schedule = async (p: PlanItem) => {
     // Déjà programmée : un second clic créerait un doublon au calendrier.
-    if (scheduledKeys.has(p.id)) { showToast(UI.calendar, 'Ce sujet est déjà programmé — retrouvez-le dans le Calendrier.'); return; }
+    if (scheduledKeys.has(p.id)) {
+      showToast(UI.calendar, "Ce sujet est déjà programmé — retrouvez-le dans le Calendrier.");
+      return;
+    }
     setComposing(p);
     const { text, ai, reason } = await writePost(p);
     // planKey relie la publication à son sujet d'origine : c'est ce lien qui
     // marque le sujet « programmé » dans le plan.
-    addToCalendar({ dateTime: defaultDateTime(p.date, 9), text, networks: netsFor(p), photoUrl: null, pillar: p.pillar, planKey: p.id });
+    addToCalendar({
+      dateTime: defaultDateTime(p.date, 9),
+      text,
+      networks: netsFor(p),
+      photoUrl: null,
+      pillar: p.pillar,
+      planKey: p.id,
+    });
     setComposing(null);
     // addToCalendar confirme déjà l'ajout : on ne signale ici que le repli,
     // sinon deux messages se superposeraient pour la même action.
-    if (!ai) showToast(UI.wand, `Brouillon type utilisé (IA indisponible : ${reason}) — à personnaliser.`);
+    if (!ai)
+      showToast(UI.wand, `Brouillon type utilisé (IA indisponible : ${reason}) — à personnaliser.`);
   };
   const copyIdea = (p: PlanItem) => {
-    navigator.clipboard?.writeText(p.idea).then(() => showToast(UI.check, 'Sujet copié'), () => {});
+    navigator.clipboard?.writeText(p.idea).then(
+      () => showToast(UI.check, "Sujet copié"),
+      () => {},
+    );
   };
 
   return (
@@ -306,90 +379,164 @@ export function EditorialPlanning() {
         <div>
           <div className="eyebrow">Planning éditorial</div>
           <h1>Générez votre calendrier de publications</h1>
-          <p>Un plan de contenu équilibré pour {client.name}, adapté à votre secteur d’activité. Choisissez la durée et le rythme : chaque proposition est un point de départ à personnaliser, et les dates sont réelles.</p>
+          <p>
+            Un plan de contenu équilibré pour {client.name}, adapté à votre secteur d’activité.
+            Choisissez la durée et le rythme : chaque proposition est un point de départ à
+            personnaliser, et les dates sont réelles.
+          </p>
         </div>
         {plan && plan.length > 0 && (
-          <button className="btn outline" onClick={() => downloadCsv(plan)}><Icon name="download" />Exporter (.csv)</button>
+          <button className="btn outline" onClick={() => downloadCsv(plan)}>
+            <Icon name="download" />
+            Exporter (.csv)
+          </button>
         )}
       </div>
 
       {/* ---------- Configurateur ---------- */}
       <div className="card">
-        <div className="card-h"><h3>Paramètres du planning</h3></div>
-        <div className="pad" style={{ display: 'grid', gap: 18 }}>
+        <div className="card-h">
+          <h3>Paramètres du planning</h3>
+        </div>
+        <div className="pad" style={{ display: "grid", gap: 18 }}>
           <div className="field">
             <label className="field-lbl">Secteur d’activité</label>
-            <input className="inp" value={sector} onChange={(e) => setSector(e.target.value)} placeholder="Ex : Conseil & formation, Restauration, Immobilier…" />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+            <input
+              className="inp"
+              value={sector}
+              onChange={(e) => setSector(e.target.value)}
+              placeholder="Ex : Conseil & formation, Restauration, Immobilier…"
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
               {SECTOR_PRESETS.map((s) => (
                 <button
                   key={s}
-                  className={'chip-btn' + (sector.trim() === s ? ' on' : '')}
+                  className={"chip-btn" + (sector.trim() === s ? " on" : "")}
                   onClick={() => setSector(s)}
                   style={{
-                    fontSize: 12.5, padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
-                    border: '1px solid ' + (sector.trim() === s ? 'var(--acc)' : 'var(--line)'),
-                    background: sector.trim() === s ? 'var(--acc-soft)' : 'transparent',
-                    color: sector.trim() === s ? 'var(--acc)' : 'var(--tx-2)',
+                    fontSize: 12.5,
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    border: "1px solid " + (sector.trim() === s ? "var(--acc)" : "var(--line)"),
+                    background: sector.trim() === s ? "var(--acc-soft)" : "transparent",
+                    color: sector.trim() === s ? "var(--acc)" : "var(--tx-2)",
                   }}
-                >{s}</button>
+                >
+                  {s}
+                </button>
               ))}
             </div>
           </div>
 
           <div className="field">
             <label className="field-lbl">Durée du planning</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {DURATIONS.map((d) => (
                 <button
                   key={d.key}
                   onClick={() => setDurKey(d.key)}
                   style={{
-                    fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 'var(--r-btn)', cursor: 'pointer',
-                    border: '1px solid ' + (durKey === d.key ? 'var(--acc)' : 'var(--line)'),
-                    background: durKey === d.key ? 'var(--acc)' : 'transparent',
-                    color: durKey === d.key ? 'var(--on-acc)' : 'var(--tx-2)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    padding: "9px 16px",
+                    borderRadius: "var(--r-btn)",
+                    cursor: "pointer",
+                    border: "1px solid " + (durKey === d.key ? "var(--acc)" : "var(--line)"),
+                    background: durKey === d.key ? "var(--acc)" : "transparent",
+                    color: durKey === d.key ? "var(--on-acc)" : "var(--tx-2)",
                   }}
-                >{d.label}</button>
+                >
+                  {d.label}
+                </button>
               ))}
             </div>
           </div>
 
           <div className="field">
-            <label className="field-lbl">Publications par semaine — <b style={{ color: 'var(--acc)' }}>{perWeek}</b></label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <label className="field-lbl">
+              Publications par semaine — <b style={{ color: "var(--acc)" }}>{perWeek}</b>
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <input
-                type="range" min={1} max={14} value={perWeek}
+                type="range"
+                min={1}
+                max={14}
+                value={perWeek}
                 onChange={(e) => setPerWeek(Number(e.target.value))}
-                style={{ flex: 1, accentColor: 'var(--acc)' }}
+                style={{ flex: 1, accentColor: "var(--acc)" }}
               />
-              <span style={{ fontSize: 12.5, color: 'var(--tx-3)', whiteSpace: 'nowrap' }}>
-                ≈ {perWeek * weeks} publication{perWeek * weeks > 1 ? 's' : ''} au total
+              <span style={{ fontSize: 12.5, color: "var(--tx-3)", whiteSpace: "nowrap" }}>
+                ≈ {perWeek * weeks} publication{perWeek * weeks > 1 ? "s" : ""} au total
               </span>
             </div>
           </div>
 
           {weeks * perWeek > AI_MAX_SLOTS && (
-            <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>
-              L’IA personnalise jusqu’à {AI_MAX_SLOTS} publications par génération — réduisez la durée ou le rythme pour ce volume ({weeks * perWeek}).
+            <div style={{ fontSize: 11.5, color: "var(--warn)" }}>
+              L’IA personnalise jusqu’à {AI_MAX_SLOTS} publications par génération — réduisez la
+              durée ou le rythme pour ce volume ({weeks * perWeek}).
             </div>
           )}
-          {aiNote && <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{aiNote}</div>}
+          {aiNote && <div style={{ fontSize: 11.5, color: "var(--tx-3)" }}>{aiNote}</div>}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="grow" style={{ fontSize: 12, color: 'var(--tx-3)' }}>
-              Sujets rédigés par Gemini pour votre entreprise — dates et équilibre calculés localement.
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="grow" style={{ fontSize: 12, color: "var(--tx-3)" }}>
+              Sujets rédigés par Gemini pour votre entreprise — dates et équilibre calculés
+              localement.
             </span>
             <button className="btn acc" disabled={aiBusy} onClick={generate}>
               {aiBusy ? <span className="spin" /> : <RawIcon svg={UI.sparkles2} />}
-              {plan ? 'Régénérer le planning' : 'Générer le planning'}
+              {plan ? "Régénérer le planning" : "Générer le planning"}
             </button>
           </div>
           {aiBusy && (
-            <AiLoader
-              lead="Génération IA en cours"
-              phrases={['Analyse de votre secteur et de votre stratégie…', 'Rédaction des sujets par Gemini…', 'Équilibrage du calendrier…']}
-            />
+            <>
+              <AiLoader
+                lead="Génération IA en cours"
+                phrases={[
+                  "Analyse de votre secteur et de votre stratégie…",
+                  "Rédaction des sujets par Gemini…",
+                  "Équilibrage du calendrier…",
+                ]}
+                tips={[
+                  "Le planning s’appuie sur votre stratégie (audience, offres, objectif) — plus elle est précise, meilleurs sont les sujets.",
+                  "Chaque sujet pourra être ouvert dans le Studio pour rédiger le post en un clic.",
+                  "Les dates et l’équilibre entre piliers sont calculés localement, sans IA.",
+                ]}
+              />
+              {/* Squelette du planning à venir : réserve la place des sujets
+                  pour que le résultat apparaisse sans décalage de page. */}
+              <div aria-hidden="true">
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[112, 92, 128, 84].map((w, i) => (
+                    <Skel key={i} w={w} h={28} r={999} />
+                  ))}
+                </div>
+                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "center",
+                        border: "1px solid var(--line)",
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      <Skel w={38} h={38} r={10} />
+                      <span style={{ flex: 1, display: "grid", gap: 7 }}>
+                        <Skel w="46%" h={11} />
+                        <Skel w="72%" h={10} />
+                      </span>
+                      <Skel w={70} h={22} r={999} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -398,52 +545,123 @@ export function EditorialPlanning() {
       {plan && plan.length > 0 && (
         <>
           <div className="card" style={{ marginTop: 16 }}>
-            <div className="card-h"><h3>Vue d’ensemble</h3><div className="sub">{plan.length} publications · {weeks} semaine{weeks > 1 ? 's' : ''} · {perWeek}/semaine</div></div>
+            <div className="card-h">
+              <h3>Vue d’ensemble</h3>
+              <div className="sub">
+                {plan.length} publications · {weeks} semaine{weeks > 1 ? "s" : ""} · {perWeek}
+                /semaine
+              </div>
+            </div>
             <div className="pad">
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tx-3)', marginBottom: 10 }}>Équilibre par pilier éditorial</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  color: "var(--tx-3)",
+                  marginBottom: 10,
+                }}
+              >
+                Équilibre par pilier éditorial
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {pillarDist.map((pl) => (
-                  <span key={pl.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, padding: '6px 12px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--canvas-soft)', color: 'var(--tx-2)' }}>
-                    {pl.label}<b style={{ color: 'var(--acc)' }}>{pl.n}</b>
+                  <span
+                    key={pl.key}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12.5,
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid var(--line)",
+                      background: "var(--canvas-soft)",
+                      color: "var(--tx-2)",
+                    }}
+                  >
+                    {pl.label}
+                    <b style={{ color: "var(--acc)" }}>{pl.n}</b>
                   </span>
                 ))}
               </div>
             </div>
           </div>
 
-          {view === 'calendar' && currentMonth && (
+          {view === "calendar" && currentMonth && (
             <div className="card" style={{ marginTop: 16 }}>
               <div className="card-h cal-head">
                 <button
-                  className="cal-nav" type="button" aria-label="Mois précédent"
+                  className="cal-nav"
+                  type="button"
+                  aria-label="Mois précédent"
                   disabled={safeMonthIdx === 0}
-                  onClick={() => { setMonthIdx(safeMonthIdx - 1); setSelected(null); }}
-                ><Icon name="arrowleft" /></button>
-                <h3 style={{ textTransform: 'capitalize', minWidth: 150, textAlign: 'center' }}>{currentMonth.label}</h3>
+                  onClick={() => {
+                    setMonthIdx(safeMonthIdx - 1);
+                    setSelected(null);
+                  }}
+                >
+                  <Icon name="arrowleft" />
+                </button>
+                <h3 style={{ textTransform: "capitalize", minWidth: 150, textAlign: "center" }}>
+                  {currentMonth.label}
+                </h3>
                 <button
-                  className="cal-nav" type="button" aria-label="Mois suivant"
+                  className="cal-nav"
+                  type="button"
+                  aria-label="Mois suivant"
                   disabled={safeMonthIdx >= planMonths.length - 1}
-                  onClick={() => { setMonthIdx(safeMonthIdx + 1); setSelected(null); }}
-                ><Icon name="arrowright" /></button>
+                  onClick={() => {
+                    setMonthIdx(safeMonthIdx + 1);
+                    setSelected(null);
+                  }}
+                >
+                  <Icon name="arrowright" />
+                </button>
                 <div style={{ flex: 1 }} />
                 <div className="seg">
-                  <button type="button" className="seg-b on">Calendrier</button>
-                  <button type="button" className="seg-b" onClick={() => { setView('list'); setSelected(null); }}>Liste</button>
+                  <button type="button" className="seg-b on">
+                    Calendrier
+                  </button>
+                  <button
+                    type="button"
+                    className="seg-b"
+                    onClick={() => {
+                      setView("list");
+                      setSelected(null);
+                    }}
+                  >
+                    Liste
+                  </button>
                 </div>
               </div>
 
-              <div className="cal-grid" role="grid" aria-label={`Planning de ${currentMonth.label}`}>
-                {['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map((d) => (
-                  <div className="cal-dow" key={d}>{d}</div>
+              <div
+                className="cal-grid"
+                role="grid"
+                aria-label={`Planning de ${currentMonth.label}`}
+              >
+                {["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].map((d) => (
+                  <div className="cal-dow" key={d}>
+                    {d}
+                  </div>
                 ))}
                 {monthCells.map((c) => (
-                  <div key={c.iso} className={'cal-cell' + (c.outside ? ' out' : '') + (c.today ? ' today' : '')}>
+                  <div
+                    key={c.iso}
+                    className={"cal-cell" + (c.outside ? " out" : "") + (c.today ? " today" : "")}
+                  >
                     <div className="cal-num">{c.day}</div>
                     {c.items.map(({ p, i }) => (
                       <button
                         key={p.id}
                         type="button"
-                        className={'cal-ev' + (selected?.i === i ? ' sel' : '') + (scheduledKeys.has(p.id) ? ' done' : '')}
+                        className={
+                          "cal-ev" +
+                          (selected?.i === i ? " sel" : "") +
+                          (scheduledKeys.has(p.id) ? " done" : "")
+                        }
                         data-pillar={p.pillarKey}
                         title={`${p.pillar} · ${p.format}\n${p.idea}`}
                         onClick={() => setSelected(selected?.i === i ? null : { p, i })}
@@ -458,123 +676,324 @@ export function EditorialPlanning() {
 
               {/* Détail de la publication choisie : mêmes actions que la liste,
                   affichées sous la grille pour garder les cellules lisibles. */}
-              {selected && (() => { const { p } = selected; return (
-                <div className="pad cal-detail">
-                  <div className="cal-detail-head">
-                    <span className="cal-ev-dot" data-pillar={p.pillarKey} />
-                    <strong style={{ textTransform: 'capitalize' }}>{p.label}</strong>
-                    <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>· {p.pillar} · {p.format}</span>
-                    {scheduledKeys.has(p.id)
-                      ? <span className="plan-badge sched"><Icon name="check" />Programmée</span>
-                      : p.drafted && <span className="plan-badge draft"><Icon name="edit" />Brouillon rédigé</span>}
-                    <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setSelected(null)} aria-label="Fermer le détail">
-                      <Icon name="close" />
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45, margin: '8px 0 10px' }}>{p.idea}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ fontSize: 11, color: 'var(--tx-3)' }}>Diffuser sur :</span>
-                    {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
-                      <button
-                        key={id} type="button"
-                        className={'plat-chip sm' + (netsFor(p).includes(id) ? ' on' : '')}
-                        title={netLabel[id] || id}
-                        onClick={() => toggleNet(p, id)}
+              {selected &&
+                (() => {
+                  const { p } = selected;
+                  return (
+                    <div className="pad cal-detail">
+                      <div className="cal-detail-head">
+                        <span className="cal-ev-dot" data-pillar={p.pillarKey} />
+                        <strong style={{ textTransform: "capitalize" }}>{p.label}</strong>
+                        <span style={{ fontSize: 12, color: "var(--tx-3)" }}>
+                          · {p.pillar} · {p.format}
+                        </span>
+                        {scheduledKeys.has(p.id) ? (
+                          <span className="plan-badge sched">
+                            <Icon name="check" />
+                            Programmée
+                          </span>
+                        ) : (
+                          p.drafted && (
+                            <span className="plan-badge draft">
+                              <Icon name="edit" />
+                              Brouillon rédigé
+                            </span>
+                          )
+                        )}
+                        <button
+                          className="btn ghost sm"
+                          style={{ marginLeft: "auto" }}
+                          onClick={() => setSelected(null)}
+                          aria-label="Fermer le détail"
+                        >
+                          <Icon name="close" />
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13.5,
+                          color: "var(--tx)",
+                          lineHeight: 1.45,
+                          margin: "8px 0 10px",
+                        }}
                       >
-                        <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <button className="btn acc sm" disabled={!!composing} onClick={() => compose(p)}>
-                      {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
-                      {composing === p ? 'Rédaction…' : p.drafted ? 'Rédiger à nouveau' : 'Rédiger le post'}
-                    </button>
-                    {scheduledKeys.has(p.id)
-                      ? <button className="btn outline sm" onClick={() => show('calendar')}><Icon name="check" />Voir au calendrier</button>
-                      : <button className="btn outline sm" disabled={!!composing} onClick={() => schedule(p)}><Icon name="clock" />Programmer</button>}
-                    <button className="btn ghost sm" onClick={() => copyIdea(p)}><Icon name="edit" />Copier</button>
-                    <button className="btn ghost sm" disabled={regenBusy.has(p)} onClick={() => regenerateOne(p)}>
-                      {regenBusy.has(p) ? <span className="spin lt" /> : <RawIcon svg={UI.sparkles2} />}Nouvelle idée
-                    </button>
-                  </div>
-                </div>
-              ); })()}
+                        {p.idea}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          alignItems: "center",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span style={{ fontSize: 11, color: "var(--tx-3)" }}>Diffuser sur :</span>
+                        {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map(
+                          (id) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={"plat-chip sm" + (netsFor(p).includes(id) ? " on" : "")}
+                              title={netLabel[id] || id}
+                              onClick={() => toggleNet(p, id)}
+                            >
+                              <Brand name={id as BrandName} />
+                              {netLabel[id] || id}
+                              <RawIcon svg={UI.check} className="pc-x" />
+                            </button>
+                          ),
+                        )}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        <button
+                          className="btn acc sm"
+                          disabled={!!composing}
+                          onClick={() => compose(p)}
+                        >
+                          {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
+                          {composing === p
+                            ? "Rédaction…"
+                            : p.drafted
+                              ? "Rédiger à nouveau"
+                              : "Rédiger le post"}
+                        </button>
+                        {scheduledKeys.has(p.id) ? (
+                          <button className="btn outline sm" onClick={() => show("calendar")}>
+                            <Icon name="check" />
+                            Voir au calendrier
+                          </button>
+                        ) : (
+                          <button
+                            className="btn outline sm"
+                            disabled={!!composing}
+                            onClick={() => schedule(p)}
+                          >
+                            <Icon name="clock" />
+                            Programmer
+                          </button>
+                        )}
+                        <button className="btn ghost sm" onClick={() => copyIdea(p)}>
+                          <Icon name="edit" />
+                          Copier
+                        </button>
+                        <button
+                          className="btn ghost sm"
+                          disabled={regenBusy.has(p)}
+                          onClick={() => regenerateOne(p)}
+                        >
+                          {regenBusy.has(p) ? (
+                            <span className="spin lt" />
+                          ) : (
+                            <RawIcon svg={UI.sparkles2} />
+                          )}
+                          Nouvelle idée
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
             </div>
           )}
 
-          {view === 'list' && (
-            <div className="card-h" style={{ marginTop: 16, border: '1px solid var(--line)', borderRadius: 'var(--r-card) var(--r-card) 0 0', borderBottom: 'none' }}>
+          {view === "list" && (
+            <div
+              className="card-h"
+              style={{
+                marginTop: 16,
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-card) var(--r-card) 0 0",
+                borderBottom: "none",
+              }}
+            >
               <div className="sub">Vue liste</div>
               <div style={{ flex: 1 }} />
               <div className="seg">
-                <button type="button" className="seg-b" onClick={() => setView('calendar')}>Calendrier</button>
-                <button type="button" className="seg-b on">Liste</button>
+                <button type="button" className="seg-b" onClick={() => setView("calendar")}>
+                  Calendrier
+                </button>
+                <button type="button" className="seg-b on">
+                  Liste
+                </button>
               </div>
             </div>
           )}
 
-          {view === 'list' && byMonth.map(([month, posts]) => (
-            <div className="card" style={{ marginTop: 16 }} key={month}>
-              <div className="card-h">
-                <h3 style={{ textTransform: 'capitalize' }}>{month}</h3>
-                <div className="sub">{posts.length} publication{posts.length > 1 ? 's' : ''}</div>
-              </div>
-              <div className="pad" style={{ display: 'grid', gap: 10 }}>
-                {posts.map((p) => (
-                  <div key={p.id} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--r-btn)', border: '1px solid var(--line)', background: 'var(--canvas-soft)' }}>
-                    <div style={{ minWidth: 92, fontSize: 12.5, color: 'var(--tx-2)', fontWeight: 600, textTransform: 'capitalize', paddingTop: 2 }}>{p.label}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 5 }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, color: 'var(--acc)' }}>
-                          <RawIcon svg={UI.dot} style={{ width: 12, height: 12, display: 'inline-grid' }} />{p.pillar}
-                        </span>
-                        <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>· {p.format}</span>
-                        {scheduledKeys.has(p.id)
-                          ? <span className="plan-badge sched"><Icon name="check" />Programmée</span>
-                          : p.drafted && <span className="plan-badge draft"><Icon name="edit" />Brouillon rédigé</span>}
-                      </div>
-                      <div style={{ fontSize: 13.5, color: 'var(--tx)', lineHeight: 1.45, marginBottom: 8 }}>{p.idea}</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: 'var(--tx-3)' }}>Diffuser sur :</span>
-                        {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map((id) => (
-                          <button
-                            key={id} type="button"
-                            className={'plat-chip sm' + (netsFor(p).includes(id) ? ' on' : '')}
-                            title={netLabel[id] || id}
-                            onClick={() => toggleNet(p, id)}
-                          >
-                            <Brand name={id as BrandName} />{netLabel[id] || id}<RawIcon svg={UI.check} className="pc-x" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      <button className="btn acc sm" title="Rédiger ce post par IA dans le Studio" disabled={!!composing} onClick={() => compose(p)}>
-                        {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
-                        {composing === p ? 'Rédaction…' : p.drafted ? 'Rédiger à nouveau' : 'Rédiger le post'}
-                      </button>
-                      {scheduledKeys.has(p.id) ? (
-                        <button className="btn outline sm" title="Ce sujet est déjà programmé" onClick={() => show('calendar')}>
-                          <Icon name="check" />Voir au calendrier
-                        </button>
-                      ) : (
-                        <button className="btn outline sm" title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés" disabled={!!composing} onClick={() => schedule(p)}>
-                          <Icon name="clock" />Programmer
-                        </button>
-                      )}
-                      <button className="btn ghost sm" title="Copier le sujet" onClick={() => copyIdea(p)}>
-                        <Icon name="edit" />Copier
-                      </button>
-                      <button className="btn ghost sm" disabled={regenBusy.has(p)} title="Générer un nouveau sujet par IA pour cette publication" onClick={() => regenerateOne(p)}>
-                        {regenBusy.has(p) ? <span className="spin lt" /> : <RawIcon svg={UI.sparkles2} />}Nouvelle idée
-                      </button>
-                    </div>
+          {view === "list" &&
+            byMonth.map(([month, posts]) => (
+              <div className="card" style={{ marginTop: 16 }} key={month}>
+                <div className="card-h">
+                  <h3 style={{ textTransform: "capitalize" }}>{month}</h3>
+                  <div className="sub">
+                    {posts.length} publication{posts.length > 1 ? "s" : ""}
                   </div>
-                ))}
+                </div>
+                <div className="pad" style={{ display: "grid", gap: 10 }}>
+                  {posts.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: "flex",
+                        gap: 14,
+                        alignItems: "flex-start",
+                        padding: "12px 14px",
+                        borderRadius: "var(--r-btn)",
+                        border: "1px solid var(--line)",
+                        background: "var(--canvas-soft)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          minWidth: 92,
+                          fontSize: 12.5,
+                          color: "var(--tx-2)",
+                          fontWeight: 600,
+                          textTransform: "capitalize",
+                          paddingTop: 2,
+                        }}
+                      >
+                        {p.label}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            alignItems: "center",
+                            marginBottom: 5,
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              color: "var(--acc)",
+                            }}
+                          >
+                            <RawIcon
+                              svg={UI.dot}
+                              style={{ width: 12, height: 12, display: "inline-grid" }}
+                            />
+                            {p.pillar}
+                          </span>
+                          <span style={{ fontSize: 11.5, color: "var(--tx-3)" }}>· {p.format}</span>
+                          {scheduledKeys.has(p.id) ? (
+                            <span className="plan-badge sched">
+                              <Icon name="check" />
+                              Programmée
+                            </span>
+                          ) : (
+                            p.drafted && (
+                              <span className="plan-badge draft">
+                                <Icon name="edit" />
+                                Brouillon rédigé
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13.5,
+                            color: "var(--tx)",
+                            lineHeight: 1.45,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {p.idea}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            alignItems: "center",
+                          }}
+                        >
+                          <span style={{ fontSize: 11, color: "var(--tx-3)" }}>Diffuser sur :</span>
+                          {(connectedPlanNetworks.length ? connectedPlanNetworks : [p.network]).map(
+                            (id) => (
+                              <button
+                                key={id}
+                                type="button"
+                                className={"plat-chip sm" + (netsFor(p).includes(id) ? " on" : "")}
+                                title={netLabel[id] || id}
+                                onClick={() => toggleNet(p, id)}
+                              >
+                                <Brand name={id as BrandName} />
+                                {netLabel[id] || id}
+                                <RawIcon svg={UI.check} className="pc-x" />
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}
+                      >
+                        <button
+                          className="btn acc sm"
+                          title="Rédiger ce post par IA dans le Studio"
+                          disabled={!!composing}
+                          onClick={() => compose(p)}
+                        >
+                          {composing === p ? <span className="spin lt" /> : <Icon name="spark" />}
+                          {composing === p
+                            ? "Rédaction…"
+                            : p.drafted
+                              ? "Rédiger à nouveau"
+                              : "Rédiger le post"}
+                        </button>
+                        {scheduledKeys.has(p.id) ? (
+                          <button
+                            className="btn outline sm"
+                            title="Ce sujet est déjà programmé"
+                            onClick={() => show("calendar")}
+                          >
+                            <Icon name="check" />
+                            Voir au calendrier
+                          </button>
+                        ) : (
+                          <button
+                            className="btn outline sm"
+                            title="Ajouter au calendrier de programmation, sur tous les réseaux sélectionnés"
+                            disabled={!!composing}
+                            onClick={() => schedule(p)}
+                          >
+                            <Icon name="clock" />
+                            Programmer
+                          </button>
+                        )}
+                        <button
+                          className="btn ghost sm"
+                          title="Copier le sujet"
+                          onClick={() => copyIdea(p)}
+                        >
+                          <Icon name="edit" />
+                          Copier
+                        </button>
+                        <button
+                          className="btn ghost sm"
+                          disabled={regenBusy.has(p)}
+                          title="Générer un nouveau sujet par IA pour cette publication"
+                          onClick={() => regenerateOne(p)}
+                        >
+                          {regenBusy.has(p) ? (
+                            <span className="spin lt" />
+                          ) : (
+                            <RawIcon svg={UI.sparkles2} />
+                          )}
+                          Nouvelle idée
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </>
       )}
     </section>
