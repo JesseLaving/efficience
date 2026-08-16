@@ -16,7 +16,12 @@ export function tiktokLogin(): void {
 }
 
 export async function refreshTiktok(refresh: string): Promise<{ token: string; refresh: string } | null> {
-  const r = await fetch(`${API_BASE}/tiktok/refresh?refresh=${encodeURIComponent(refresh)}`);
+  // POST + corps JSON : le refresh token ne doit jamais transiter en URL.
+  const r = await fetch(`${API_BASE}/tiktok/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d.token) return null;
   return { token: d.token, refresh: d.refresh };

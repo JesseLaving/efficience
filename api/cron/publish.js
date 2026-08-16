@@ -15,9 +15,19 @@ const getParam = (req, name) => {
 // protégée → la self-requête y échouerait en renvoyant du HTML).
 const BASE = process.env.PUBLISH_BASE || 'https://efficience.vercel.app';
 
+/* Les endpoints de publication exigent une session utilisateur ; le cron n'en
+   a pas. Il se signe avec son propre secret en en-tête — reconnu par
+   api/_h/requireSession.js (jamais en URL pour ne pas fuiter dans les logs). */
+const cronHeaders = () => {
+  const h = { 'Content-Type': 'application/json' };
+  const secret = (process.env.CRON_SECRET || '').trim();
+  if (secret) h['x-cron-key'] = secret;
+  return h;
+};
+
 async function postJson(path, body) {
   try {
-    const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: cronHeaders(), body: JSON.stringify(body) });
     const txt = await r.text();
     let d = {};
     try { d = txt ? JSON.parse(txt) : {}; } catch { return { ok: false, reason: `HTTP ${r.status} (réponse non-JSON de ${path})` }; }
@@ -54,7 +64,8 @@ async function publishOne(spaceId, post) {
     if (tok && tok.token) {
       let gToken = tok.token;
       if (tok.refresh) {
-        try { const rr = await fetch(`${BASE}/api/google/refresh?refresh=${encodeURIComponent(tok.refresh)}`); const dd = await rr.json().catch(() => ({})); if (dd.token) { gToken = dd.token; await kvSet(`tok:${spaceId}:google`, { ...tok, token: gToken }); } } catch { /* garde l'ancien */ }
+        // POST + corps JSON : le refresh token ne doit jamais transiter en URL.
+        try { const dd = await postJson('/api/google/refresh', { refresh: tok.refresh }); if (dd.token) { gToken = dd.token; await kvSet(`tok:${spaceId}:google`, { ...tok, token: gToken }); } } catch { /* garde l'ancien */ }
       }
       const paths = (tok.paths && tok.paths.length) ? tok.paths : [];
       if (!paths.length) errs.push('google: aucune fiche');
@@ -65,7 +76,14 @@ async function publishOne(spaceId, post) {
     } else errs.push('google: token absent');
   }
 
-  return { status: errs.length && !okCount ? 'failed' : (errs.length ? 'failed' : 'published'), lastResult: errs.length ? errs.join(' · ') : `Publié sur ${okCount} cible(s).` };
+  /* Trois issues distinctes — un succès partiel n'est PAS un échec total :
+     le marquer « failed » pousserait l'utilisateur à republier à la main,
+     donc à doublonner sur les réseaux qui avaient déjà réussi. */
+  const status = okCount ? (errs.length ? 'partial' : 'published') : 'failed';
+  const lastResult = errs.length
+    ? (okCount ? `Publié sur ${okCount} cible(s) · Échecs : ${errs.join(' · ')}` : errs.join(' · '))
+    : `Publié sur ${okCount} cible(s).`;
+  return { status, lastResult };
 }
 
 export default async function handler(req, res) {
@@ -75,7 +93,7 @@ export default async function handler(req, res) {
   if (!kvConfigured()) return json(res, 200, { ok: false, reason: 'KV non configuré.' });
 
   const now = Date.now();
-  let processed = 0, published = 0, failed = 0;
+  let processed = 0, published = 0, partial = 0, failed = 0;
   try {
     const keys = (await kvKeys('sched:*')) || [];
     for (const k of keys) {
@@ -90,10 +108,12 @@ export default async function handler(req, res) {
       const out = await publishOne(spaceId, post);
       const updated = { ...post, status: out.status, lastResult: out.lastResult, publishedAt: now };
       await kvSet(k, updated);
-      if (out.status === 'published') published++; else failed++;
+      if (out.status === 'published') published++;
+      else if (out.status === 'partial') partial++;
+      else failed++;
     }
-    return json(res, 200, { ok: true, processed, published, failed, at: now });
+    return json(res, 200, { ok: true, processed, published, partial, failed, at: now });
   } catch (e) {
-    return json(res, 200, { ok: false, reason: String(e && e.message || e), processed, published, failed });
+    return json(res, 200, { ok: false, reason: String(e && e.message || e), processed, published, partial, failed });
   }
 }

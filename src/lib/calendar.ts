@@ -3,7 +3,10 @@
    date/heure prévue. La publication automatique à l'heure (backend) viendra
    s'appuyer sur cette même structure. */
 
-export type SchedStatus = 'scheduled' | 'published' | 'failed';
+/* « partial » : l'auto-publication serveur a réussi sur une partie des réseaux
+   seulement — lastResult détaille cibles publiées et échecs. Distinct de
+   « failed » pour ne pas pousser à republier (et doublonner) ce qui est passé. */
+export type SchedStatus = 'scheduled' | 'published' | 'partial' | 'failed';
 
 export interface ScheduledPost {
   id: string;

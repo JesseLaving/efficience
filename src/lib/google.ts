@@ -26,7 +26,12 @@ export async function fetchGoogleAccounts(token: string): Promise<GoogleAccounts
 }
 
 export async function refreshGoogle(refresh: string): Promise<string> {
-  const r = await fetch(`${API_BASE}/google/refresh?refresh=${encodeURIComponent(refresh)}`);
+  // POST + corps JSON : le refresh token ne doit jamais transiter en URL.
+  const r = await fetch(`${API_BASE}/google/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || 'refresh');
   return d.token as string;
