@@ -45,12 +45,43 @@ function snapshot(): Record<string, string> {
   return out;
 }
 
+/* L'autosave sérialisait TOUT le localStorage toutes les 4 s pour détecter un
+   changement. On lève plutôt un drapeau « sale » à chaque écriture du même
+   onglet (setItem/removeItem/clear) : tant que rien n'a bougé, le tick ne
+   coûte rien. Le drapeau démarre à true pour garantir un premier état de
+   référence. (Les écritures des autres onglets ne comptent pas : chaque
+   onglet flushe les siennes.) */
+let storageDirty = true;
+if (typeof Storage !== 'undefined') {
+  const origSet = Storage.prototype.setItem;
+  const origRemove = Storage.prototype.removeItem;
+  const origClear = Storage.prototype.clear;
+  Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+    storageDirty = true;
+    origSet.call(this, key, value);
+  };
+  Storage.prototype.removeItem = function (this: Storage, key: string) {
+    storageDirty = true;
+    origRemove.call(this, key);
+  };
+  Storage.prototype.clear = function (this: Storage) {
+    storageDirty = true;
+    origClear.call(this);
+  };
+}
+
 export function AuthWrapper() {
   const { isAuth, user, loading } = useAuth();
   const initialActive = typeof localStorage !== 'undefined' ? localStorage.getItem(ACTIVE_KEY) : null;
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(initialActive ? Number(initialActive) : null);
   const [activating, setActivating] = useState(false);
   const lastSaved = useRef<string>('');
+  /* Bascule d'espace en cours : localStorage contient déjà les données du
+     NOUVEL espace alors que activeSpaceId pointe encore l'ancien. Tant que ce
+     drapeau est levé, autosave et beacon de sortie sont suspendus — sinon le
+     beforeunload du reload enverrait les données de l'espace B sous l'id de
+     l'espace A, écrasant A côté serveur. */
+  const switchingRef = useRef(false);
 
   // Switch space: pull the space's stored data into localStorage and reload so
   // every provider (which reads localStorage at boot) re-initialises.
@@ -73,6 +104,9 @@ export function AuthWrapper() {
       if (current) {
         try { await saveSpaceData(Number(current), snapshot()); } catch (e) { console.error('Flush before switch failed:', e); }
       }
+      // L'ancien espace est flushé : à partir d'ici, plus aucune sauvegarde
+      // automatique ne doit partir sous son id.
+      switchingRef.current = true;
       const data = await getSpaceData(spaceId) as Record<string, string>;
       const keys = Object.keys(data || {});
       if (keys.length > 0) {
@@ -89,6 +123,7 @@ export function AuthWrapper() {
       window.location.reload();
     } catch (e) {
       console.error('Failed to activate space:', e);
+      switchingRef.current = false;
       setActivating(false);
     }
   }, []);
@@ -97,6 +132,9 @@ export function AuthWrapper() {
   // ses données locales n'ont plus de raison d'être — on nettoie et on
   // recharge, exactement comme après un changement d'espace normal.
   const handleActiveSpaceDeleted = useCallback(() => {
+    // Même précaution qu'à la bascule : le beacon de sortie ne doit pas
+    // renvoyer ce localStorage vidé (ou celui d'un autre état) au serveur.
+    switchingRef.current = true;
     localStorage.removeItem(ACTIVE_KEY);
     Object.keys(snapshot()).forEach((k) => localStorage.removeItem(k));
     window.location.reload();
@@ -107,6 +145,10 @@ export function AuthWrapper() {
     if (!activeSpaceId) return;
     lastSaved.current = JSON.stringify(snapshot());
     const tick = () => {
+      if (switchingRef.current) return;
+      // Rien n'a été écrit depuis le dernier tick → pas de sérialisation.
+      if (!storageDirty) return;
+      storageDirty = false;
       const snap = JSON.stringify(snapshot());
       if (snap !== lastSaved.current) {
         lastSaved.current = snap;
@@ -115,6 +157,7 @@ export function AuthWrapper() {
     };
     const id = window.setInterval(tick, 4000);
     const onLeave = () => {
+      if (switchingRef.current) return;
       const snap = JSON.stringify(snapshot());
       if (snap !== lastSaved.current) {
         navigator.sendBeacon?.(
