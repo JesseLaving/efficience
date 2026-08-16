@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { getBusiness } from '../lib/business';
 
 export type ScreenId =
@@ -72,12 +72,20 @@ export function EffProvider({ children }: { children: React.ReactNode }) {
   }, [show]);
   const clearStudioSeed = useCallback(() => setStudioSeed(null), []);
 
-  const value: EffCtx = {
-    screen, show,
-    client, setClient,
-    campaignSeed, newCampaign, clearCampaignSeed,
-    studioSeed, seedStudio, editPostInStudio, clearStudioSeed,
-  };
+  const value = useMemo<EffCtx>(
+    () => ({
+      screen, show,
+      client, setClient,
+      campaignSeed, newCampaign, clearCampaignSeed,
+      studioSeed, seedStudio, editPostInStudio, clearStudioSeed,
+    }),
+    [
+      screen, show,
+      client, setClient,
+      campaignSeed, newCampaign, clearCampaignSeed,
+      studioSeed, seedStudio, editPostInStudio, clearStudioSeed,
+    ],
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

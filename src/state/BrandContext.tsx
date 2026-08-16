@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { analyzeSite, type SiteResponse } from '../lib/api';
 import {
   fallbackBrand, getStoredBrand, getStoredSiteUrl, normalizeBrand, setStoredBrand, setStoredSiteUrl,
@@ -40,7 +40,10 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     } catch { setBrandStatus('error'); }
   }, []);
 
-  const value: BrandCtx = { brandKit, brandStatus, setBrandKit, applySiteBrand, refreshBrand };
+  const value = useMemo<BrandCtx>(
+    () => ({ brandKit, brandStatus, setBrandKit, applySiteBrand, refreshBrand }),
+    [brandKit, brandStatus, setBrandKit, applySiteBrand, refreshBrand],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

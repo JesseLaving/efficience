@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
   loadSavedSegments, saveSavedSegments, loadGroups, saveGroups,
   type SavedSegment, type Group,
@@ -87,15 +87,18 @@ export function SegmentsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return (
-    <Ctx.Provider value={{
+  const value = useMemo<SegmentsCtx>(
+    () => ({
       savedSegments, groups, createSegment, deleteSegment,
       createGroup, renameGroup, deleteGroup, addToGroup, removeFromGroup,
-    }}
-    >
-      {children}
-    </Ctx.Provider>
+    }),
+    [
+      savedSegments, groups, createSegment, deleteSegment,
+      createGroup, renameGroup, deleteGroup, addToGroup, removeFromGroup,
+    ],
   );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useSegments(): SegmentsCtx {

@@ -39,5 +39,8 @@ export default defineConfig(({ command }) => ({
   //   Vercel (served at /)      -> VITE_BASE=/
   //   GitHub Pages / 42web sub  -> default /efficience/
   base: process.env.VITE_BASE || (command === 'build' ? '/efficience/' : '/'),
+  // Aligné sur tsconfig (es2023) : sans cible explicite, Vite transpile vers
+  // sa cible par défaut plus ancienne — poids et travail de build inutiles.
+  build: { target: 'esnext' },
   plugins: [react(), apiDevServer()],
 }))

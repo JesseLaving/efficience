@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useEff } from "../state/EffContext";
 import { useCalendar } from "../state/CalendarContext";
 import { useConnections } from "../state/ConnectionsContext";
@@ -174,7 +174,7 @@ export function EditorialPlanning() {
       const idea = res.available && res.ideas && res.ideas[0] ? res.ideas[0].trim() : "";
       if (idea) {
         setPlan((prev) =>
-          prev ? prev.map((item) => (item === p ? { ...item, idea } : item)) : prev,
+          prev ? prev.map((item) => (item.id === p.id ? { ...item, idea } : item)) : prev,
         );
         showToast(UI.check, "Nouveau sujet proposé");
       } else {
@@ -240,7 +240,10 @@ export function EditorialPlanning() {
     // getDay : 0 = dimanche. On décale pour une semaine commençant lundi.
     const lead = (first.getDay() + 6) % 7;
     const start = new Date(y, m - 1, 1 - lead);
-    const todayIso = new Date().toISOString().slice(0, 10);
+    // Date locale (et non UTC) : sinon le surlignage « aujourd'hui » se
+    // trompe de jour entre minuit et 2h heure de Paris.
+    const nowLocal = new Date();
+    const todayIso = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
 
     const byDate = new Map<string, { p: PlanItem; i: number }[]>();
     plan.forEach((p, i) => {
@@ -340,31 +343,41 @@ export function EditorialPlanning() {
     setNetSel((s) => ({ ...s, [p.id]: next }));
   };
 
+  /* Garde contre le double-clic : scheduledKeys n'est mis à jour qu'après le
+     await de writePost, donc un second clic pendant la rédaction passait la
+     vérification et créait un doublon au calendrier. */
+  const schedulingRef = useRef<Set<string>>(new Set());
+
   /* Programmer enregistrait lui aussi le texte de gabarit : la publication
      partait au calendrier avec un contenu sans rapport avec son sujet. */
   const schedule = async (p: PlanItem) => {
     // Déjà programmée : un second clic créerait un doublon au calendrier.
-    if (scheduledKeys.has(p.id)) {
+    if (scheduledKeys.has(p.id) || schedulingRef.current.has(p.id)) {
       showToast(UI.calendar, "Ce sujet est déjà programmé — retrouvez-le dans le Calendrier.");
       return;
     }
+    schedulingRef.current.add(p.id);
     setComposing(p);
-    const { text, ai, reason } = await writePost(p);
-    // planKey relie la publication à son sujet d'origine : c'est ce lien qui
-    // marque le sujet « programmé » dans le plan.
-    addToCalendar({
-      dateTime: defaultDateTime(p.date, 9),
-      text,
-      networks: netsFor(p),
-      photoUrl: null,
-      pillar: p.pillar,
-      planKey: p.id,
-    });
-    setComposing(null);
-    // addToCalendar confirme déjà l'ajout : on ne signale ici que le repli,
-    // sinon deux messages se superposeraient pour la même action.
-    if (!ai)
-      showToast(UI.wand, `Brouillon type utilisé (IA indisponible : ${reason}) — à personnaliser.`);
+    try {
+      const { text, ai, reason } = await writePost(p);
+      // planKey relie la publication à son sujet d'origine : c'est ce lien qui
+      // marque le sujet « programmé » dans le plan.
+      addToCalendar({
+        dateTime: defaultDateTime(p.date, 9),
+        text,
+        networks: netsFor(p),
+        photoUrl: null,
+        pillar: p.pillar,
+        planKey: p.id,
+      });
+      // addToCalendar confirme déjà l'ajout : on ne signale ici que le repli,
+      // sinon deux messages se superposeraient pour la même action.
+      if (!ai)
+        showToast(UI.wand, `Brouillon type utilisé (IA indisponible : ${reason}) — à personnaliser.`);
+    } finally {
+      setComposing(null);
+      schedulingRef.current.delete(p.id);
+    }
   };
   const copyIdea = (p: PlanItem) => {
     navigator.clipboard?.writeText(p.idea).then(

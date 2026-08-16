@@ -1,29 +1,35 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useEff } from '../state/EffContext';
-import { useConnections } from '../state/ConnectionsContext';
-import { useCalendar } from '../state/CalendarContext';
-import { Icon, Brand, RawIcon } from '../lib/Icon';
-import { UI, type BrandName } from '../lib/icons';
-import { FMT, UNIT } from '../lib/format';
-import { countUp } from '../lib/countup';
-import { netName } from '../lib/networks';
-import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from '../lib/kpi';
-import { KpiModal } from '../components/KpiModal';
-import { useTilt3d } from '../lib/useTilt3d';
-import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from '../lib/meta';
-import { useAuthUser, firstNameOf } from '../state/AuthUserContext';
-import { loadProfile } from '../lib/profile';
-import { useSpaces } from '../state/SpaceContext';
-import { useCampaigns } from '../state/CampaignsContext';
-import { fetchCampaignStats } from '../lib/email';
-import { SetupGuide } from '../components/SetupGuide';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useEff } from "../state/EffContext";
+import { useConnections } from "../state/ConnectionsContext";
+import { useCalendar } from "../state/CalendarContext";
+import { Icon, Brand, RawIcon } from "../lib/Icon";
+import { UI, type BrandName } from "../lib/icons";
+import { FMT, UNIT } from "../lib/format";
+import { countUp } from "../lib/countup";
+import { netName } from "../lib/networks";
+import { CATALOG, SRC, loadKpiState, saveKpiState, type KpiDef, type KpiState } from "../lib/kpi";
+import { KpiModal } from "../components/KpiModal";
+import { useTilt3d } from "../lib/useTilt3d";
+import { aggregateMeta, engagementSeries, kpiSparkline, type MetaSeries } from "../lib/meta";
+import { useAuthUser, firstNameOf } from "../state/AuthUserContext";
+import { loadProfile } from "../lib/profile";
+import { useSpaces } from "../state/SpaceContext";
+import { useCampaigns } from "../state/CampaignsContext";
+import { fetchCampaignStats } from "../lib/email";
+import { SetupGuide } from "../components/SetupGuide";
+import { NextAction } from "../components/NextAction";
+import { showToast } from "../lib/toast";
 
 const fmtVal = (fmt: string, v: number) => (FMT[fmt] || FMT.int)(v);
 
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return (
+    d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) +
+    " à " +
+    d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+  );
 }
 
 /* ---------- KPI card ---------- */
@@ -31,57 +37,151 @@ function fmtWhen(iso: string): string {
 // no honest history for the metric). Uses the same catmull-rom smoothing as the
 // main chart so the two read as one visual language.
 function Sparkline({ data }: { data: number[] }) {
-  const W = 240, H = 30, pad = 3;
+  const W = 240,
+    H = 30,
+    pad = 3;
   const max = Math.max(...data, 1);
   const n = data.length;
-  const pts = data.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
+  const pts = data.map((v, i) => [
+    pad + (i * (W - 2 * pad)) / (n - 1),
+    H - pad - (v / max) * (H - 2 * pad),
+  ]);
   return (
-    <svg className="kpi-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-      <path d={smooth(pts)} fill="none" stroke="var(--acc)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    <svg
+      className="kpi-spark"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path
+        d={smooth(pts)}
+        fill="none"
+        stroke="var(--acc)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
 
-function KpiCard({ id, def, raw, removing, onRemove, onOpen, spark, i }: { id: string; def: KpiDef; raw: number; removing: boolean; onRemove: (id: string) => void; onOpen?: () => void; spark?: number[] | null; i: number }) {
+function KpiCard({
+  id,
+  def,
+  raw,
+  removing,
+  onRemove,
+  onOpen,
+  spark,
+  i,
+}: {
+  id: string;
+  def: KpiDef;
+  // null = data source failed to load or is still loading — rendered as "—"
+  // rather than a misleading zero.
+  raw: number | null;
+  removing: boolean;
+  onRemove: (id: string) => void;
+  onOpen?: () => void;
+  spark?: number[] | null;
+  i: number;
+}) {
   const valRef = useRef<HTMLSpanElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const s = SRC[def.src] || SRC.manual;
-  const tr = def.trend || { dir: 'neutral', val: '' };
+  const tr = def.trend || { dir: "neutral", val: "" };
   const unit = UNIT[def.fmt] ? <span className="ku">{UNIT[def.fmt]}</span> : null;
-  const pct = def.target ? Math.min(100, (raw / def.target) * 100) : 0;
+  const pct = def.target && raw != null ? Math.min(100, (raw / def.target) * 100) : 0;
 
   useEffect(() => {
+    if (raw == null) return;
     countUp(valRef.current, raw, { fmt: (v) => fmtVal(def.fmt, v), dur: 850 });
-    if (barRef.current) requestAnimationFrame(() => { if (barRef.current) barRef.current.style.width = pct + '%'; });
+    if (barRef.current)
+      requestAnimationFrame(() => {
+        if (barRef.current) barRef.current.style.width = pct + "%";
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raw, pct]);
 
-  const pill = tr.dir === 'up'
-    ? <span className="pill up"><RawIcon svg={UI.arrowup} />{tr.val}</span>
-    : tr.dir === 'down'
-      ? <span className="pill down"><RawIcon svg={UI.arrowdown} />{tr.val}</span>
-      : <span className="pill neutral">{tr.val}</span>;
+  const pill =
+    tr.dir === "up" ? (
+      <span className="pill up">
+        <RawIcon svg={UI.arrowup} />
+        {tr.val}
+      </span>
+    ) : tr.dir === "down" ? (
+      <span className="pill down">
+        <RawIcon svg={UI.arrowdown} />
+        {tr.val}
+      </span>
+    ) : (
+      <span className="pill neutral">{tr.val}</span>
+    );
 
   return (
     <div
-      className={'kpi kpi-in' + (removing ? ' kpi-out' : '') + (onOpen ? ' kpi-clickable' : '')}
+      className={"kpi kpi-in" + (removing ? " kpi-out" : "") + (onOpen ? " kpi-clickable" : "")}
       data-kpi={id}
-      style={{ '--i': i } as React.CSSProperties}
-      {...(onOpen ? {
-        role: 'button', tabIndex: 0, title: 'Voir les statistiques réseaux',
-        onClick: onOpen,
-        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } },
-      } : {})}
+      style={{ "--i": i } as React.CSSProperties}
+      {...(onOpen
+        ? {
+            role: "button",
+            tabIndex: 0,
+            title: "Voir les statistiques réseaux",
+            onClick: onOpen,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen();
+              }
+            },
+          }
+        : {})}
     >
-      <button className="kpi-rm" title="Retirer" aria-label="Retirer cet indicateur" onClick={(e) => { e.stopPropagation(); onRemove(id); }}><Icon name="close" /></button>
-      <div className="kl"><RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />{def.label}</div>
-      <div className="kv"><span className="kv-n" ref={valRef}>0</span>{unit}</div>
-      <div className="kf">{pill}{tr.since && <span className="since">{tr.since}</span>}<span className="ksrc"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{s.label}</span></div>
+      <button
+        className="kpi-rm"
+        title="Retirer"
+        aria-label="Retirer cet indicateur"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(id);
+        }}
+      >
+        <Icon name="close" />
+      </button>
+      <div className="kl">
+        <RawIcon svg={UI[def.icon as keyof typeof UI] || UI.target} />
+        {def.label}
+      </div>
+      <div className="kv">
+        {raw == null ? (
+          <span className="kv-n">—</span>
+        ) : (
+          <span className="kv-n" ref={valRef}>
+            0
+          </span>
+        )}
+        {unit}
+      </div>
+      <div className="kf">
+        {pill}
+        {tr.since && <span className="since">{tr.since}</span>}
+        <span className="ksrc">
+          <span dangerouslySetInnerHTML={{ __html: s.glyph }} />
+          {s.label}
+        </span>
+      </div>
       {spark && spark.length ? <Sparkline data={spark} /> : null}
       {def.target ? (
         <div className="ktarget">
-          <div className="kt-h"><span>Objectif</span><b>{fmtVal(def.fmt, def.target)}</b></div>
-          <div className="kt-bar"><i ref={barRef as React.RefObject<HTMLElement>} style={{ width: 0 }} /></div>
+          <div className="kt-h">
+            <span>Objectif</span>
+            <b>{fmtVal(def.fmt, def.target)}</b>
+          </div>
+          <div className="kt-bar">
+            <i ref={barRef as React.RefObject<HTMLElement>} style={{ width: 0 }} />
+          </div>
         </div>
       ) : null}
     </div>
@@ -92,22 +192,42 @@ function KpiCard({ id, def, raw, removing, onRemove, onOpen, spark, i }: { id: s
 function SugCard({ id, onAdd, i }: { id: string; onAdd: (id: string) => void; i: number }) {
   const d = CATALOG[id];
   const s = SRC[d.src] || SRC.manual;
-  const tr = d.trend || { dir: 'up', val: '' };
-  const val = fmtVal(d.fmt, d.val) + (UNIT[d.fmt] || '');
-  const trCls = tr.dir === 'down' ? 'down' : 'up';
+  const tr = d.trend || { dir: "up", val: "" };
+  const val = fmtVal(d.fmt, d.val) + (UNIT[d.fmt] || "");
+  const trCls = tr.dir === "down" ? "down" : "up";
   const tiltRef = useTilt3d<HTMLDivElement>(5);
   return (
-    <div className="sug-card tilt rise-in" ref={tiltRef} style={{ '--i': i } as React.CSSProperties}>
+    <div
+      className="sug-card tilt rise-in"
+      ref={tiltRef}
+      style={{ "--i": i } as React.CSSProperties}
+    >
       <div className="sug-top">
-        <div className="sg-ic"><RawIcon svg={UI[d.icon as keyof typeof UI] || UI.target} /></div>
+        <div className="sg-ic">
+          <RawIcon svg={UI[d.icon as keyof typeof UI] || UI.target} />
+        </div>
         <div className="sg-t">
           <div className="sg-n">{d.label}</div>
-          <div className="sg-src"><span dangerouslySetInnerHTML={{ __html: s.glyph }} />{d.why || s.label}</div>
+          <div className="sg-src">
+            <span dangerouslySetInnerHTML={{ __html: s.glyph }} />
+            {d.why || s.label}
+          </div>
         </div>
-        {d.suggested && <span className="sug-badge"><RawIcon svg={UI.sparkles2} />Suggéré</span>}
+        {d.suggested && (
+          <span className="sug-badge">
+            <RawIcon svg={UI.sparkles2} />
+            Suggéré
+          </span>
+        )}
       </div>
-      <div className="sug-mid"><span className="sg-v">{val}</span>{tr.val && <span className={'sg-tr ' + trCls}>{tr.val}</span>}</div>
-      <button className="btn outline sm sg-add" onClick={() => onAdd(id)}><RawIcon svg={UI.plus} />Ajouter au tableau</button>
+      <div className="sug-mid">
+        <span className="sg-v">{val}</span>
+        {tr.val && <span className={"sg-tr " + trCls}>{tr.val}</span>}
+      </div>
+      <button className="btn outline sm sg-add" onClick={() => onAdd(id)}>
+        <RawIcon svg={UI.plus} />
+        Ajouter au tableau
+      </button>
     </div>
   );
 }
@@ -116,9 +236,14 @@ function SugCard({ id, onAdd, i }: { id: string; onAdd: (id: string) => void; i:
 function smooth(pts: number[][]): string {
   let d = `M ${pts[0][0]} ${pts[0][1]}`;
   for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    const p0 = pts[i - 1] || pts[i],
+      p1 = pts[i],
+      p2 = pts[i + 1],
+      p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6,
+      c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6,
+      c2y = p2[1] - (p3[1] - p1[1]) / 6;
     d += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`;
   }
   return d;
@@ -127,13 +252,18 @@ function smooth(pts: number[][]): string {
 function Chart({ series }: { series: MetaSeries | null }) {
   const lineRef = useRef<SVGPathElement>(null);
   const areaRef = useRef<SVGPathElement>(null);
-  const W = 620, H = 200, pad = 6;
+  const W = 620,
+    H = 200,
+    pad = 6;
   // Real engagement series when posts are available; flat baseline otherwise (no invented data).
   const raw = series && series.values.length ? series.values : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   const peak = Math.max(...raw, 0);
   const max = peak > 0 ? peak * 1.15 : 105;
   const n = raw.length;
-  const pts = raw.map((v, i) => [pad + (i * (W - 2 * pad)) / (n - 1), H - pad - (v / max) * (H - 2 * pad)]);
+  const pts = raw.map((v, i) => [
+    pad + (i * (W - 2 * pad)) / (n - 1),
+    H - pad - (v / max) * (H - 2 * pad),
+  ]);
   const line = smooth(pts);
   const area = line + ` L ${pts[n - 1][0]} ${H} L ${pts[0][0]} ${H} Z`;
 
@@ -144,11 +274,16 @@ function Chart({ series }: { series: MetaSeries | null }) {
       path.style.strokeDasharray = String(L);
       path.style.strokeDashoffset = String(L);
       path.getBoundingClientRect();
-      path.style.transition = 'stroke-dashoffset 1.3s var(--ease,ease)';
-      path.style.strokeDashoffset = '0';
+      path.style.transition = "stroke-dashoffset 1.3s var(--ease,ease)";
+      path.style.strokeDashoffset = "0";
     }
     const a = areaRef.current;
-    if (a) { a.style.opacity = '0'; a.getBoundingClientRect(); a.style.transition = 'opacity .9s ease .3s'; a.style.opacity = '1'; }
+    if (a) {
+      a.style.opacity = "0";
+      a.getBoundingClientRect();
+      a.style.transition = "opacity .9s ease .3s";
+      a.style.opacity = "1";
+    }
   }, []);
 
   return (
@@ -160,7 +295,16 @@ function Chart({ series }: { series: MetaSeries | null }) {
         </linearGradient>
       </defs>
       <path ref={areaRef} d={area} fill="url(#area-g)" opacity="0" />
-      <path ref={lineRef} d={line} fill="none" stroke="var(--acc)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path
+        ref={lineRef}
+        d={line}
+        fill="none"
+        stroke="var(--acc)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -171,11 +315,11 @@ export function Dashboard() {
      getBusiness() : ce dernier retombe sur « Votre entreprise », un texte de
      remplissage qui donnerait « tableau de bord de Votre entreprise ». Tant
      qu'aucun profil n'est enregistré, on garde donc la formule générique. */
-  const company = loadProfile()?.name?.trim() || null;
+  const [company] = useState<string | null>(() => loadProfile()?.name?.trim() || null);
   const { show } = useEff();
   const { activeSpaceId } = useSpaces();
   const { campaigns } = useCampaigns();
-  const [emailStats, setEmailStats] = useState<Record<string, Record<string, number>>>({});
+  const [emailStats, setEmailStats] = useState<Record<string, Record<string, number>> | null>(null);
   const { totalReach, metaStats } = useConnections();
   const { scheduled } = useCalendar();
   const [state, setState] = useState<KpiState>(() => loadKpiState());
@@ -184,22 +328,38 @@ export function Dashboard() {
   // Chart period filter — undefined = full history. Options below.
   const [periodDays, setPeriodDays] = useState<number | undefined>(undefined);
   const PERIODS: { label: string; days?: number }[] = [
-    { label: '7 j', days: 7 }, { label: '30 j', days: 30 }, { label: '90 j', days: 90 }, { label: 'Tout' },
+    { label: "7 j", days: 7 },
+    { label: "30 j", days: 30 },
+    { label: "90 j", days: 90 },
+    { label: "Tout" },
   ];
 
-  const upcomingPosts = scheduled.filter((p) => p.status === 'scheduled').slice(0, 4);
+  const upcomingPosts = scheduled.filter((p) => p.status === "scheduled").slice(0, 4);
 
   // Real Meta aggregates (followers, engagement, posts…) — all derived, never invented.
   const agg = aggregateMeta(metaStats);
   const series = engagementSeries(metaStats, 12, periodDays);
 
-  const update = (next: KpiState) => { setState(next); saveKpiState(next); };
+  const update = (next: KpiState) => {
+    setState(next);
+    saveKpiState(next);
+  };
   const def = (id: string): KpiDef | undefined => CATALOG[id] || state.custom[id];
   useEffect(() => {
     if (activeSpaceId == null) return;
     let alive = true;
-    fetchCampaignStats(activeSpaceId).then((s) => { if (alive) setEmailStats(s); });
-    return () => { alive = false; };
+    fetchCampaignStats(activeSpaceId)
+      .then((s) => {
+        if (alive) setEmailStats(s);
+      })
+      .catch(() => {
+        // Failed load must not masquerade as "0 email campaigns" — KPI cards
+        // read the null and render "—" instead of a fabricated zero.
+        if (alive) setEmailStats(null);
+      });
+    return () => {
+      alive = false;
+    };
   }, [activeSpaceId]);
 
   /* Agrégats e-mail issus des événements réels (webhook Resend). Le taux
@@ -207,30 +367,54 @@ export function Dashboard() {
      effectivement servis, sur les seules campagnes suivies — une campagne
      antérieure au suivi ne tire donc pas la moyenne vers le bas. */
   const emailAgg = useMemo(() => {
-    let recipients = 0, opened = 0, clicked = 0, unsubscribed = 0;
-    for (const c of campaigns) {
-      const st = c.id ? emailStats[c.id] : undefined;
-      if (!st) continue;
-      recipients += c.sentCount ?? c.recipients;
-      opened += st.opened || 0;
-      clicked += st.clicked || 0;
-      unsubscribed += st.unsubscribed || 0;
+    let recipients = 0,
+      opened = 0,
+      clicked = 0,
+      unsubscribed = 0;
+    if (emailStats) {
+      for (const c of campaigns) {
+        const st = c.id ? emailStats[c.id] : undefined;
+        if (!st) continue;
+        recipients += c.sentCount ?? c.recipients;
+        opened += st.opened || 0;
+        clicked += st.clicked || 0;
+        unsubscribed += st.unsubscribed || 0;
+      }
     }
-    return { recipients, opened, clicked, unsubscribed, openRate: recipients ? (opened / recipients) * 100 : 0 };
+    return {
+      recipients,
+      opened,
+      clicked,
+      unsubscribed,
+      // Clamped: opened events aren't bounded by sentCount (a resend or a
+      // tracking replay can push raw opens past the recipient count).
+      openRate: recipients ? Math.min(100, (opened / recipients) * 100) : 0,
+    };
   }, [campaigns, emailStats]);
 
-  const rawVal = (d: KpiDef): number => {
+  // null = e-mail stats never loaded (still fetching or the fetch failed) —
+  // callers must render "—" rather than a fabricated 0.
+  const rawVal = (d: KpiDef): number | null => {
     switch (d.live) {
-      case 'reach':
-      case 'followers': return totalReach;
-      case 'engagementRate': return agg.engagementRate ?? 0;
-      case 'totalEngagement': return agg.totalEngagement;
-      case 'reachInsights': return agg.reach ?? 0;
-      case 'postsMonth': return agg.postsMonth;
-      case 'emailOpenRate': return emailAgg.openRate;
-      case 'emailClicks': return emailAgg.clicked;
-      case 'emailUnsubscribes': return emailAgg.unsubscribed;
-      default: return d.val;
+      case "reach":
+      case "followers":
+        return totalReach;
+      case "engagementRate":
+        return agg.engagementRate ?? 0;
+      case "totalEngagement":
+        return agg.totalEngagement;
+      case "reachInsights":
+        return agg.reach ?? 0;
+      case "postsMonth":
+        return agg.postsMonth;
+      case "emailOpenRate":
+        return emailStats ? emailAgg.openRate : null;
+      case "emailClicks":
+        return emailStats ? emailAgg.clicked : null;
+      case "emailUnsubscribes":
+        return emailStats ? emailAgg.unsubscribed : null;
+      default:
+        return d.val;
     }
   };
 
@@ -242,8 +426,17 @@ export function Dashboard() {
   const removeKpi = (id: string) => {
     setRemoving((r) => ({ ...r, [id]: true }));
     setTimeout(() => {
-      setRemoving((r) => { const n = { ...r }; delete n[id]; return n; });
-      setState((s) => { const next = { ...s, board: s.board.filter((x) => x !== id) }; saveKpiState(next); return next; });
+      setRemoving((r) => {
+        const n = { ...r };
+        delete n[id];
+        return n;
+      });
+      setState((s) => {
+        const next = { ...s, board: s.board.filter((x) => x !== id) };
+        saveKpiState(next);
+        return next;
+      });
+      showToast(UI.trash, "Indicateur retiré du tableau.");
     }, 220);
   };
   const toggleSuggest = () => update({ ...state, suggestOpen: !state.suggestOpen });
@@ -263,62 +456,123 @@ export function Dashboard() {
           {/* Quatre combinaisons possibles selon ce qui est réellement connu :
               on ne complète jamais un nom manquant par un texte générique. */}
           <h1>
-            {greetName && company ? `Bonjour ${greetName} 👋 — le tableau de bord de ${company}`
-              : company ? `Le tableau de bord de ${company}`
-              : greetName ? `Bonjour ${greetName} 👋 — votre tableau de bord`
-              : 'Votre tableau de bord'}
+            {greetName && company
+              ? `Bonjour ${greetName} 👋 — le tableau de bord de ${company}`
+              : company
+                ? `Le tableau de bord de ${company}`
+                : greetName
+                  ? `Bonjour ${greetName} 👋 — votre tableau de bord`
+                  : "Votre tableau de bord"}
           </h1>
-          <p>Connectez vos réseaux, importez votre base clients et créez vos campagnes : vos indicateurs se rempliront avec vos vraies données.</p>
+          <p>
+            Connectez vos réseaux, importez votre base clients et créez vos campagnes : vos
+            indicateurs se rempliront avec vos vraies données.
+          </p>
         </div>
-        <div className="ph-actions" style={{ display: 'flex', gap: 10 }}>
-          <button className="btn outline" onClick={() => setModal(true)}><Icon name="plus" />Créer un KPI</button>
-          <button className="btn acc" onClick={() => show('planning')}><span className="ic">✦</span>Générer le mois avec l’IA</button>
+        <div className="ph-actions" style={{ display: "flex", gap: 10 }}>
+          <button className="btn outline" onClick={() => setModal(true)}>
+            <Icon name="plus" />
+            Créer un KPI
+          </button>
+          <button className="btn acc" onClick={() => show("planning")}>
+            <span className="ic">✦</span>Générer le mois avec l’IA
+          </button>
         </div>
       </div>
 
-      {/* Fil conducteur tant que la mise en route n'est pas bouclée. */}
+      {/* Fil conducteur tant que la mise en route n'est pas bouclée, puis
+          relais par la prochaine action de production quand il y en a une. */}
       <SetupGuide />
+      <NextAction />
 
       {state.board.length === 0 ? (
         <div className="crm-empty" style={{ marginBottom: 16 }}>
-          <div className="ce-ic"><Icon name="grid" /></div>
+          <div className="ce-ic">
+            <Icon name="grid" />
+          </div>
           <div className="ce-t">Aucun indicateur sur votre tableau de bord</div>
-          <p>Ajoutez vos premiers KPI, ou piochez parmi les suggestions basées sur votre activité ci-dessous.</p>
-          <button className="btn acc" style={{ marginTop: 14 }} onClick={() => setModal(true)}><Icon name="plus" />Ajouter un KPI</button>
+          <p>
+            Ajoutez vos premiers KPI, ou piochez parmi les suggestions basées sur votre activité
+            ci-dessous.
+          </p>
+          <button className="btn acc" style={{ marginTop: 14 }} onClick={() => setModal(true)}>
+            <Icon name="plus" />
+            Ajouter un KPI
+          </button>
         </div>
       ) : (
         <div className="kpi-board">
           {state.board.map((id, i) => {
             const d = def(id);
             if (!d) return null;
-            return <KpiCard key={id} id={id} def={d} raw={rawVal(d)} removing={!!removing[id]} onRemove={removeKpi} spark={kpiSparkline(metaStats, d.live)} onOpen={d.live ? () => show('inbox') : undefined} i={i} />;
+            return (
+              <KpiCard
+                key={id}
+                id={id}
+                def={d}
+                raw={rawVal(d)}
+                removing={!!removing[id]}
+                onRemove={removeKpi}
+                spark={kpiSparkline(metaStats, d.live)}
+                onOpen={d.live ? () => show("inbox") : undefined}
+                i={i}
+              />
+            );
           })}
-          <div className="kpi add-tile" onClick={() => setModal(true)}>
-            <div className="at-ic"><Icon name="plus" /></div>
+          <button
+            type="button"
+            className="kpi add-tile"
+            style={{ font: "inherit" }}
+            onClick={() => setModal(true)}
+          >
+            <div className="at-ic">
+              <Icon name="plus" />
+            </div>
             <div className="at-t">Ajouter un KPI</div>
-          </div>
+          </button>
         </div>
       )}
 
       <div>
         <div className="kpi-suggest">
           <div className="ks-head">
-            <div className="ks-ic"><Icon name="wand" /></div>
-            <div><h3>Suggestions pour votre activité</h3><p>D’après vos réseaux connectés, votre fiche Google et votre base clients.</p></div>
-            <button className="btn ghost sm ks-toggle" onClick={toggleSuggest}>{state.suggestOpen ? 'Masquer' : 'Afficher'}</button>
+            <div className="ks-ic">
+              <Icon name="wand" />
+            </div>
+            <div>
+              <h3>Suggestions pour votre activité</h3>
+              <p>D’après vos réseaux connectés, votre fiche Google et votre base clients.</p>
+            </div>
+            <button className="btn ghost sm ks-toggle" onClick={toggleSuggest}>
+              {state.suggestOpen ? "Masquer" : "Afficher"}
+            </button>
           </div>
-          {state.suggestOpen && (
-            sugList.length
-              ? <div className="ks-row">{sugList.map((id, i) => <SugCard key={id} id={id} onAdd={addKpi} i={i} />)}</div>
-              : <div className="ks-empty">Tous les indicateurs suggérés sont déjà sur votre tableau de bord. 🎉</div>
-          )}
+          {state.suggestOpen &&
+            (sugList.length ? (
+              <div className="ks-row">
+                {sugList.map((id, i) => (
+                  <SugCard key={id} id={id} onAdd={addKpi} i={i} />
+                ))}
+              </div>
+            ) : (
+              <div className="ks-empty">
+                Tous les indicateurs suggérés sont déjà sur votre tableau de bord. 🎉
+              </div>
+            ))}
         </div>
       </div>
 
       <div className="dash-grid">
         <div className="card">
           <div className="card-h">
-            <div><h3>Performance</h3><div className="sub">{series ? `Interactions par publication · ${series.from} → ${series.to}` : 'Interactions des publications récentes'}</div></div>
+            <div>
+              <h3>Performance</h3>
+              <div className="sub">
+                {series
+                  ? `Interactions par publication · ${series.from} → ${series.to}`
+                  : "Interactions des publications récentes"}
+              </div>
+            </div>
             <div className="chart-legend">
               <div className="seg" role="tablist" aria-label="Période">
                 {PERIODS.map((p) => (
@@ -327,44 +581,105 @@ export function Dashboard() {
                     type="button"
                     role="tab"
                     aria-selected={periodDays === p.days}
-                    className={'seg-b' + (periodDays === p.days ? ' on' : '')}
+                    className={"seg-b" + (periodDays === p.days ? " on" : "")}
                     onClick={() => setPeriodDays(p.days)}
-                  >{p.label}</button>
+                  >
+                    {p.label}
+                  </button>
                 ))}
               </div>
-              {series
-                ? <span className="chip"><RawIcon svg={UI.dot} />{FMT.int(series.total)} au total</span>
-                : <span className="chip"><RawIcon svg={UI.dot} />En attente de données</span>}
+              {series ? (
+                <span className="chip">
+                  <RawIcon svg={UI.dot} />
+                  {FMT.int(series.total)} au total
+                </span>
+              ) : (
+                <span className="chip">
+                  <RawIcon svg={UI.dot} />
+                  En attente de données
+                </span>
+              )}
             </div>
           </div>
           <div className="chart-wrap">
-            <Chart key={series ? series.total + '-' + series.from : 'empty'} series={series} />
+            <Chart key={series ? series.total + "-" + series.from : "empty"} series={series} />
             <div className="chart-x">
-              {series
-                ? <><span>{series.labels[0]}</span><span>{series.labels[1]}</span><span>{series.labels[2]}</span></>
-                : <><span>—</span><span>—</span><span>—</span></>}
+              {series ? (
+                <>
+                  <span>{series.labels[0]}</span>
+                  <span>{series.labels[1]}</span>
+                  <span>{series.labels[2]}</span>
+                </>
+              ) : (
+                <>
+                  <span>—</span>
+                  <span>—</span>
+                  <span>—</span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         <div className="stack">
           <div className="card">
-            <div className="card-h"><div><h3>Prochains posts</h3></div><button className="btn ghost sm" onClick={() => show('calendar')}>Tout voir</button></div>
+            <div className="card-h">
+              <div>
+                <h3>Prochains posts</h3>
+              </div>
+              <button className="btn ghost sm" onClick={() => show("calendar")}>
+                Tout voir
+              </button>
+            </div>
             <div>
               {upcomingPosts.length === 0 ? (
-                <div className="pad" style={{ color: 'var(--tx-3)', fontSize: 13.5, textAlign: 'center', padding: '28px 24px' }}>
-                  Aucun post programmé. Créez-en un depuis le <b style={{ color: 'var(--tx-2)' }}>Studio</b>.
+                <div
+                  className="pad"
+                  style={{
+                    color: "var(--tx-3)",
+                    fontSize: 13.5,
+                    textAlign: "center",
+                    padding: "28px 24px",
+                  }}
+                >
+                  Aucun post programmé. Créez-en un depuis le{" "}
+                  <b style={{ color: "var(--tx-2)" }}>Studio</b>.
                 </div>
-              ) : upcomingPosts.map((p) => (
-                <div className="post" key={p.id}>
-                  <div className="thumb">{p.photoUrl ? <img src={p.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : <Icon name="image" />}</div>
-                  <div className="pmeta">
-                    <div className="pt">{p.text.slice(0, 60)}{p.text.length > 60 ? '…' : ''}</div>
-                    <div className="pl">{p.networks[0] && <Brand name={p.networks[0] as BrandName} />}<span>{p.networks.map(netName).join(', ') || 'Aucun réseau'}</span><span>·</span><span>{fmtWhen(p.dateTime)}</span></div>
+              ) : (
+                upcomingPosts.map((p) => (
+                  <div className="post" key={p.id}>
+                    <div className="thumb">
+                      {p.photoUrl ? (
+                        <img
+                          src={p.photoUrl}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            borderRadius: "inherit",
+                          }}
+                        />
+                      ) : (
+                        <Icon name="image" />
+                      )}
+                    </div>
+                    <div className="pmeta">
+                      <div className="pt">
+                        {p.text.slice(0, 60)}
+                        {p.text.length > 60 ? "…" : ""}
+                      </div>
+                      <div className="pl">
+                        {p.networks[0] && <Brand name={p.networks[0] as BrandName} />}
+                        <span>{p.networks.map(netName).join(", ") || "Aucun réseau"}</span>
+                        <span>·</span>
+                        <span>{fmtWhen(p.dateTime)}</span>
+                      </div>
+                    </div>
+                    <span className="tag sched">Programmé</span>
                   </div>
-                  <span className="tag sched">Programmé</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

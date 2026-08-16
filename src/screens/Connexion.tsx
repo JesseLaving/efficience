@@ -22,6 +22,37 @@ const META_NETS = ['instagram', 'facebook'];
    donner la même carte pleine taille que les intégrations fonctionnelles. */
 const INTEGRATED_IDS = [...META_NETS, 'google', 'linkedin', 'youtube', 'tiktok'];
 
+/* Déconnecter un réseau efface un token OAuth réel sans retour possible — un
+   clic accidentel sur cette icône compacte n'a aucun garde-fou. Second clic
+   dans la même position, plutôt qu'un layout qui saute, pour rester lisible
+   dans la barre d'actions étroite de la carte. */
+function DisconnectButton({ onDisconnect }: { onDisconnect: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => setConfirming(true)}>
+        <Icon name="unlink" />
+      </button>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <button
+        className="unlink-btn"
+        title="Confirmer la déconnexion"
+        aria-label="Confirmer la déconnexion"
+        style={{ color: 'var(--danger)' }}
+        onClick={() => { setConfirming(false); onDisconnect(); }}
+      >
+        <Icon name="check" />
+      </button>
+      <button className="unlink-btn" title="Annuler" aria-label="Annuler" onClick={() => setConfirming(false)}>
+        <Icon name="close" />
+      </button>
+    </span>
+  );
+}
+
 function ProfileBlock({ net, loading, acc }: { net: Network; loading: boolean; acc?: MetaAccount }) {
   if (loading) {
     return (
@@ -98,7 +129,7 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setLiModal(true)}>Publier un post</button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('linkedin')}><Icon name="unlink" /></button>
+      <DisconnectButton onDisconnect={() => disconnect('linkedin')} />
     </>;
   } else if (isGoogle && isConn) {
     const g = googleAccounts[0];
@@ -115,7 +146,7 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => show('planning')}>Publier une actualité</button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('google')}><Icon name="unlink" /></button>
+      <DisconnectButton onDisconnect={() => disconnect('google')} />
     </>;
   } else if (isYoutube && isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
@@ -133,7 +164,7 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     );
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setYtModal(true)}>Publier une vidéo</button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('youtube')}><Icon name="unlink" /></button>
+      <DisconnectButton onDisconnect={() => disconnect('youtube')} />
     </>;
   } else if (isTiktok && isConn) {
     stateLbl = <span className="nc-dot on"><i />Connecté</span>;
@@ -152,7 +183,7 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setTtModal(true)}>Publier une vidéo</button>
       <button className="btn ghost sm" title="Voir mes vidéos" aria-label="Voir mes vidéos" onClick={() => setTtVideos(true)}><Icon name="play" /></button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect('tiktok')}><Icon name="unlink" /></button>
+      <DisconnectButton onDisconnect={() => disconnect('tiktok')} />
     </>;
   } else if (ph === 'loading') {
     stateLbl = <span className="nc-dot on"><i />Import…</span>;
@@ -163,7 +194,7 @@ function NetCard({ net, i }: { net: Network; i: number }) {
     body = <ProfileBlock net={net} loading={false} acc={acc} />;
     foot = <>
       <button className="btn ghost sm grow" onClick={() => setMetaModal(true)}>Publier</button>
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => disconnect(net.id)}><Icon name="unlink" /></button>
+      <DisconnectButton onDisconnect={() => disconnect(net.id)} />
     </>;
   } else {
     const integrated = INTEGRATED_IDS.includes(net.id);

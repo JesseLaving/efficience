@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { showToast } from '../lib/toast';
 import { UI } from '../lib/icons';
+import { netName } from '../lib/networks';
 import {
   clearStoredMetaToken, fetchMetaAccounts, fetchMetaStats, getStoredMetaToken, setStoredMetaToken, metaLogin,
   type MetaAccount, type MetaStatAccount,
@@ -370,6 +371,8 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     else if (id === 'linkedin') disconnectLinkedin();
     else if (id === 'youtube') disconnectYoutube();
     else if (id === 'tiktok') disconnectTiktok();
+    else return;
+    showToast(UI.unlink, `« ${netName(id)} » déconnecté.`);
   }, [disconnectMeta, disconnectGoogle, disconnectLinkedin, disconnectYoutube, disconnectTiktok]);
 
   const connectAll = useCallback(() => connectMeta(), [connectMeta]);

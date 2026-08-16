@@ -6,6 +6,7 @@ import { useCalendar } from '../state/CalendarContext';
 import { useCampaigns } from '../state/CampaignsContext';
 import { CATALOG, loadKpiState } from '../lib/kpi';
 import { Icon } from '../lib/Icon';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const MAX_PER_GROUP = 6;
 
@@ -32,6 +33,8 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useModalA11y(open ? cardRef : { current: null });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,7 +91,11 @@ export function GlobalSearch() {
       </button>
       {open && createPortal(
         <div className="search-modal" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="search-card">
+          <div
+            className="search-card" ref={cardRef} tabIndex={-1}
+            role="dialog" aria-modal="true" aria-labelledby="global-search-title"
+          >
+            <h2 id="global-search-title" className="sr-only">Recherche globale</h2>
             <div className="search-inp-row">
               <Icon name="search" />
               <input

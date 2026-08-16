@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { loadCampaigns, saveCampaigns, type Campaign } from '../lib/campaigns';
 
 interface CampaignsCtx {
@@ -38,7 +38,11 @@ export function CampaignsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return <Ctx.Provider value={{ campaigns, addCampaign, updateCampaign, removeCampaign }}>{children}</Ctx.Provider>;
+  const value = useMemo<CampaignsCtx>(
+    () => ({ campaigns, addCampaign, updateCampaign, removeCampaign }),
+    [campaigns, addCampaign, updateCampaign, removeCampaign],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useCampaigns(): CampaignsCtx {

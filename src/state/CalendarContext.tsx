@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { showToast } from '../lib/toast';
 import { UI } from '../lib/icons';
 import { useEff } from './EffContext';
@@ -38,7 +38,10 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const removeFromCalendar = useCallback((id: string) => { setScheduled((list) => removeScheduled(list, id)); }, []);
 
-  const value: CalendarCtx = { scheduled, addToCalendar, updateCalendar, removeFromCalendar, recordPublished };
+  const value = useMemo<CalendarCtx>(
+    () => ({ scheduled, addToCalendar, updateCalendar, removeFromCalendar, recordPublished }),
+    [scheduled, addToCalendar, updateCalendar, removeFromCalendar, recordPublished],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

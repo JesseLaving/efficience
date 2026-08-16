@@ -399,6 +399,14 @@ export function Studio() {
   // et n'est donc pas restauré au chargement d'un brouillon.
   const { drafts, saveDraft, deleteDraft } = useDrafts();
   const [draftsOpen, setDraftsOpen] = useState(false);
+  // Suppression d'un brouillon irréversible : confirmation en deux clics,
+  // un seul brouillon à la fois peut être en attente de confirmation.
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const removeDraft = (id: string) => {
+    deleteDraft(id);
+    setConfirmingDeleteId(null);
+    showToast(UI.check, "Brouillon supprimé.");
+  };
   const saveDraftNow = () => {
     const hasContent = type === "email" ? subject.trim() || body.trim() : text.trim();
     if (!hasContent) {
@@ -837,7 +845,8 @@ export function Studio() {
                       </button>
                     </div>
                   ) : (
-                    <div
+                    <button
+                      type="button"
                       className={"media-drop" + (dragMedia ? " drag" : "")}
                       onClick={() => fileRef.current?.click()}
                       onDragEnter={(e) => {
@@ -876,7 +885,7 @@ export function Studio() {
                           if (f) loadMedia(f);
                         }}
                       />
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1041,15 +1050,39 @@ export function Studio() {
                                   })}
                                 </div>
                               </button>
-                              <button
-                                type="button"
-                                className="unlink-btn"
-                                title="Supprimer ce brouillon"
-                                aria-label="Supprimer ce brouillon"
-                                onClick={() => deleteDraft(d.id)}
-                              >
-                                <Icon name="trash" />
-                              </button>
+                              {confirmingDeleteId === d.id ? (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  <button
+                                    type="button"
+                                    className="unlink-btn"
+                                    title="Confirmer la suppression"
+                                    aria-label="Confirmer la suppression"
+                                    style={{ color: "var(--danger)" }}
+                                    onClick={() => removeDraft(d.id)}
+                                  >
+                                    <Icon name="check" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="unlink-btn"
+                                    title="Annuler"
+                                    aria-label="Annuler"
+                                    onClick={() => setConfirmingDeleteId(null)}
+                                  >
+                                    <Icon name="close" />
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="unlink-btn"
+                                  title="Supprimer ce brouillon"
+                                  aria-label="Supprimer ce brouillon"
+                                  onClick={() => setConfirmingDeleteId(d.id)}
+                                >
+                                  <Icon name="trash" />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>

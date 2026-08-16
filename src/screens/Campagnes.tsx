@@ -22,6 +22,7 @@ import { generateEmail } from "../lib/ai";
 import { sendCampaignEmail, fetchCampaignStats } from "../lib/email";
 import { AiLoader } from "../components/AiLoader";
 import { Skel, SkelText } from "../components/Skeleton";
+import { EmptyState } from "../components/EmptyState";
 import { newCampaignId, type Campaign, type CampaignContent } from "../lib/campaigns";
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
@@ -273,6 +274,32 @@ export function Campagnes() {
      proposés » ni de « régénérer » sur un texte écrit à la main. */
   const [manual, setManual] = useState(false);
   const [sending, setSending] = useState(false);
+  /* Premier clic sur « Envoyer » ne fait qu'armer la confirmation — un envoi
+     de masse est irréversible et part vers de vraies adresses. Le second
+     clic, dans la fenêtre, déclenche réellement l'envoi ; sinon ça expire. */
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const confirmSendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendBtnWrapRef = useRef<HTMLDivElement>(null);
+  const cancelConfirmSend = () => {
+    if (confirmSendTimer.current) clearTimeout(confirmSendTimer.current);
+    confirmSendTimer.current = null;
+    setConfirmingSend(false);
+  };
+
+  // Fenêtre de confirmation : un clic ailleurs ou 5s d'inactivité désarme
+  // l'envoi plutôt que de le laisser prêt à partir indéfiniment.
+  useEffect(() => {
+    if (!confirmingSend) return;
+    const onOutside = (e: MouseEvent) => {
+      if (!sendBtnWrapRef.current?.contains(e.target as Node)) cancelConfirmSend();
+    };
+    document.addEventListener("mousedown", onOutside);
+    confirmSendTimer.current = setTimeout(cancelConfirmSend, 5000);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      if (confirmSendTimer.current) clearTimeout(confirmSendTimer.current);
+    };
+  }, [confirmingSend]);
   const fields = useMemo(() => fieldsFor(contacts), [contacts]);
 
   // Résout un identifiant de segment (fixe, ou préfixé saved:/group: pour un
@@ -491,6 +518,7 @@ export function Campagnes() {
     setPrompt("");
     setManual(false);
     setEditingId(null);
+    cancelConfirmSend();
   };
 
   const finish = async (status: "sent" | "sched") => {
@@ -965,19 +993,45 @@ export function Campagnes() {
                       Ajouter des contacts
                     </button>
                   )}
-                  <button
-                    className="btn acc"
-                    disabled={sending || !sendableCount}
-                    title={
-                      !sendableCount
-                        ? "Aucun destinataire avec e-mail valide dans ce segment"
-                        : undefined
-                    }
-                    onClick={() => finish("sent")}
+                  <div
+                    ref={sendBtnWrapRef}
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
-                    {sending ? <span className="spin" /> : <Icon name="rocket" />}
-                    {sending ? "Envoi en cours…" : `Envoyer à ${fr(sendableCount)} contacts`}
-                  </button>
+                    {confirmingSend && (
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                        Confirmer l’envoi à {fr(sendableCount)} contacts ?
+                      </span>
+                    )}
+                    <button
+                      className="btn acc"
+                      disabled={sending || !sendableCount}
+                      title={
+                        !sendableCount
+                          ? "Aucun destinataire avec e-mail valide dans ce segment"
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!confirmingSend) {
+                          setConfirmingSend(true);
+                          return;
+                        }
+                        cancelConfirmSend();
+                        finish("sent");
+                      }}
+                    >
+                      {sending ? <span className="spin" /> : <Icon name="rocket" />}
+                      {sending
+                        ? "Envoi en cours…"
+                        : confirmingSend
+                          ? "Oui, envoyer"
+                          : `Envoyer à ${fr(sendableCount)} contacts`}
+                    </button>
+                    {confirmingSend && (
+                      <button className="btn ghost" disabled={sending} onClick={cancelConfirmSend}>
+                        Annuler
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -1147,7 +1201,15 @@ export function Campagnes() {
       </div>
 
       <div className="camp-list">
-        {campaigns.map((c, i) => (
+        {!campaigns.length ? (
+          <EmptyState
+            icon="mail"
+            title="Aucune campagne pour l’instant"
+            description="Créez votre première campagne e-mail pour toucher votre base de contacts."
+            action={{ label: "Créer une campagne", onClick: () => openBuilder() }}
+          />
+        ) : (
+          campaigns.map((c, i) => (
           <div className="camp-row" key={i}>
             <div className="camp-main">
               <div className={"camp-ic" + (c.status === "sent" ? " sent" : "")}>
@@ -1240,7 +1302,8 @@ export function Campagnes() {
               </button>
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </section>
   );

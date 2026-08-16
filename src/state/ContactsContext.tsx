@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { loadContacts, saveContacts, mergeContacts, type Contact } from '../lib/contacts';
 
 /* Base clients réelle — importée par fichier ou Google Contacts (jamais
@@ -46,7 +46,11 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
 
   const clearContacts = useCallback(() => { setContacts([]); saveContacts([]); }, []);
 
-  return <Ctx.Provider value={{ contacts, addContacts, updateContact, removeContact, clearContacts }}>{children}</Ctx.Provider>;
+  const value = useMemo<ContactsCtx>(
+    () => ({ contacts, addContacts, updateContact, removeContact, clearContacts }),
+    [contacts, addContacts, updateContact, removeContact, clearContacts],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useContacts(): ContactsCtx {

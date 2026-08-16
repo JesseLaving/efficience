@@ -281,14 +281,16 @@ export function App({
           </div>
         </header>
 
+        {/* Fil de production visible sur les quatre outils de publication :
+            la chaîne Planning → Studio → Calendrier → Statistiques existait
+            dans le code mais pas à l'écran. Rendu HORS du .canvas (re-monté
+            à chaque écran via key) pour que la pastille active puisse
+            glisser d'une étape à l'autre au lieu de réapparaître. */}
+        {(screen === "planning" ||
+          screen === "studio" ||
+          screen === "calendar" ||
+          screen === "inbox") && <FlowNav current={screen} />}
         <div className="canvas" key={screen}>
-          {/* Fil de production visible sur les quatre outils de publication :
-              la chaîne Planning → Studio → Calendrier → Statistiques existait
-              dans le code mais pas à l'écran. */}
-          {(screen === "planning" ||
-            screen === "studio" ||
-            screen === "calendar" ||
-            screen === "inbox") && <FlowNav current={screen} />}
           <Suspense
             fallback={
               <div className="screen-load">

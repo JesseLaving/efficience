@@ -112,7 +112,15 @@ export function aggregateMeta(accounts: MetaStatAccount[] | null): MetaAggregate
       postsAnalyzed += s.posts || 0;
       if (s.engagementRate != null && a.followers) { wRate += s.engagementRate * a.followers; wFollowers += a.followers; }
     }
-    for (const p of (a.posts || [])) { if (p.date && p.date.slice(0, 7) === ym) postsMonth++; }
+    for (const p of (a.posts || [])) {
+      if (!p.date) continue;
+      // p.date vient de Meta en UTC (created_time) : on le compare en heure
+      // locale pour ne pas décaler les posts proches d'un changement de mois.
+      const d = new Date(p.date);
+      if (isNaN(d.getTime())) continue;
+      const postYm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (postYm === ym) postsMonth++;
+    }
     if (a.insights) {
       if (a.insights.reach != null) reach = (reach || 0) + a.insights.reach;
       if (a.insights.impressions != null) impressions = (impressions || 0) + a.insights.impressions;

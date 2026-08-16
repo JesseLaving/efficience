@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, RawIcon } from '../lib/Icon';
 import { UI } from '../lib/icons';
 import { createManualContact, type Contact } from '../lib/contacts';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const todayIso = () => {
   const d = new Date();
@@ -31,6 +32,8 @@ export function AddContactModal({ onAdd, onClose }: { onAdd: (c: Contact) => voi
   const [createdAt, setCreatedAt] = useState(todayIso);
   const [lastContactAt, setLastContactAt] = useState('');
   const [notes, setNotes] = useState('');
+  const cardRef = useRef<HTMLDivElement>(null);
+  useModalA11y(cardRef);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -60,88 +63,91 @@ export function AddContactModal({ onAdd, onClose }: { onAdd: (c: Contact) => voi
 
   return createPortal(
     <div className="kmodal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="kmodal-card" style={{ width: 'min(520px, 100%)' }}>
+      <div
+        className="kmodal-card" style={{ width: 'min(520px, 100%)' }} ref={cardRef} tabIndex={-1}
+        role="dialog" aria-modal="true" aria-labelledby="add-contact-title"
+      >
         <div className="kmodal-top">
           <div className="km-ic"><Icon name="users" /></div>
-          <div><h3>Ajouter un contact</h3><div className="km-s">Saisissez un client directement dans votre base</div></div>
-          <button className="km-x" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
+          <div><h3 id="add-contact-title">Ajouter un contact</h3><div className="km-s">Saisissez un client directement dans votre base</div></div>
+          <button className="km-x" type="button" aria-label="Fermer" onClick={onClose}><Icon name="close" /></button>
         </div>
-        <div className="kmodal-body">
-          <div className="km-2">
-            <div className="field">
-              <label className="field-lbl">Prénom</label>
-              <input className="inp" autoFocus value={first} onChange={(e) => setFirst(e.target.value)} placeholder="Camille" />
+        <form onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <div className="kmodal-body">
+            <div className="km-2">
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-first">Prénom</label>
+                <input id="ac-first" className="inp" autoFocus value={first} onChange={(e) => setFirst(e.target.value)} placeholder="Camille" />
+              </div>
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-last">Nom</label>
+                <input id="ac-last" className="inp" value={last} onChange={(e) => setLast(e.target.value)} placeholder="Durand" />
+              </div>
             </div>
             <div className="field">
-              <label className="field-lbl">Nom</label>
-              <input className="inp" value={last} onChange={(e) => setLast(e.target.value)} placeholder="Durand" />
+              <label className="field-lbl" htmlFor="ac-email">E-mail</label>
+              <input id="ac-email" className="inp" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="camille.durand@exemple.com" />
+              {email.trim() && !emailValid && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4 }}>Adresse e-mail invalide.</div>}
+            </div>
+            <div className="km-2">
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-phone">Téléphone <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
+                <input id="ac-phone" className="inp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06 12 34 56 78" />
+              </div>
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-city">Ville <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
+                <input id="ac-city" className="inp" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Avignon" />
+              </div>
+            </div>
+            <div className="km-2">
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-company">Société <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
+                <input id="ac-company" className="inp" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Atelier Durand SARL" />
+              </div>
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-job">Poste <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
+                <input id="ac-job" className="inp" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Responsable achats" />
+              </div>
+            </div>
+            <div className="km-2">
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-basket">Panier moyen <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, €</span></label>
+                <input id="ac-basket" className="inp" type="number" value={basket} onChange={(e) => setBasket(e.target.value)} placeholder="—" />
+              </div>
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-consent">Consentement e-mail</label>
+                <select id="ac-consent" className="inp" value={consent} onChange={(e) => setConsent(e.target.value as typeof consent)}>
+                  <option value="unknown">Non renseigné</option>
+                  <option value="yes">Accepté</option>
+                  <option value="no">Refusé</option>
+                </select>
+              </div>
+            </div>
+            <div className="km-2">
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-created">Client depuis <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— date de création</span></label>
+                <input id="ac-created" className="inp" type="date" value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} />
+              </div>
+              <div className="field">
+                <label className="field-lbl" htmlFor="ac-last-contact">Dernier contact <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
+                <input id="ac-last-contact" className="inp" type="date" value={lastContactAt} onChange={(e) => setLastContactAt(e.target.value)} />
+              </div>
+            </div>
+            <div className="field">
+              <label className="field-lbl" htmlFor="ac-tags">Tags <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, séparés par des virgules</span></label>
+              <input id="ac-tags" className="inp" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="VIP, prospect chaud" />
+            </div>
+            <div className="field">
+              <label className="field-lbl" htmlFor="ac-notes">Notes <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, toute information utile</span></label>
+              <textarea id="ac-notes" className="inp" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Préférences, contexte, historique de la relation…" style={{ resize: 'vertical' }} />
             </div>
           </div>
-          <div className="field">
-            <label className="field-lbl">E-mail</label>
-            <input className="inp" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="camille.durand@exemple.com"
-              onKeyDown={(e) => { if (e.key === 'Enter' && canSave) save(); }}
-            />
-            {email.trim() && !emailValid && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4 }}>Adresse e-mail invalide.</div>}
+          <div className="kmodal-foot">
+            <span className="grow" style={{ fontSize: 12.5, color: 'var(--tx-3)' }}>Fusionné automatiquement si l’e-mail existe déjà.</span>
+            <button className="btn outline" type="button" onClick={onClose}>Annuler</button>
+            <button className="btn acc" type="submit" disabled={!canSave}><RawIcon svg={UI.check} />Ajouter</button>
           </div>
-          <div className="km-2">
-            <div className="field">
-              <label className="field-lbl">Téléphone <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
-              <input className="inp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06 12 34 56 78" />
-            </div>
-            <div className="field">
-              <label className="field-lbl">Ville <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
-              <input className="inp" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Avignon" />
-            </div>
-          </div>
-          <div className="km-2">
-            <div className="field">
-              <label className="field-lbl">Société <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
-              <input className="inp" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Atelier Durand SARL" />
-            </div>
-            <div className="field">
-              <label className="field-lbl">Poste <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
-              <input className="inp" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Responsable achats" />
-            </div>
-          </div>
-          <div className="km-2">
-            <div className="field">
-              <label className="field-lbl">Panier moyen <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, €</span></label>
-              <input className="inp" type="number" value={basket} onChange={(e) => setBasket(e.target.value)} placeholder="—" />
-            </div>
-            <div className="field">
-              <label className="field-lbl">Consentement e-mail</label>
-              <select className="inp" value={consent} onChange={(e) => setConsent(e.target.value as typeof consent)}>
-                <option value="unknown">Non renseigné</option>
-                <option value="yes">Accepté</option>
-                <option value="no">Refusé</option>
-              </select>
-            </div>
-          </div>
-          <div className="km-2">
-            <div className="field">
-              <label className="field-lbl">Client depuis <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— date de création</span></label>
-              <input className="inp" type="date" value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="field-lbl">Dernier contact <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel</span></label>
-              <input className="inp" type="date" value={lastContactAt} onChange={(e) => setLastContactAt(e.target.value)} />
-            </div>
-          </div>
-          <div className="field">
-            <label className="field-lbl">Tags <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, séparés par des virgules</span></label>
-            <input className="inp" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="VIP, prospect chaud" />
-          </div>
-          <div className="field">
-            <label className="field-lbl">Notes <span style={{ color: 'var(--tx-3)', fontWeight: 400 }}>— optionnel, toute information utile</span></label>
-            <textarea className="inp" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Préférences, contexte, historique de la relation…" style={{ resize: 'vertical' }} />
-          </div>
-        </div>
-        <div className="kmodal-foot">
-          <span className="grow" style={{ fontSize: 12.5, color: 'var(--tx-3)' }}>Fusionné automatiquement si l’e-mail existe déjà.</span>
-          <button className="btn outline" onClick={onClose}>Annuler</button>
-          <button className="btn acc" disabled={!canSave} onClick={save}><RawIcon svg={UI.check} />Ajouter</button>
-        </div>
+        </form>
       </div>
     </div>,
     document.body

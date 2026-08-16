@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   getSpaces, createSpace as apiCreateSpace, renameSpace as apiRenameSpace, deleteSpace as apiDeleteSpace,
   type Space,
@@ -82,7 +82,10 @@ export function SpaceProvider({ children, activeSpaceId, onActiveSpaceDeleted }:
     if (id === activeSpaceId) onActiveSpaceDeleted();
   }, [activeSpaceId, onActiveSpaceDeleted]);
 
-  const value: SpaceCtx = { spaces, loading, error, retry, activeSpaceId, createSpace, renameSpace, deleteSpace };
+  const value = useMemo<SpaceCtx>(
+    () => ({ spaces, loading, error, retry, activeSpaceId, createSpace, renameSpace, deleteSpace }),
+    [spaces, loading, error, retry, activeSpaceId, createSpace, renameSpace, deleteSpace],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

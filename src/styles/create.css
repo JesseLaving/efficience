@@ -107,7 +107,8 @@
   padding: 6px 11px; border-radius: var(--r-chip); border: 1px solid var(--line); background: var(--canvas); cursor: pointer; transition: all .15s; }
 .ratio-chip .rbox { border: 1.5px solid currentColor; border-radius: 2px; opacity: .8; }
 .ratio-chip.on { color: var(--acc); border-color: var(--acc-soft2); background: var(--acc-soft); }
-.media-drop { border: 1.5px dashed var(--line); border-radius: var(--r-card); padding: 22px; text-align: center; cursor: pointer; transition: all .2s; }
+.media-drop { border: 1.5px dashed var(--line); border-radius: var(--r-card); padding: 22px; text-align: center; cursor: pointer; transition: all .2s;
+  font: inherit; color: inherit; background: none; width: 100%; display: block; }
 .media-drop:hover, .media-drop.drag { border-color: var(--acc-soft2); background: var(--acc-soft); }
 .media-drop .md-ic { width: 44px; height: 44px; margin: 0 auto 11px; border-radius: 12px; display: grid; place-items: center;
   color: var(--acc); background: var(--acc-soft); border: 1px solid var(--acc-soft2); }

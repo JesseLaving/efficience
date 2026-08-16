@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { loadDrafts, saveDrafts, type Draft } from '../lib/drafts';
 
 interface DraftsCtx {
@@ -28,7 +28,11 @@ export function DraftsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return <Ctx.Provider value={{ drafts, saveDraft, deleteDraft }}>{children}</Ctx.Provider>;
+  const value = useMemo<DraftsCtx>(
+    () => ({ drafts, saveDraft, deleteDraft }),
+    [drafts, saveDraft, deleteDraft],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useDrafts(): DraftsCtx {

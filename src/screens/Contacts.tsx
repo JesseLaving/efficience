@@ -8,7 +8,7 @@ import { fr } from '../lib/format';
 import { countUp } from '../lib/countup';
 import { showToast } from '../lib/toast';
 import {
-  SEGMENTS, fieldsFor, matchCriteria, initials, avFor,
+  SEGMENTS, segmentInfos, fieldsFor, matchCriteria, initials, avFor,
   type Criterion, type Contact, type Segment,
 } from '../lib/population';
 import {
@@ -63,6 +63,9 @@ export function Contacts() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<null | 'saveSegment' | 'createGroup' | 'addContact'>(null);
   const [editing, setEditing] = useState<Contact | null>(null);
+  // Armed two-step confirm for deleting a saved segment or a group (row-level,
+  // mirrors the Settings "zone sensible" idiom but inline in a compact list row).
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'segment' | 'group'; id: string } | null>(null);
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,26 +152,59 @@ export function Contacts() {
   }, [contacts.length]);
 
   /* ---------- filtrage ---------- */
-  const activeSeg: Segment = SEGMENTS.find((x) => x.id === audience.id) || SEGMENTS[0];
-  const activeSavedSeg = savedSegments.find((s) => s.id === audience.id);
-  const activeGroup = groups.find((g) => g.id === audience.id);
+  const activeSeg: Segment = useMemo(
+    () => SEGMENTS.find((x) => x.id === audience.id) || SEGMENTS[0],
+    [audience.id],
+  );
+  const activeSavedSeg = useMemo(
+    () => savedSegments.find((s) => s.id === audience.id),
+    [savedSegments, audience.id],
+  );
+  const activeGroup = useMemo(
+    () => groups.find((g) => g.id === audience.id),
+    [groups, audience.id],
+  );
 
-  let list: Contact[];
-  if (audience.kind === 'custom') list = contacts.filter((c) => matchCriteria(c, criteria, fields));
-  else if (audience.kind === 'saved' && activeSavedSeg) list = contacts.filter((c) => matchCriteria(c, activeSavedSeg.criteria, fields));
-  else if (audience.kind === 'group' && activeGroup) { const ids = new Set(activeGroup.contactIds); list = contacts.filter((c) => ids.has(c.id)); }
-  else list = contacts.filter(activeSeg.pred);
+  // Full-scan filters (segment match, search) only recompute when their real
+  // inputs change — not on every render, which matters since `q` changes on
+  // every keystroke.
+  const list = useMemo<Contact[]>(() => {
+    let next: Contact[];
+    if (audience.kind === 'custom') next = contacts.filter((c) => matchCriteria(c, criteria, fields));
+    else if (audience.kind === 'saved' && activeSavedSeg) next = contacts.filter((c) => matchCriteria(c, activeSavedSeg.criteria, fields));
+    else if (audience.kind === 'group' && activeGroup) { const ids = new Set(activeGroup.contactIds); next = contacts.filter((c) => ids.has(c.id)); }
+    else next = contacts.filter(activeSeg.pred);
 
-  if (q) {
-    const ql = q.toLowerCase();
-    list = list.filter((c) => c.name.toLowerCase().includes(ql) || c.email.includes(ql) || (c.city || '').toLowerCase().includes(ql));
-  }
+    if (q) {
+      const ql = q.toLowerCase();
+      next = next.filter((c) => c.name.toLowerCase().includes(ql) || c.email.includes(ql) || (c.city || '').toLowerCase().includes(ql));
+    }
+    return next;
+  }, [audience, criteria, fields, contacts, activeSavedSeg, activeGroup, activeSeg, q]);
+
   const rows = list.slice(0, 10);
-  const builderCount = audience.kind === 'custom' || criteria.length ? contacts.filter((c) => matchCriteria(c, criteria, fields)).length : 0;
+  const builderCount = useMemo(
+    () => (audience.kind === 'custom' || criteria.length ? contacts.filter((c) => matchCriteria(c, criteria, fields)).length : 0),
+    [audience.kind, criteria, contacts, fields],
+  );
 
   const pickSeg = (id: string) => { setAudience({ kind: 'fixed', id }); setQ(''); setSelected(new Set()); };
   const pickSaved = (id: string) => { setAudience({ kind: 'saved', id }); setQ(''); setSelected(new Set()); };
   const pickGroup = (id: string) => { setAudience({ kind: 'group', id }); setQ(''); setSelected(new Set()); };
+
+  const cancelDelete = () => setConfirmDelete(null);
+  const confirmDeleteSegment = (id: string, name: string) => {
+    deleteSegment(id);
+    if (audience.kind === 'saved' && audience.id === id) setAudience({ kind: 'fixed', id: 'all' });
+    showToast(UI.check, `Segment « ${name} » supprimé.`);
+    setConfirmDelete(null);
+  };
+  const confirmDeleteGroup = (id: string, name: string) => {
+    deleteGroup(id);
+    if (audience.kind === 'group' && audience.id === id) setAudience({ kind: 'fixed', id: 'all' });
+    showToast(UI.check, `Groupe « ${name} » supprimé.`);
+    setConfirmDelete(null);
+  };
 
   const addCriterion = () => {
     const keys = Object.keys(fields);
@@ -200,9 +236,21 @@ export function Contacts() {
     : audience.kind === 'saved' ? (activeSavedSeg?.name || 'Segment enregistré')
       : audience.kind === 'group' ? (activeGroup?.name || 'Groupe')
         : activeSeg.name;
-  const optin = contacts.filter((c) => c.consent === true).length;
-  const avg = contacts.length ? contacts.reduce((s, c) => s + (c.basket || 0), 0) / contacts.length : 0;
+  const optin = useMemo(() => contacts.filter((c) => c.consent === true).length, [contacts]);
+  const avg = useMemo(
+    () => (contacts.length ? contacts.reduce((s, c) => s + (c.basket || 0), 0) / contacts.length : 0),
+    [contacts],
+  );
   const pctOfBase = (n: number) => (contacts.length ? Math.round((n / contacts.length) * 100) : 0);
+
+  // Segment/saved-segment counts precomputed once per contacts change instead
+  // of a fresh full-array filter per row on every render.
+  const fixedSegmentInfos = useMemo(() => segmentInfos(contacts), [contacts]);
+  const savedSegmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of savedSegments) counts.set(s.id, contacts.filter((c) => matchCriteria(c, s.criteria, fields)).length);
+    return counts;
+  }, [savedSegments, contacts, fields]);
 
   /* ---------- sélection & groupes ---------- */
   const toggleOne = (id: string) => setSelected((prev) => {
@@ -333,30 +381,60 @@ export function Contacts() {
               <div className="seg-card">
                 <div className="sc-h"><h3>Segments</h3><Icon name="filter" style={{ width: 15, height: 15, color: 'var(--tx-3)' }} /></div>
                 <div className="seg-list">
-                  {SEGMENTS.map((s) => (
-                    <div key={s.id} className={'seg-item' + (audience.kind === 'fixed' && audience.id === s.id ? ' active' : '')} onClick={() => pickSeg(s.id)}>
-                      <div className="si-ic"><RawIcon svg={UI[s.icon as keyof typeof UI] || UI.users} /></div>
-                      <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">{s.desc}</div></div>
-                      <div className="si-c">{fr(contacts.filter(s.pred).length)}</div>
-                    </div>
-                  ))}
-                  {savedSegments.map((s) => (
-                    <div key={s.id} className={'seg-item' + (audience.kind === 'saved' && audience.id === s.id ? ' active' : '')} onClick={() => pickSaved(s.id)}>
-                      <div className="si-ic"><RawIcon svg={UI.sliders} /></div>
-                      <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">Segment enregistré</div></div>
-                      <div className="si-c">{fr(contacts.filter((c) => matchCriteria(c, s.criteria, fields)).length)}</div>
+                  {fixedSegmentInfos.map((s) => {
+                    const isActive = audience.kind === 'fixed' && audience.id === s.id;
+                    return (
                       <button
-                        className="si-del" aria-label={`Supprimer le segment ${s.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSegment(s.id);
-                          if (audience.kind === 'saved' && audience.id === s.id) setAudience({ kind: 'fixed', id: 'all' });
-                        }}
+                        type="button" key={s.id}
+                        className={'seg-item' + (isActive ? ' active' : '')}
+                        aria-pressed={isActive}
+                        onClick={() => pickSeg(s.id)}
                       >
-                        <Icon name="trash" />
+                        <div className="si-ic"><RawIcon svg={UI[s.icon as keyof typeof UI] || UI.users} /></div>
+                        <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">{s.desc}</div></div>
+                        <div className="si-c">{fr(s.count)}</div>
                       </button>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {savedSegments.map((s) => {
+                    const isActive = audience.kind === 'saved' && audience.id === s.id;
+                    const isConfirming = confirmDelete?.kind === 'segment' && confirmDelete.id === s.id;
+                    return (
+                      <div key={s.id} className="seg-row">
+                        <button
+                          type="button"
+                          className={'seg-item' + (isActive ? ' active' : '')}
+                          aria-pressed={isActive}
+                          onClick={() => pickSaved(s.id)}
+                        >
+                          <div className="si-ic"><RawIcon svg={UI.sliders} /></div>
+                          <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">Segment enregistré</div></div>
+                          <div className="si-c">{fr(savedSegmentCounts.get(s.id) ?? 0)}</div>
+                        </button>
+                        {isConfirming ? (
+                          <div className="si-confirm">
+                            <button
+                              type="button" className="si-del si-del-yes"
+                              aria-label={`Confirmer la suppression du segment ${s.name}`}
+                              onClick={() => confirmDeleteSegment(s.id, s.name)}
+                            >
+                              <Icon name="check" />
+                            </button>
+                            <button type="button" className="si-del" aria-label="Annuler la suppression" onClick={cancelDelete}>
+                              <Icon name="close" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button" className="si-del" aria-label={`Supprimer le segment ${s.name}`}
+                            onClick={() => setConfirmDelete({ kind: 'segment', id: s.id })}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -369,23 +447,45 @@ export function Contacts() {
                   {groups.length === 0 && (
                     <p className="seg-empty">Cochez des contacts dans le tableau pour créer votre premier groupe.</p>
                   )}
-                  {groups.map((g) => (
-                    <div key={g.id} className={'seg-item' + (audience.kind === 'group' && audience.id === g.id ? ' active' : '')} onClick={() => pickGroup(g.id)}>
-                      <div className="si-ic"><RawIcon svg={UI.users} /></div>
-                      <div className="si-t"><div className="si-n">{g.name}</div><div className="si-d">Groupe manuel</div></div>
-                      <div className="si-c">{fr(g.contactIds.length)}</div>
-                      <button
-                        className="si-del" aria-label={`Supprimer le groupe ${g.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteGroup(g.id);
-                          if (audience.kind === 'group' && audience.id === g.id) setAudience({ kind: 'fixed', id: 'all' });
-                        }}
-                      >
-                        <Icon name="trash" />
-                      </button>
-                    </div>
-                  ))}
+                  {groups.map((g) => {
+                    const isActive = audience.kind === 'group' && audience.id === g.id;
+                    const isConfirming = confirmDelete?.kind === 'group' && confirmDelete.id === g.id;
+                    return (
+                      <div key={g.id} className="seg-row">
+                        <button
+                          type="button"
+                          className={'seg-item' + (isActive ? ' active' : '')}
+                          aria-pressed={isActive}
+                          onClick={() => pickGroup(g.id)}
+                        >
+                          <div className="si-ic"><RawIcon svg={UI.users} /></div>
+                          <div className="si-t"><div className="si-n">{g.name}</div><div className="si-d">Groupe manuel</div></div>
+                          <div className="si-c">{fr(g.contactIds.length)}</div>
+                        </button>
+                        {isConfirming ? (
+                          <div className="si-confirm">
+                            <button
+                              type="button" className="si-del si-del-yes"
+                              aria-label={`Confirmer la suppression du groupe ${g.name}`}
+                              onClick={() => confirmDeleteGroup(g.id, g.name)}
+                            >
+                              <Icon name="check" />
+                            </button>
+                            <button type="button" className="si-del" aria-label="Annuler la suppression" onClick={cancelDelete}>
+                              <Icon name="close" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button" className="si-del" aria-label={`Supprimer le groupe ${g.name}`}
+                            onClick={() => setConfirmDelete({ kind: 'group', id: g.id })}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
