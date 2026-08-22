@@ -32,6 +32,10 @@ export interface Campaign {
   /** Résultat réel du dernier envoi (Resend) — absent pour les campagnes
    *  programmées ou antérieures à la mise en place de l'envoi réel. */
   sentCount?: number; failedCount?: number; sendError?: string | null;
+  /** Instant d'envoi programmé (ms depuis epoch). Distinct de `when`, qui
+   *  n'est qu'un libellé d'affichage : c'est cette valeur qui permet de
+   *  reconnaître la campagne dans la file du serveur et de l'annuler. */
+  scheduledAt?: number;
 }
 
 const LS = 'eff_campaigns_v1';

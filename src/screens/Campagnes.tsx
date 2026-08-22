@@ -19,11 +19,18 @@ import {
 } from "../lib/population";
 import { getBusiness } from "../lib/business";
 import { generateEmail } from "../lib/ai";
-import { sendCampaignEmail, fetchCampaignStats } from "../lib/email";
+import {
+  sendCampaignEmail,
+  fetchCampaignStats,
+  scheduleCampaignEmail,
+  cancelScheduledCampaign,
+  fetchScheduledCampaigns,
+} from "../lib/email";
 import { AiLoader } from "../components/AiLoader";
 import { Skel, SkelText } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import { useArmedConfirm } from "../hooks/useArmedConfirm";
+import { toLocalIso } from "../lib/calendar";
 import {
   newCampaignId,
   CAMPAIGN_STATUS_LABEL,
@@ -32,6 +39,19 @@ import {
 } from "../lib/campaigns";
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
+
+/** Demain 9 h, au format attendu par un champ datetime-local. */
+function defaultSchedule(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return toLocalIso(d);
+}
+
+const fmtSchedule = (ms: number) =>
+  new Date(ms).toLocaleString("fr-FR", {
+    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+  });
 const SOCIAL: BrandName[] = ["linkedin", "instagram", "facebook"];
 const TONES = ["Direct", "Pédagogique", "Expert", "Chaleureux"];
 
@@ -263,6 +283,31 @@ export function Campagnes() {
      Rechargés à chaque retour sur la liste : les événements arrivent en continu
      après l'envoi, pas au moment où on quitte l'écran. */
   const [stats, setStats] = useState<Record<string, Record<string, number>>>({});
+  /* Annulation d'un envoi programmé : deux clics, comme partout ailleurs pour
+     une action sans retour possible. */
+  const { armed: cancellingId, confirm: confirmCancel, disarm: disarmCancel } = useArmedConfirm();
+  const [cancelBusy, setCancelBusy] = useState<string | null>(null);
+
+  const cancelSchedule = async (c: Campaign) => {
+    if (!c.id || activeSpaceId == null) return;
+    if (!confirmCancel(c.id)) return;
+    setCancelBusy(c.id);
+    const r = await cancelScheduledCampaign(activeSpaceId, c.id);
+    setCancelBusy(null);
+    if (!r.ok) {
+      showToast(UI.close, r.reason || "Impossible d’annuler l’envoi programmé.");
+      return;
+    }
+    /* La campagne redevient un brouillon : le contenu est conservé, seule la
+       date d'envoi disparaît — c'est ce qui vient d'être annulé. */
+    updateCampaign(c.id, {
+      status: "draft",
+      when: "Brouillon — envoi annulé",
+      scheduledAt: undefined,
+    });
+    disarmCancel();
+    showToast(UI.check, "Envoi programmé annulé. La campagne reste en brouillon.");
+  };
   /* Campagne en cours de modification. Non nul → l'enregistrement met à jour
      l'existante au lieu d'en créer une nouvelle. */
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -272,6 +317,10 @@ export function Campagnes() {
      proposés » ni de « régénérer » sur un texte écrit à la main. */
   const [manual, setManual] = useState(false);
   const [sending, setSending] = useState(false);
+  /* Date d'envoi différé. Par défaut demain 9 h : une campagne programmée
+     « tout de suite » n'aurait pas de sens, et une heure ouvrable évite
+     d'expédier au milieu de la nuit par simple inadvertance. */
+  const [schedAt, setSchedAt] = useState(() => defaultSchedule());
   /* Premier clic sur « Envoyer » ne fait qu'armer la confirmation — un envoi
      de masse est irréversible et part vers de vraies adresses. Le second
      clic, dans la fenêtre, déclenche réellement l'envoi ; sinon ça expire. */
@@ -360,6 +409,16 @@ export function Campagnes() {
     }
     setSeg(segs.find((s) => s.id === c.segId) || segs.find((s) => s.name === c.seg) || segs[0]);
     setEditingId(c.id);
+    /* Rouvrir une campagne programmée ne doit pas déplacer sa date : on repart
+       de l'heure prévue, sauf si elle est passée (le serveur la refuserait). */
+    setSchedAt(
+      // Gestionnaire de clic, jamais exécuté pendant un rendu : lire l'heure
+      // ici est sans effet sur la stabilité du rendu.
+      // eslint-disable-next-line react-hooks/purity
+      c.scheduledAt && c.scheduledAt > Date.now()
+        ? toLocalIso(new Date(c.scheduledAt))
+        : defaultSchedule(),
+    );
     setGenerating(false);
     setSubject(0);
     setManual(true); // texte existant : on n'affiche pas l'UI de génération
@@ -396,6 +455,42 @@ export function Campagnes() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignSeed]);
+
+  /* État réel de la file d'envoi. Une campagne programmée part sans le
+     navigateur : c'est le serveur qui sait si elle est effectivement sortie,
+     et l'écran doit refléter ce qui s'est passé, pas ce qui était prévu. */
+  useEffect(() => {
+    if (view !== "list" || activeSpaceId == null) return;
+    let alive = true;
+    fetchScheduledCampaigns(activeSpaceId).then((queue) => {
+      if (!alive) return;
+      for (const q of queue) {
+        const local = campaigns.find((c) => c.id === q.id);
+        if (!local || local.status !== "sched") continue;
+        if (q.status === "sent") {
+          const r = q.result;
+          updateCampaign(q.id, {
+            status: "sent",
+            when: `Envoyée ${fmtSchedule(q.sentAt || q.whenMs)}`,
+            sentCount: r?.sent,
+            failedCount: r?.failed ?? undefined,
+            recipients: r?.total || local.recipients,
+            sendError: null,
+          });
+        } else if (q.status === "failed") {
+          updateCampaign(q.id, {
+            status: "failed",
+            when: `Échec de l’envoi programmé (${fmtSchedule(q.sentAt || q.whenMs)})`,
+            sendError: q.result?.reason || null,
+          });
+        }
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, activeSpaceId]);
 
   /* Chargement des statistiques réelles. Relancé au retour sur la liste, car
      les ouvertures et clics continuent d'arriver bien après l'envoi. */
@@ -514,31 +609,76 @@ export function Campagnes() {
     const name = gen!.subjects[subject].replace(/\s*[🥐✨🥖💚🎉]/gu, "").trim();
 
     if (status === "sched") {
-      // Contrairement aux réseaux sociaux (auto-publication via cron déjà en
-      // place), aucun moteur de programmation d'e-mails n'existe encore —
-      // on enregistre l'intention sans jamais prétendre à un envoi
-      // automatique à une date donnée.
+      const whenMs = Date.parse(schedAt);
+      if (!Number.isFinite(whenMs) || whenMs <= Date.now()) {
+        showToast(UI.close, "Choisissez une date d’envoi dans le futur.");
+        return;
+      }
+      if (activeSpaceId == null) {
+        showToast(UI.close, "Espace introuvable — reconnectez-vous.");
+        return;
+      }
+      /* Destinataires résolus MAINTENANT : la base de contacts vit dans le
+         navigateur, le serveur ne pourra pas la relire à l'heure dite. Le
+         message le dit, plutôt que de laisser croire à une liste vivante. */
+      const pred = resolvePred(seg.id);
+      const recipients = contacts.filter((c) => c.email && c.consent !== false && (!pred || pred(c)));
+      if (!recipients.length) {
+        showToast(UI.close, "Aucun destinataire avec une adresse e-mail valide dans ce segment.");
+        return;
+      }
+
+      const b = getBusiness();
+      const edited = editingId ? campaigns.find((c) => c.id === editingId) : undefined;
+      // Une campagne déjà envoyée qu'on reprogramme repart sous un nouvel
+      // identifiant : réutiliser l'ancien fusionnerait les ouvertures des deux
+      // envois en un seul total, ce qui serait faux.
+      const reuseId = edited && edited.status !== "sent" ? edited.id : undefined;
+      const campaignId = reuseId || newCampaignId();
+
+      setSending(true);
+      const res = await scheduleCampaignEmail({
+        spaceId: activeSpaceId,
+        campaignId,
+        whenMs,
+        business: { name: b.name, email: replyTo, addressLine: b.addressLine },
+        subject: gen!.subjects[subject],
+        preheader: gen!.pre,
+        headline: gen!.headline || gen!.subjects[subject],
+        bodyParagraphs: gen!.body,
+        cta: gen!.cta,
+        contacts: recipients.map((c) => ({ id: c.id, email: c.email, first: c.first, name: c.name })),
+      });
+      setSending(false);
+
+      if (!res.ok) {
+        // Rien n'est enregistré comme programmé si le serveur n'a pas accepté :
+        // afficher « Programmée » sur une campagne qui ne partira jamais serait
+        // pire que l'échec lui-même.
+        showToast(UI.close, res.reason || "Programmation impossible.");
+        return;
+      }
+
       const patch = {
         name,
         seg: seg.name,
         segId: seg.id,
         status: "sched" as const,
-        recipients: seg.count,
+        recipients: recipients.length,
         open: null,
         click: null,
-        when: "Programmée — envoi manuel à déclencher",
+        when: `Envoi ${fmtSchedule(whenMs)}`,
+        scheduledAt: whenMs,
         content: contentOf(),
       };
       // Réédition d'une campagne existante : on la met à jour au lieu d'en
       // créer un doublon à chaque enregistrement.
-      if (editingId) updateCampaign(editingId, patch);
-      else addCampaign({ id: newCampaignId(), ...patch });
+      if (reuseId) updateCampaign(reuseId, patch);
+      else addCampaign({ id: campaignId, ...patch });
       closeBuilder();
       showToast(
         UI.calendar,
-        editingId
-          ? "Modifications enregistrées. Revenez l’envoyer le moment venu."
-          : "Campagne enregistrée comme programmée. Revenez l’envoyer manuellement le moment venu — l’envoi automatique à date n’est pas encore disponible.",
+        `Campagne programmée pour le ${fmtSchedule(whenMs)} — ${fr(recipients.length)} destinataires, figés à cet instant.`,
       );
       return;
     }
@@ -555,6 +695,21 @@ export function Campagnes() {
     }
 
     setSending(true);
+    /* Une campagne déjà dans la file du serveur doit en sortir AVANT l'envoi
+       manuel : sans ça, le cron la réexpédierait à toute la liste à l'heure
+       initialement prévue. En cas d'échec du retrait, on renonce à l'envoi —
+       un envoi manqué se rattrape, un envoi en double, non. */
+    const queued = editingId ? campaigns.find((c) => c.id === editingId) : undefined;
+    // Sans identifiant (campagne antérieure au suivi), rien ne peut être en
+    // file côté serveur : il n'y a donc rien à retirer.
+    if (queued?.id && queued.status === "sched" && activeSpaceId != null) {
+      const off = await cancelScheduledCampaign(activeSpaceId, queued.id);
+      if (!off.ok) {
+        setSending(false);
+        showToast(UI.close, off.reason || "Impossible de retirer la campagne de la file d’envoi.");
+        return;
+      }
+    }
     const b = getBusiness();
     /* Identifiant créé AVANT l'envoi : c'est lui qui part dans les tags Resend
        et qui est ensuite enregistré avec la campagne, sinon les événements
@@ -960,10 +1115,24 @@ export function Campagnes() {
               )}
               {gen && !generating && (
                 <>
+                  <label
+                    style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--tx-2)" }}
+                  >
+                    Envoi le
+                    <input
+                      type="datetime-local"
+                      className="inp"
+                      value={schedAt}
+                      onChange={(e) => setSchedAt(e.target.value)}
+                      style={{ width: 200, padding: "6px 9px", fontSize: 12.5 }}
+                      aria-label="Date et heure d’envoi programmé"
+                    />
+                  </label>
                   <button
                     className="btn outline"
                     disabled={sending}
                     onClick={() => finish("sched")}
+                    title="La campagne partira toute seule à cette date, avec les destinataires du segment tels qu’ils sont aujourd’hui"
                   >
                     <Icon name="calendar" />
                     Programmer
@@ -1279,6 +1448,29 @@ export function Campagnes() {
                 <Icon name="edit" />
                 {c.status === "sent" ? "Dupliquer" : "Modifier"}
               </button>
+              {/* Une campagne programmée part sans intervention : il faut
+                  pouvoir l'arrêter, sinon la seule issue serait de l'envoyer
+                  tout de suite ou de la reprogrammer. */}
+              {c.status === "sched" && c.id && (
+                <button
+                  className="btn ghost sm"
+                  style={
+                    cancellingId === c.id
+                      ? { color: "var(--danger)", borderColor: "rgba(179,69,59,.35)" }
+                      : undefined
+                  }
+                  disabled={cancelBusy === c.id}
+                  title={
+                    cancellingId === c.id
+                      ? "Cliquer à nouveau pour confirmer l’annulation"
+                      : "Retirer de la file d’envoi"
+                  }
+                  onClick={() => cancelSchedule(c)}
+                >
+                  <Icon name="close" />
+                  {cancellingId === c.id ? "Confirmer ?" : "Annuler l’envoi"}
+                </button>
+              )}
             </div>
           </div>
           ))

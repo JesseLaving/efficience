@@ -3,6 +3,7 @@
    Lit les posts dus dans Vercel KV et publie via les endpoints existants
    (Meta / LinkedIn / Google), avec les tokens stockés. Protégé par un secret. */
 import { kvConfigured, kvSet, kvKeys, kvGetJson } from '../_h/kv.js';
+import { sendCampaign } from '../_h/email/_send.js';
 
 function json(res, status, data) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.statusCode = status; res.end(JSON.stringify(data));
@@ -97,6 +98,45 @@ async function publishOne(spaceId, post) {
   return { status, lastResult, failedNetworks: [...new Set(failed)] };
 }
 
+/* Campagnes e-mail programmées. Appel direct de la fonction d'envoi plutôt
+   qu'une requête HTTP vers /api/email/send : cette route exige une session
+   utilisateur, que le cron n'a pas. Le propriétaire est celui enregistré à la
+   programmation, et l'appartenance de l'espace est revérifiée à l'envoi. */
+async function sendDueCampaigns(host, now) {
+  const out = { processed: 0, sent: 0, failed: 0 };
+  const keys = (await kvKeys('mail:*')) || [];
+  for (const k of keys) {
+    const rec = await kvGetJson(k);
+    if (!rec || rec.status !== 'scheduled') continue;
+    if ((rec.whenMs || 0) > now) continue; // pas encore l'heure
+    out.processed++;
+    /* Marqué « en cours » AVANT l'envoi : si la fonction est interrompue en
+       plein vol, le passage suivant ne réexpédiera pas la campagne à toute la
+       liste. Un envoi manqué se rattrape ; un envoi en double, non. */
+    await kvSet(k, { ...rec, status: 'sending', startedAt: now });
+    const r = await sendCampaign({
+      host,
+      spaceId: rec.spaceId,
+      userId: rec.userId,
+      campaignId: rec.id,
+      ...rec.payload,
+      contacts: rec.contacts,
+    });
+    const status = r.ok ? 'sent' : 'failed';
+    if (r.ok) out.sent++; else out.failed++;
+    await kvSet(k, {
+      ...rec,
+      status,
+      sentAt: Date.now(),
+      // La liste d'adresses n'a plus lieu d'être conservée une fois l'envoi
+      // fait : le relevé suffit à rendre compte.
+      contacts: [],
+      result: { ok: r.ok, sent: r.sent || 0, failed: r.failed || 0, total: r.total || 0, reason: r.reason || null },
+    });
+  }
+  return out;
+}
+
 export default async function handler(req, res) {
   const secret = (process.env.CRON_SECRET || '').trim();
   const provided = (getParam(req, 'key') || '').trim();
@@ -123,7 +163,8 @@ export default async function handler(req, res) {
       else if (out.status === 'partial') partial++;
       else failed++;
     }
-    return json(res, 200, { ok: true, processed, published, partial, failed, at: now });
+    const mail = await sendDueCampaigns(req.headers.host, now);
+    return json(res, 200, { ok: true, processed, published, partial, failed, mail, at: now });
   } catch (e) {
     return json(res, 200, { ok: false, reason: String(e && e.message || e), processed, published, partial, failed });
   }
