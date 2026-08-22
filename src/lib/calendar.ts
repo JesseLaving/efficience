@@ -22,6 +22,9 @@ export interface ScheduledPost {
   status: SchedStatus;
   createdAt: string;
   lastResult?: string | null;
+  /** Réseaux en échec au dernier essai — cibles d'une relance, pour ne pas
+   *  republier sur ceux qui étaient déjà passés. */
+  failedNetworks?: string[] | null;
   auto?: boolean;        // auto-publication serveur activée
   googleEventId?: string | null; // synchronisé vers l'agenda Google dédié — présent une fois poussé
 }

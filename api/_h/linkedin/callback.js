@@ -33,7 +33,12 @@ export default async function handler(req, res) {
     const r = await fetch('https://www.linkedin.com/oauth/v2/accessToken', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     const d = await r.json();
     if (d.error) return bounce(res, ret, { li_error: d.error_description || d.error });
-    return bounce(res, ret, { li_token: d.access_token });
+    /* expires_in (~60 jours) : LinkedIn ne donne pas de jeton de
+       rafraîchissement sur ce type d'application, l'échéance est donc la seule
+       information qui permette d'anticiper la reconnexion. */
+    const out = { li_token: d.access_token };
+    if (d.expires_in) out.li_expires = String(d.expires_in);
+    return bounce(res, ret, out);
   } catch (e) {
     return bounce(res, ret, { li_error: String(e && e.message || e) });
   }

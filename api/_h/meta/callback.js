@@ -32,7 +32,13 @@ export default async function handler(req, res) {
     // upgrade to a long-lived token (~60 days)
     const r2 = await fetch(`https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${secret}&fb_exchange_token=${d1.access_token}`);
     const d2 = await r2.json();
-    return bounce(res, ret, { meta_token: d2.access_token || d1.access_token });
+    /* La durée de vie remonte avec le jeton : Meta ne délivre pas de jeton de
+       rafraîchissement, donc c'est la seule façon pour l'app de savoir quand
+       demander une reconnexion — avant qu'une publication programmée n'échoue. */
+    const long = d2.access_token ? d2 : d1;
+    const out = { meta_token: long.access_token || d1.access_token };
+    if (long.expires_in) out.meta_expires = String(long.expires_in);
+    return bounce(res, ret, out);
   } catch (e) {
     return bounce(res, ret, { meta_error: String(e && e.message || e) });
   }

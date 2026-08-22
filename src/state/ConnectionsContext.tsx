@@ -24,6 +24,7 @@ import {
   clearStoredGcal, createEditorialCalendar, gcalLogin, getStoredGcalCalendarId, getStoredGcalCalendarName,
   getStoredGcalRefresh, getStoredGcalToken, setStoredGcal, setStoredGcalCalendar, type GcalCreateResult,
 } from '../lib/googleCalendar';
+import { clearTokenExpiry, formatExpiry, setTokenExpiry, tokenExpiry, type ExpiringNet } from '../lib/tokenExpiry';
 
 export type Phase = 'connecting' | 'loading' | null;
 const META_NETS = ['instagram', 'facebook'];
@@ -140,18 +141,18 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!location.hash) return;
     const h = new URLSearchParams(location.hash.slice(1));
-    const mt = h.get('meta_token'), me = h.get('meta_error');
+    const mt = h.get('meta_token'), me = h.get('meta_error'), mx = h.get('meta_expires');
     const gt = h.get('google_token'), gr = h.get('google_refresh'), ge = h.get('google_error');
-    const lt = h.get('li_token'), le = h.get('li_error');
+    const lt = h.get('li_token'), le = h.get('li_error'), lx = h.get('li_expires');
     const yt = h.get('yt_token'), yr = h.get('yt_refresh'), ye = h.get('yt_error');
     const tt = h.get('tt_token'), tr = h.get('tt_refresh'), to = h.get('tt_openid'), te = h.get('tt_error');
     const gct = h.get('gcal_token'), gcr = h.get('gcal_refresh'), gce = h.get('gcal_error');
     if (mt || me || gt || ge || lt || le || yt || ye || tt || te || gct || gce) history.replaceState(null, '', location.pathname + location.search);
-    if (mt) { setStoredMetaToken(mt); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
+    if (mt) { setStoredMetaToken(mt); setTokenExpiry('meta', mx); setMetaToken(mt); showToast(UI.check, 'Comptes Meta connectés'); }
     else if (me) { setMetaError(me); showToast(UI.close, `Connexion Meta : ${me}`); }
     if (gt) { setStoredGoogle(gt, gr || undefined); setGoogleToken(gt); showToast(UI.check, 'Google Business connecté'); }
     else if (ge) { setGoogleReason(ge); showToast(UI.close, `Connexion Google : ${ge}`); }
-    if (lt) { setStoredLiToken(lt); setLinkedinToken(lt); showToast(UI.check, 'LinkedIn connecté'); }
+    if (lt) { setStoredLiToken(lt); setTokenExpiry('linkedin', lx); setLinkedinToken(lt); showToast(UI.check, 'LinkedIn connecté'); }
     else if (le) { showToast(UI.close, `Connexion LinkedIn : ${le}`); }
     if (yt) { setStoredYoutube(yt, yr || undefined); setYoutubeToken(yt); showToast(UI.check, 'YouTube connecté'); }
     else if (ye) { setYoutubeReason(ye); showToast(UI.close, `Connexion YouTube : ${ye}`); }
@@ -160,6 +161,32 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     if (gct) { setStoredGcal(gct, gcr || undefined); setGcalToken(gct); showToast(UI.check, 'Google Agenda connecté'); }
     else if (gce) { showToast(UI.close, `Connexion Google Agenda : ${gce}`); }
   }, []);
+
+  /* Alerte d'expiration. Meta et LinkedIn ne se renouvellent pas tout seuls :
+     sans ce rappel, l'utilisateur n'apprend l'expiration qu'en constatant
+     qu'une publication programmée n'est jamais partie. Une fois par jour au
+     plus — un avertissement répété à chaque écran serait ignoré. */
+  useEffect(() => {
+    const nets: { net: ExpiringNet; token: string | null; label: string }[] = [
+      { net: 'meta', token: metaToken, label: 'Instagram / Facebook' },
+      { net: 'linkedin', token: linkedinToken, label: 'LinkedIn' },
+    ];
+    const today = new Date().toDateString();
+    for (const { net, token, label } of nets) {
+      if (!token) continue;
+      const st = tokenExpiry(net);
+      if (!st || st.status === 'ok') continue;
+      const seenKey = `eff_exp_warned_${net}`;
+      if (localStorage.getItem(seenKey) === today) continue;
+      localStorage.setItem(seenKey, today);
+      showToast(
+        st.status === 'expired' ? UI.close : UI.warning,
+        st.status === 'expired'
+          ? `Accès ${label} expiré — reconnectez-le, sinon vos publications programmées ne partiront pas.`
+          : `Accès ${label} à renouveler ${formatExpiry(st)} — reconnectez-le depuis l'écran Connexion.`,
+      );
+    }
+  }, [metaToken, linkedinToken]);
 
   // Load Google locations whenever we hold a token. The access token expires
   // after ~1h — on a 401, refresh once with the stored refresh token and
@@ -297,7 +324,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   const connectMeta = useCallback(() => metaLogin(), []);
   const disconnectMeta = useCallback(() => {
-    clearStoredMetaToken(); setMetaToken(null); setMetaAccounts([]); setMetaUser(null); setMetaError(null);
+    clearStoredMetaToken(); clearTokenExpiry('meta'); setMetaToken(null); setMetaAccounts([]); setMetaUser(null); setMetaError(null);
   }, []);
 
   const connectGoogle = useCallback(() => googleLogin(), []);
@@ -311,7 +338,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const connectLinkedin = useCallback(() => linkedinLogin(), []);
-  const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); setLinkedinToken(null); setLinkedinMe(null); setLinkedinStatus('idle'); }, []);
+  const disconnectLinkedin = useCallback(() => { clearStoredLiToken(); clearTokenExpiry('linkedin'); setLinkedinToken(null); setLinkedinMe(null); setLinkedinStatus('idle'); }, []);
 
   const connectYoutube = useCallback(() => youtubeLogin(), []);
   const disconnectYoutube = useCallback(() => {

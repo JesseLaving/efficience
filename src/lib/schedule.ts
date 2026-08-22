@@ -13,6 +13,10 @@ export interface ArmTokens {
   meta?: string | null;
   linkedin?: string | null;
   google?: { token: string; refresh?: string | null; paths: string[] } | null;
+  /* Échéances (ms depuis epoch) des jetons sans renouvellement automatique :
+     le cron peut ainsi distinguer « jeton expiré, reconnectez » d'une panne
+     du réseau social, au lieu de renvoyer une erreur d'API illisible. */
+  expiry?: { meta?: number | null; linkedin?: number | null };
 }
 export interface ArmPost {
   id: string;
@@ -64,6 +68,8 @@ export interface ServerPost {
   whenMs: number;
   status: string;
   lastResult?: string | null;
+  /** Réseaux réellement en échec — permet de ne relancer que ceux-là. */
+  failedNetworks?: string[] | null;
 }
 export async function listServerScheduled(): Promise<{
   ok: boolean;

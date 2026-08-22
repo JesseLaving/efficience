@@ -36,27 +36,38 @@ async function postJson(path, body) {
   } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
 }
 
+/* Un jeton dont l'échéance est dépassée ne sert à rien : le dire explicitement
+   évite de renvoyer l'erreur brute du réseau social, que personne ne relie à
+   une reconnexion à faire. */
+const expired = (tok) => !!(tok && tok.expiresAt && Number(tok.expiresAt) <= Date.now());
+
 async function publishOne(spaceId, post) {
   const errs = [];
+  /* Réseaux réellement en échec, pour que l'utilisateur puisse relancer ceux-là
+     SEULEMENT : republier la liste entière doublonnerait sur ceux qui sont déjà
+     passés. Le message lisible (errs) ne se prête pas à être réanalysé. */
+  const failed = [];
   let okCount = 0;
   const nets = post.networks || [];
   const metaTargets = nets.filter((n) => n === 'instagram' || n === 'facebook');
 
   if (metaTargets.length) {
     const tok = await kvGetJson(`tok:${spaceId}:meta`);
-    if (tok && tok.token) {
+    if (expired(tok)) { errs.push('meta: accès expiré — reconnectez Instagram / Facebook'); failed.push(...metaTargets); }
+    else if (tok && tok.token) {
       const r = await postJson('/api/meta/post', { token: tok.token, targets: metaTargets, message: post.text, photoUrl: post.photoUrl || undefined });
-      for (const res of (r.results || [])) { if (res.ok) okCount++; else errs.push(`${res.network}: ${res.reason || 'échec'}`); }
-      if (!r.results) errs.push(`meta: ${r.reason || 'pas de réponse'}`);
-    } else errs.push('meta: token absent');
+      for (const res of (r.results || [])) { if (res.ok) okCount++; else { errs.push(`${res.network}: ${res.reason || 'échec'}`); failed.push(res.network); } }
+      if (!r.results) { errs.push(`meta: ${r.reason || 'pas de réponse'}`); failed.push(...metaTargets); }
+    } else { errs.push('meta: token absent'); failed.push(...metaTargets); }
   }
 
   if (nets.includes('linkedin')) {
     const tok = await kvGetJson(`tok:${spaceId}:linkedin`);
-    if (tok && tok.token) {
+    if (expired(tok)) { errs.push('linkedin: accès expiré — reconnectez LinkedIn'); failed.push('linkedin'); }
+    else if (tok && tok.token) {
       const r = await postJson('/api/linkedin/post', { token: tok.token, text: post.text });
-      if (r.ok) okCount++; else errs.push(`linkedin: ${r.reason || r.error || 'échec'}`);
-    } else errs.push('linkedin: token absent');
+      if (r.ok) okCount++; else { errs.push(`linkedin: ${r.reason || r.error || 'échec'}`); failed.push('linkedin'); }
+    } else { errs.push('linkedin: token absent'); failed.push('linkedin'); }
   }
 
   if (nets.includes('google')) {
@@ -68,12 +79,12 @@ async function publishOne(spaceId, post) {
         try { const dd = await postJson('/api/google/refresh', { refresh: tok.refresh }); if (dd.token) { gToken = dd.token; await kvSet(`tok:${spaceId}:google`, { ...tok, token: gToken }); } } catch { /* garde l'ancien */ }
       }
       const paths = (tok.paths && tok.paths.length) ? tok.paths : [];
-      if (!paths.length) errs.push('google: aucune fiche');
+      if (!paths.length) { errs.push('google: aucune fiche'); failed.push('google'); }
       for (const path of paths) {
         const r = await postJson('/api/google/post', { token: gToken, path, summary: post.text, photoUrl: post.photoUrl || undefined });
-        if (r.ok) okCount++; else errs.push(`google: ${r.reason || r.error || 'échec'}`);
+        if (r.ok) okCount++; else { errs.push(`google: ${r.reason || r.error || 'échec'}`); failed.push('google'); }
       }
-    } else errs.push('google: token absent');
+    } else { errs.push('google: token absent'); failed.push('google'); }
   }
 
   /* Trois issues distinctes — un succès partiel n'est PAS un échec total :
@@ -83,7 +94,7 @@ async function publishOne(spaceId, post) {
   const lastResult = errs.length
     ? (okCount ? `Publié sur ${okCount} cible(s) · Échecs : ${errs.join(' · ')}` : errs.join(' · '))
     : `Publié sur ${okCount} cible(s).`;
-  return { status, lastResult };
+  return { status, lastResult, failedNetworks: [...new Set(failed)] };
 }
 
 export default async function handler(req, res) {
@@ -106,7 +117,7 @@ export default async function handler(req, res) {
       if ((post.whenMs || 0) > now) continue; // pas encore l'heure
       processed++;
       const out = await publishOne(spaceId, post);
-      const updated = { ...post, status: out.status, lastResult: out.lastResult, publishedAt: now };
+      const updated = { ...post, status: out.status, lastResult: out.lastResult, failedNetworks: out.failedNetworks, publishedAt: now };
       await kvSet(k, updated);
       if (out.status === 'published') published++;
       else if (out.status === 'partial') partial++;

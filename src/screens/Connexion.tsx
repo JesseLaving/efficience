@@ -16,6 +16,7 @@ import { TiktokPostModal } from '../components/TiktokPostModal';
 import { TiktokVideosModal } from '../components/TiktokVideosModal';
 import { useTilt3d } from '../lib/useTilt3d';
 import { useArmedConfirm } from '../hooks/useArmedConfirm';
+import { formatExpiry, tokenExpiry, type ExpiringNet } from '../lib/tokenExpiry';
 
 const META_NETS = ['instagram', 'facebook'];
 /* Réseaux avec une vraie intégration (connexion + publication). Les autres
@@ -27,6 +28,30 @@ const INTEGRATED_IDS = [...META_NETS, 'google', 'linkedin', 'youtube', 'tiktok']
    clic accidentel sur cette icône compacte n'a aucun garde-fou. Second clic
    dans la même position, plutôt qu'un layout qui saute, pour rester lisible
    dans la barre d'actions étroite de la carte. */
+/* Échéance du jeton d'accès. Meta et LinkedIn n'ont pas de renouvellement
+   automatique : passé ~60 jours, seule une reconnexion rétablit la
+   publication. L'afficher ici est le seul endroit où l'utilisateur peut agir
+   avant que ses publications programmées ne tombent. */
+function ExpiryNotice({ net, onReconnect }: { net: ExpiringNet; onReconnect: () => void }) {
+  const st = tokenExpiry(net);
+  if (!st) return null;
+  const alert = st.status !== 'ok';
+  const color = st.status === 'expired' ? 'var(--danger)' : st.status === 'soon' ? 'var(--warn)' : 'var(--tx-3)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', fontSize: 12, color, borderTop: '1px solid var(--line-2)' }}>
+      <RawIcon svg={alert ? UI.warning : UI.clock} style={{ width: 13, height: 13, display: 'inline-grid', flex: 'none' }} />
+      <span style={{ flex: 1 }}>
+        {st.status === 'expired'
+          ? `Accès expiré ${formatExpiry(st)} — les publications programmées ne partiront pas.`
+          : `Accès à renouveler ${formatExpiry(st)}.`}
+      </span>
+      {alert && (
+        <button type="button" className="btn ghost sm" onClick={onReconnect}>Reconnecter</button>
+      )}
+    </div>
+  );
+}
+
 function DisconnectButton({ onDisconnect }: { onDisconnect: () => void }) {
   const { armed, confirm, disarm } = useArmedConfirm();
   const click = () => { if (confirm('disconnect')) onDisconnect(); };
@@ -229,6 +254,9 @@ function NetCard({ net, i }: { net: Network; i: number }) {
         <div className="nc-state">{stateLbl}</div>
       </div>
       <div className="nc-body">{body}</div>
+      {isConn && (meta || isLinkedin) && (
+        <ExpiryNotice net={meta ? 'meta' : 'linkedin'} onReconnect={() => connect(net.id)} />
+      )}
       <div className="nc-foot">{foot}</div>
       {liModal && <LinkedInPostModal onClose={() => setLiModal(false)} />}
       {metaModal && <MetaPostModal onClose={() => setMetaModal(false)} defaultTargets={net.id === 'instagram' ? ['instagram'] : ['facebook']} />}

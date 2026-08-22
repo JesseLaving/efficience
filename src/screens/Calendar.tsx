@@ -12,6 +12,7 @@ import { syncPostsToCalendar } from "../lib/googleCalendar";
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from "../lib/schedule";
 import { PublishPanel } from "../components/PublishPanel";
 import { useArmedConfirm } from "../hooks/useArmedConfirm";
+import { expiresBefore, getTokenExpiry } from "../lib/tokenExpiry";
 import { nowLocalIso, toLocalIso, type ScheduledPost } from "../lib/calendar";
 
 const NETS = ["instagram", "facebook", "linkedin", "google"];
@@ -94,6 +95,9 @@ export function Calendar() {
     createGcalCalendar,
   } = useConnections();
   const [publishing, setPublishing] = useState<ScheduledPost | null>(null);
+  /* Relance ciblée : les réseaux à réessayer, ou null pour une publication
+     manuelle ordinaire (tous les réseaux du post). */
+  const [retryOnly, setRetryOnly] = useState<string[] | null>(null);
   const [arming, setArming] = useState<string | null>(null);
   /* Édition du texte d'une publication programmée : l'heure et les réseaux
      étaient modifiables, mais pas le contenu — il fallait supprimer la
@@ -238,6 +242,7 @@ export function Calendar() {
           updateCalendar(local.id, {
             status: sp.status as ScheduledPost["status"],
             lastResult: sp.lastResult || null,
+            failedNetworks: sp.failedNetworks || null,
           });
         }
       }
@@ -247,6 +252,28 @@ export function Calendar() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Réseaux à réessayer après un échec. Sans détail enregistré, un échec
+     total se relance en entier ; un succès partiel, lui, ne se relance pas à
+     l'aveugle — republier ce qui est déjà passé ferait un doublon public. */
+  const retryTargets = (p: ScheduledPost): string[] => {
+    if (p.failedNetworks && p.failedNetworks.length) return p.failedNetworks;
+    return p.status === "failed" ? p.networks : [];
+  };
+
+  /* Un jeton Meta ou LinkedIn qui expire AVANT l'heure prévue condamne la
+     publication : le cron partirait avec un accès périmé, et l'échec ne serait
+     visible qu'après coup. Mieux vaut le refuser tout de suite, en disant quoi
+     faire. */
+  const expiredNetworks = (p: ScheduledPost): string[] => {
+    const whenMs = Date.parse(p.dateTime);
+    if (!Number.isFinite(whenMs)) return [];
+    const out: string[] = [];
+    if (p.networks.some((n) => n === "instagram" || n === "facebook") && expiresBefore("meta", whenMs))
+      out.push("Instagram / Facebook");
+    if (p.networks.includes("linkedin") && expiresBefore("linkedin", whenMs)) out.push("LinkedIn");
+    return out;
+  };
 
   /* Réarme l'auto-publication côté serveur avec les valeurs à jour (date,
      heure ou réseaux) : armAutoPublish avait figé whenMs/dateTime/networks à
@@ -263,6 +290,7 @@ export function Calendar() {
         refresh: getStoredGoogleRefresh(),
         paths: googleAccounts.map((a) => a.path),
       };
+    tokens.expiry = { meta: getTokenExpiry("meta"), linkedin: getTokenExpiry("linkedin") };
     return armAutoPublish(
       {
         id: p.id,
@@ -278,6 +306,19 @@ export function Calendar() {
   };
 
   const rearm = async (p: ScheduledPost) => {
+    /* Déplacer une publication armée au-delà de l'échéance du jeton la
+       condamnerait aussi sûrement que l'armer trop tard : on coupe
+       l'auto-publication plutôt que de laisser croire qu'elle partira. */
+    const stale = expiredNetworks(p);
+    if (stale.length) {
+      updateCalendar(p.id, { auto: false });
+      await disarmAutoPublish(p.id);
+      showToast(
+        UI.warning,
+        `Auto-publication désactivée : l'accès ${stale.join(" et ")} aura expiré à cette date. Reconnectez, puis réactivez-la.`,
+      );
+      return;
+    }
     const seq = (rearmSeq.get(p.id) || 0) + 1;
     rearmSeq.set(p.id, seq);
     const r = await armServer(p);
@@ -323,6 +364,14 @@ export function Calendar() {
   };
 
   const arm = async (p: ScheduledPost) => {
+    const stale = expiredNetworks(p);
+    if (stale.length) {
+      showToast(
+        UI.warning,
+        `Accès ${stale.join(" et ")} expiré d'ici là — reconnectez ${stale.length > 1 ? "ces réseaux" : "ce réseau"} depuis l'écran Connexion avant d'activer l'auto-publication.`,
+      );
+      return;
+    }
     setArming(p.id);
     const r = await armServer(p);
     setArming(null);
@@ -697,6 +746,20 @@ export function Calendar() {
                         </button>
                       </>
                     )}
+                    {(p.status === "failed" || p.status === "partial") &&
+                      retryTargets(p).length > 0 && (
+                        <button
+                          className="btn ghost sm"
+                          onClick={() => {
+                            setRetryOnly(retryTargets(p));
+                            setPublishing(p);
+                          }}
+                          title={`Réessayer sur ${retryTargets(p).map(netName).join(", ")} — les réseaux déjà publiés ne sont pas retouchés`}
+                        >
+                          <Icon name="refresh" />
+                          Relancer
+                        </button>
+                      )}
                     <button
                       className="btn ghost sm"
                       style={
@@ -877,22 +940,39 @@ export function Calendar() {
       {publishing && (
         <PublishPanel
           text={publishing.text}
-          platforms={publishing.networks}
+          platforms={retryOnly ?? publishing.networks}
           localMedia={false}
           defaultPhotoUrl={publishing.photoUrl || null}
-          onPublished={() => {
+          onPublished={(okNetworks, attemptedNetworks) => {
             /* Le post programmé devient une publication effectuée : statut
                « publié », daté du moment réel de diffusion. Si l'auto-publication
                était armée côté serveur, on la coupe — sinon le même texte
-               repartirait tout seul à l'heure prévue. */
-            updateCalendar(publishing.id, {
-              status: "published",
-              dateTime: nowLocalIso(),
-              auto: false,
-            });
+               repartirait tout seul à l'heure prévue.
+               Une cible qui échoue encore reste en attente de relance, plutôt
+               que d'être comptée comme publiée. */
+            const stillFailing = attemptedNetworks.filter((n) => !okNetworks.includes(n));
+            if (stillFailing.length) {
+              updateCalendar(publishing.id, {
+                status: "partial",
+                auto: false,
+                failedNetworks: stillFailing,
+                lastResult: `Relance : toujours en échec sur ${stillFailing.map(netName).join(", ")}.`,
+              });
+            } else {
+              updateCalendar(publishing.id, {
+                status: "published",
+                dateTime: nowLocalIso(),
+                auto: false,
+                failedNetworks: null,
+                lastResult: null,
+              });
+            }
             if (publishing.auto) disarmAutoPublish(publishing.id);
           }}
-          onClose={() => setPublishing(null)}
+          onClose={() => {
+            setPublishing(null);
+            setRetryOnly(null);
+          }}
         />
       )}
     </section>
