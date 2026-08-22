@@ -366,8 +366,15 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   }, [connectMeta, connectGoogle, connectLinkedin, connectYoutube, connectTiktok]);
 
   const disconnect = useCallback((id: string) => {
-    if (META_NETS.includes(id)) disconnectMeta();
-    else if (id === 'google') disconnectGoogle();
+    /* Instagram et Facebook partagent un seul jeton Meta : en déconnecter un
+       déconnecte l'autre. Le dire, sinon l'utilisateur croit Facebook encore
+       relié jusqu'à ce que ses publications échouent. */
+    if (META_NETS.includes(id)) {
+      disconnectMeta();
+      showToast(UI.unlink, 'Compte Meta déconnecté — Instagram et Facebook le sont ensemble.');
+      return;
+    }
+    if (id === 'google') disconnectGoogle();
     else if (id === 'linkedin') disconnectLinkedin();
     else if (id === 'youtube') disconnectYoutube();
     else if (id === 'tiktok') disconnectTiktok();

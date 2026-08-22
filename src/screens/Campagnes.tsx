@@ -23,7 +23,13 @@ import { sendCampaignEmail, fetchCampaignStats } from "../lib/email";
 import { AiLoader } from "../components/AiLoader";
 import { Skel, SkelText } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
-import { newCampaignId, type Campaign, type CampaignContent } from "../lib/campaigns";
+import { useArmedConfirm } from "../hooks/useArmedConfirm";
+import {
+  newCampaignId,
+  CAMPAIGN_STATUS_LABEL,
+  type Campaign,
+  type CampaignContent,
+} from "../lib/campaigns";
 
 const MAIL_LOGO = `${import.meta.env.BASE_URL}assets/logo-white.png`;
 const SOCIAL: BrandName[] = ["linkedin", "instagram", "facebook"];
@@ -234,18 +240,10 @@ function TypedBody({ paras }: { paras: string[] }) {
 }
 
 function StatusPill({ s }: { s: Campaign["status"] }) {
-  const [cls, lbl] = (
-    {
-      sent: ["sent", "Envoyée"],
-      sched: ["sched", "Programmée"],
-      draft: ["draft", "Brouillon"],
-      failed: ["failed", "Échec"],
-    } as Record<string, [string, string]>
-  )[s];
   return (
-    <span className={"st-pill " + cls}>
+    <span className={"st-pill " + s}>
       <i />
-      {lbl}
+      {CAMPAIGN_STATUS_LABEL[s]}
     </span>
   );
 }
@@ -277,29 +275,15 @@ export function Campagnes() {
   /* Premier clic sur « Envoyer » ne fait qu'armer la confirmation — un envoi
      de masse est irréversible et part vers de vraies adresses. Le second
      clic, dans la fenêtre, déclenche réellement l'envoi ; sinon ça expire. */
-  const [confirmingSend, setConfirmingSend] = useState(false);
-  const confirmSendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sendBtnWrapRef = useRef<HTMLDivElement>(null);
-  const cancelConfirmSend = () => {
-    if (confirmSendTimer.current) clearTimeout(confirmSendTimer.current);
-    confirmSendTimer.current = null;
-    setConfirmingSend(false);
-  };
-
   // Fenêtre de confirmation : un clic ailleurs ou 5s d'inactivité désarme
   // l'envoi plutôt que de le laisser prêt à partir indéfiniment.
-  useEffect(() => {
-    if (!confirmingSend) return;
-    const onOutside = (e: MouseEvent) => {
-      if (!sendBtnWrapRef.current?.contains(e.target as Node)) cancelConfirmSend();
-    };
-    document.addEventListener("mousedown", onOutside);
-    confirmSendTimer.current = setTimeout(cancelConfirmSend, 5000);
-    return () => {
-      document.removeEventListener("mousedown", onOutside);
-      if (confirmSendTimer.current) clearTimeout(confirmSendTimer.current);
-    };
-  }, [confirmingSend]);
+  const sendBtnWrapRef = useRef<HTMLDivElement>(null);
+  const {
+    armed: sendArmed,
+    confirm: confirmSend,
+    disarm: cancelConfirmSend,
+  } = useArmedConfirm({ timeoutMs: 5000, outsideRef: sendBtnWrapRef });
+  const confirmingSend = sendArmed !== null;
   const fields = useMemo(() => fieldsFor(contacts), [contacts]);
 
   // Résout un identifiant de segment (fixe, ou préfixé saved:/group: pour un
@@ -419,7 +403,7 @@ export function Campagnes() {
     if (view !== "list" || activeSpaceId == null) return;
     let alive = true;
     fetchCampaignStats(activeSpaceId).then((s) => {
-      if (alive) setStats(s);
+      if (alive) setStats(s || {});
     });
     return () => {
       alive = false;
@@ -1011,12 +995,7 @@ export function Campagnes() {
                           : undefined
                       }
                       onClick={() => {
-                        if (!confirmingSend) {
-                          setConfirmingSend(true);
-                          return;
-                        }
-                        cancelConfirmSend();
-                        finish("sent");
+                        if (confirmSend("send")) finish("sent");
                       }}
                     >
                       {sending ? <span className="spin" /> : <Icon name="rocket" />}

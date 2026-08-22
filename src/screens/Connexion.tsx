@@ -15,6 +15,7 @@ import { YoutubeUploadModal } from '../components/YoutubeUploadModal';
 import { TiktokPostModal } from '../components/TiktokPostModal';
 import { TiktokVideosModal } from '../components/TiktokVideosModal';
 import { useTilt3d } from '../lib/useTilt3d';
+import { useArmedConfirm } from '../hooks/useArmedConfirm';
 
 const META_NETS = ['instagram', 'facebook'];
 /* Réseaux avec une vraie intégration (connexion + publication). Les autres
@@ -27,10 +28,11 @@ const INTEGRATED_IDS = [...META_NETS, 'google', 'linkedin', 'youtube', 'tiktok']
    dans la même position, plutôt qu'un layout qui saute, pour rester lisible
    dans la barre d'actions étroite de la carte. */
 function DisconnectButton({ onDisconnect }: { onDisconnect: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-  if (!confirming) {
+  const { armed, confirm, disarm } = useArmedConfirm();
+  const click = () => { if (confirm('disconnect')) onDisconnect(); };
+  if (!armed) {
     return (
-      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={() => setConfirming(true)}>
+      <button className="unlink-btn" title="Déconnecter" aria-label="Déconnecter" onClick={click}>
         <Icon name="unlink" />
       </button>
     );
@@ -42,11 +44,11 @@ function DisconnectButton({ onDisconnect }: { onDisconnect: () => void }) {
         title="Confirmer la déconnexion"
         aria-label="Confirmer la déconnexion"
         style={{ color: 'var(--danger)' }}
-        onClick={() => { setConfirming(false); onDisconnect(); }}
+        onClick={click}
       >
         <Icon name="check" />
       </button>
-      <button className="unlink-btn" title="Annuler" aria-label="Annuler" onClick={() => setConfirming(false)}>
+      <button className="unlink-btn" title="Annuler" aria-label="Annuler" onClick={disarm}>
         <Icon name="close" />
       </button>
     </span>

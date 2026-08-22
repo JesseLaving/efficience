@@ -5,6 +5,7 @@ import { useContacts } from '../state/ContactsContext';
 import { useCalendar } from '../state/CalendarContext';
 import { useCampaigns } from '../state/CampaignsContext';
 import { CATALOG, loadKpiState } from '../lib/kpi';
+import { CAMPAIGN_STATUS_LABEL } from '../lib/campaigns';
 import { Icon } from '../lib/Icon';
 import { useModalA11y } from '../hooks/useModalA11y';
 
@@ -20,7 +21,6 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
-const STATUS_LABEL: Record<string, string> = { sent: 'Envoyée', sched: 'Programmée', draft: 'Brouillon' };
 
 /** Recherche globale (⌘K) — contacts, publications programmées, campagnes
     e-mail et KPI affichés sur le tableau de bord : les seules sources de
@@ -34,7 +34,7 @@ export function GlobalSearch() {
   const [q, setQ] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  useModalA11y(open ? cardRef : { current: null });
+  useModalA11y(cardRef, open);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -147,7 +147,7 @@ export function GlobalSearch() {
                           <Icon name="mail" />
                           <div className="search-item-t">
                             <div className="search-item-n">{c.name}</div>
-                            <div className="search-item-s">{c.seg} · {STATUS_LABEL[c.status] || c.status}</div>
+                            <div className="search-item-s">{c.seg} · {CAMPAIGN_STATUS_LABEL[c.status] || c.status}</div>
                           </div>
                         </button>
                       ))}

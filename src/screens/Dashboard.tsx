@@ -348,15 +348,11 @@ export function Dashboard() {
   useEffect(() => {
     if (activeSpaceId == null) return;
     let alive = true;
-    fetchCampaignStats(activeSpaceId)
-      .then((s) => {
-        if (alive) setEmailStats(s);
-      })
-      .catch(() => {
-        // Failed load must not masquerade as "0 email campaigns" — KPI cards
-        // read the null and render "—" instead of a fabricated zero.
-        if (alive) setEmailStats(null);
-      });
+    // fetchCampaignStats renvoie null sur échec : les cartes KPI lisent ce null
+    // et affichent « — » au lieu d'un zéro fabriqué.
+    fetchCampaignStats(activeSpaceId).then((s) => {
+      if (alive) setEmailStats(s);
+    });
     return () => {
       alive = false;
     };
@@ -367,19 +363,21 @@ export function Dashboard() {
      effectivement servis, sur les seules campagnes suivies — une campagne
      antérieure au suivi ne tire donc pas la moyenne vers le bas. */
   const emailAgg = useMemo(() => {
+    // null tant que les stats ne sont pas chargées : une seule expression de
+    // « non chargé », que les appelants propagent avec `?.` plutôt que de
+    // re-tester emailStats à chaque KPI.
+    if (!emailStats) return null;
     let recipients = 0,
       opened = 0,
       clicked = 0,
       unsubscribed = 0;
-    if (emailStats) {
-      for (const c of campaigns) {
-        const st = c.id ? emailStats[c.id] : undefined;
-        if (!st) continue;
-        recipients += c.sentCount ?? c.recipients;
-        opened += st.opened || 0;
-        clicked += st.clicked || 0;
-        unsubscribed += st.unsubscribed || 0;
-      }
+    for (const c of campaigns) {
+      const st = c.id ? emailStats[c.id] : undefined;
+      if (!st) continue;
+      recipients += c.sentCount ?? c.recipients;
+      opened += st.opened || 0;
+      clicked += st.clicked || 0;
+      unsubscribed += st.unsubscribed || 0;
     }
     return {
       recipients,
@@ -408,11 +406,11 @@ export function Dashboard() {
       case "postsMonth":
         return agg.postsMonth;
       case "emailOpenRate":
-        return emailStats ? emailAgg.openRate : null;
+        return emailAgg?.openRate ?? null;
       case "emailClicks":
-        return emailStats ? emailAgg.clicked : null;
+        return emailAgg?.clicked ?? null;
       case "emailUnsubscribes":
-        return emailStats ? emailAgg.unsubscribed : null;
+        return emailAgg?.unsubscribed ?? null;
       default:
         return d.val;
     }

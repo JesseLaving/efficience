@@ -19,15 +19,19 @@ export interface SendCampaignPayload {
 
 /* Statistiques réelles rapportées par Resend, par identifiant de campagne.
    Une campagne absente n'a simplement aucun événement : l'appelant doit
-   afficher « — », jamais 0 — l'absence de mesure n'est pas une mesure nulle. */
-export async function fetchCampaignStats(spaceId: number): Promise<Record<string, Record<string, number>>> {
+   afficher « — », jamais 0 — l'absence de mesure n'est pas une mesure nulle.
+   `null` distingue l'échec du chargement d'un relevé vide : un {} renvoyé sur
+   erreur ferait afficher 0 % d'ouverture au lieu de « — ». */
+export async function fetchCampaignStats(
+  spaceId: number,
+): Promise<Record<string, Record<string, number>> | null> {
   try {
     const r = await fetch(`${API_BASE}/email/stats?spaceId=${spaceId}`);
-    if (!r.ok) return {};
+    if (!r.ok) return null;
     const d = await r.json();
     return (d && d.stats) || {};
   } catch {
-    return {};
+    return null;
   }
 }
 

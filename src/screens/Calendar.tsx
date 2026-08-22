@@ -11,9 +11,17 @@ import { getBusiness } from "../lib/business";
 import { syncPostsToCalendar } from "../lib/googleCalendar";
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from "../lib/schedule";
 import { PublishPanel } from "../components/PublishPanel";
-import { nowLocalIso, type ScheduledPost } from "../lib/calendar";
+import { useArmedConfirm } from "../hooks/useArmedConfirm";
+import { nowLocalIso, toLocalIso, type ScheduledPost } from "../lib/calendar";
 
 const NETS = ["instagram", "facebook", "linkedin", "google"];
+
+/* Minuteries et numéros de séquence du réarmement, par publication. Hors de
+   React : ces valeurs ne participent à aucun rendu, et l'écran n'est monté
+   qu'une fois à la fois (App remonte le conteneur à chaque navigation). Les
+   deux tables sont vidées au démontage. */
+const rearmTimers = new Map<string, number>();
+const rearmSeq = new Map<string, number>();
 
 const fmtDay = (iso: string) => {
   const d = new Date(iso);
@@ -97,7 +105,16 @@ export function Calendar() {
   /* Suppression à deux clics : le bouton n'était qu'une icône sans
      confirmation — un clic malencontreux effaçait une publication déjà
      armée côté serveur sans aucun retour. */
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const { armed: confirmDeleteId, confirm: confirmDelete } = useArmedConfirm();
+
+  useEffect(
+    () => () => {
+      for (const t of rearmTimers.values()) window.clearTimeout(t);
+      rearmTimers.clear();
+      rearmSeq.clear();
+    },
+    [],
+  );
 
   const createCalendar = async () => {
     setCreatingCal(true);
@@ -185,13 +202,12 @@ export function Calendar() {
       });
     }
     const sigs = new Set(rows.map((r) => dayKey(r.dateTime) + "|" + r.text.trim().slice(0, 80)));
-    const pad = (n: number) => String(n).padStart(2, "0");
     for (const acc of metaStats || []) {
       for (const mp of acc.posts || []) {
         if (!mp.date) continue;
         const d = new Date(mp.date);
         if (isNaN(d.getTime())) continue;
-        const dt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const dt = toLocalIso(d);
         const sig = dayKey(dt) + "|" + (mp.caption || "").trim().slice(0, 80);
         if (sigs.has(sig)) continue;
         sigs.add(sig);
@@ -236,7 +252,7 @@ export function Calendar() {
      heure ou réseaux) : armAutoPublish avait figé whenMs/dateTime/networks à
      l'armement initial, si bien qu'une modification locale ne changeait rien
      au cron, qui publiait l'ANCIEN horaire ou l'ANCIENNE liste de réseaux. */
-  const rearm = async (p: ScheduledPost) => {
+  const armServer = (p: ScheduledPost) => {
     const tokens: Parameters<typeof armAutoPublish>[1] = {};
     if (p.networks.some((n) => n === "instagram" || n === "facebook") && metaToken)
       tokens.meta = metaToken;
@@ -247,11 +263,10 @@ export function Calendar() {
         refresh: getStoredGoogleRefresh(),
         paths: googleAccounts.map((a) => a.path),
       };
-    const whenMs = Date.parse(p.dateTime);
-    const r = await armAutoPublish(
+    return armAutoPublish(
       {
         id: p.id,
-        whenMs,
+        whenMs: Date.parse(p.dateTime),
         dateTime: p.dateTime,
         text: p.text,
         networks: p.networks,
@@ -260,6 +275,17 @@ export function Calendar() {
       },
       tokens,
     );
+  };
+
+  const rearm = async (p: ScheduledPost) => {
+    const seq = (rearmSeq.get(p.id) || 0) + 1;
+    rearmSeq.set(p.id, seq);
+    const r = await armServer(p);
+    /* Un réarmement plus récent est parti entre-temps : c'est lui qui fait
+       foi. Sans ce garde, une réponse arrivée dans le désordre — ou l'échec
+       d'une valeur intermédiaire — couperait l'auto-publication alors que la
+       valeur finale, elle, s'arme très bien. */
+    if (rearmSeq.get(p.id) !== seq) return;
     if (!r.ok) {
       await disarmAutoPublish(p.id);
       updateCalendar(p.id, { auto: false });
@@ -267,38 +293,38 @@ export function Calendar() {
     }
   };
 
+  /* Les champs date/heure émettent un change par frappe (y compris des valeurs
+     intermédiaires : taper « 2027 » passe par l'an 0002). Réarmer à chaque
+     événement inonderait le serveur et pourrait armer le cron sur une date
+     passée, donc publier immédiatement. On attend la fin de la saisie. */
+  const scheduleRearm = (p: ScheduledPost) => {
+    const pending = rearmTimers.get(p.id);
+    if (pending) window.clearTimeout(pending);
+    rearmTimers.set(
+      p.id,
+      window.setTimeout(() => {
+        rearmTimers.delete(p.id);
+        void rearm(p);
+      }, 600),
+    );
+  };
+
   const toggleNet = (p: ScheduledPost, net: string) => {
     const has = p.networks.includes(net);
     const networks = has ? p.networks.filter((n) => n !== net) : [...p.networks, net];
+    /* Une liste vide est refusée par le serveur, et sur un post armé le
+       réarmement échouerait donc en coupant l'auto-publication. */
+    if (networks.length === 0) {
+      showToast(UI.warning, "Gardez au moins un réseau pour cette publication.");
+      return;
+    }
     updateCalendar(p.id, { networks });
-    if (p.auto) rearm({ ...p, networks });
+    if (p.auto) scheduleRearm({ ...p, networks });
   };
 
   const arm = async (p: ScheduledPost) => {
     setArming(p.id);
-    const tokens: Parameters<typeof armAutoPublish>[1] = {};
-    if (p.networks.some((n) => n === "instagram" || n === "facebook") && metaToken)
-      tokens.meta = metaToken;
-    if (p.networks.includes("linkedin") && linkedinToken) tokens.linkedin = linkedinToken;
-    if (p.networks.includes("google") && googleToken)
-      tokens.google = {
-        token: googleToken,
-        refresh: getStoredGoogleRefresh(),
-        paths: googleAccounts.map((a) => a.path),
-      };
-    const whenMs = Date.parse(p.dateTime);
-    const r = await armAutoPublish(
-      {
-        id: p.id,
-        whenMs,
-        dateTime: p.dateTime,
-        text: p.text,
-        networks: p.networks,
-        photoUrl: p.photoUrl || null,
-        pillar: p.pillar || null,
-      },
-      tokens,
-    );
+    const r = await armServer(p);
     setArming(null);
     if (r.ok) {
       updateCalendar(p.id, { auto: true });
@@ -337,12 +363,7 @@ export function Calendar() {
   };
 
   const confirmDeleteScheduled = async (p: ScheduledPost) => {
-    if (confirmDeleteId !== p.id) {
-      setConfirmDeleteId(p.id);
-      window.setTimeout(() => setConfirmDeleteId((cur) => (cur === p.id ? null : cur)), 4000);
-      return;
-    }
-    setConfirmDeleteId(null);
+    if (!confirmDelete(p.id)) return;
     // Le post est armé côté serveur : sans désarmement préalable, le cron
     // publierait quand même un contenu que l'utilisateur croit supprimé.
     if (p.auto) {
@@ -543,7 +564,7 @@ export function Calendar() {
                             if (!e.target.value) return;
                             const dateTime = e.target.value + "T" + fmtTime(p.dateTime);
                             updateCalendar(p.id, { dateTime });
-                            if (p.auto) rearm({ ...p, dateTime });
+                            if (p.auto) scheduleRearm({ ...p, dateTime });
                           }}
                           className="inp"
                           style={{ width: 145, padding: "5px 8px", fontSize: 13 }}
@@ -555,7 +576,7 @@ export function Calendar() {
                           onChange={(e) => {
                             const dateTime = dayKey(p.dateTime) + "T" + (e.target.value || "09:00");
                             updateCalendar(p.id, { dateTime });
-                            if (p.auto) rearm({ ...p, dateTime });
+                            if (p.auto) scheduleRearm({ ...p, dateTime });
                           }}
                           className="inp"
                           style={{ width: 110, padding: "5px 8px", fontSize: 13 }}

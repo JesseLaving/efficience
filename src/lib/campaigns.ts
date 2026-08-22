@@ -4,6 +4,16 @@
    et disparaissait à chaque navigation vers un autre écran (le conteneur
    `.canvas` de App.tsx est remonté avec une clé différente à chaque
    changement d'écran, ce qui démonte Campagnes et perd son état). */
+/* Libellés d'état, partagés par l'écran Campagnes et la recherche globale :
+   le type impose l'exhaustivité, si bien qu'un nouvel état ne peut plus
+   s'afficher en anglais brut dans l'une des deux vues. */
+export const CAMPAIGN_STATUS_LABEL: Record<Campaign["status"], string> = {
+  sent: "Envoyée",
+  sched: "Programmée",
+  draft: "Brouillon",
+  failed: "Échec",
+};
+
 export interface Campaign {
   /** Identifiant stable qui relie la campagne à ses événements d'e-mail
    *  (ouvertures, clics, désinscriptions) côté serveur. Absent des campagnes

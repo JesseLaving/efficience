@@ -19,6 +19,7 @@ import { googleContactsLogin, consumeGoogleContactsHash, fetchGoogleContacts, ma
 import { NameModal } from '../components/NameModal';
 import { AddContactModal } from '../components/AddContactModal';
 import { EditContactModal } from '../components/EditContactModal';
+import { useArmedConfirm } from '../hooks/useArmedConfirm';
 
 const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-mail', first: 'Prénom', last: 'Nom', name: 'Nom complet',
@@ -35,6 +36,35 @@ const frDate = (iso?: string) => {
   const [y, m, d] = iso.split('-');
   return d ? `${d}/${m}/${y}` : iso;
 };
+
+/* Contrôles de suppression d'une ligne (segment enregistré ou groupe) : mêmes
+   icônes, mêmes classes et même confirmation en deux clics des deux côtés. */
+function RowDeleteControls(
+  { confirming, what, onClick, onCancel }:
+  { confirming: boolean; what: string; onClick: () => void; onCancel: () => void },
+) {
+  if (!confirming) {
+    return (
+      <button type="button" className="si-del" aria-label={`Supprimer ${what}`} onClick={onClick}>
+        <Icon name="trash" />
+      </button>
+    );
+  }
+  return (
+    <div className="si-confirm">
+      <button
+        type="button" className="si-del si-del-yes"
+        aria-label={`Confirmer la suppression de ${what}`}
+        onClick={onClick}
+      >
+        <Icon name="check" />
+      </button>
+      <button type="button" className="si-del" aria-label="Annuler la suppression" onClick={onCancel}>
+        <Icon name="close" />
+      </button>
+    </div>
+  );
+}
 
 /* Infobulle au survol d'une ligne — regroupe les champs saisis à la main qui
    n'ont pas leur propre colonne (trop de colonnes rendraient le tableau
@@ -65,7 +95,7 @@ export function Contacts() {
   const [editing, setEditing] = useState<Contact | null>(null);
   // Armed two-step confirm for deleting a saved segment or a group (row-level,
   // mirrors the Settings "zone sensible" idiom but inline in a compact list row).
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'segment' | 'group'; id: string } | null>(null);
+  const { armed: confirmDelete, confirm: confirmRowDelete, disarm: cancelDelete } = useArmedConfirm();
   const totalRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -192,18 +222,16 @@ export function Contacts() {
   const pickSaved = (id: string) => { setAudience({ kind: 'saved', id }); setQ(''); setSelected(new Set()); };
   const pickGroup = (id: string) => { setAudience({ kind: 'group', id }); setQ(''); setSelected(new Set()); };
 
-  const cancelDelete = () => setConfirmDelete(null);
-  const confirmDeleteSegment = (id: string, name: string) => {
-    deleteSegment(id);
-    if (audience.kind === 'saved' && audience.id === id) setAudience({ kind: 'fixed', id: 'all' });
-    showToast(UI.check, `Segment « ${name} » supprimé.`);
-    setConfirmDelete(null);
-  };
-  const confirmDeleteGroup = (id: string, name: string) => {
-    deleteGroup(id);
-    if (audience.kind === 'group' && audience.id === id) setAudience({ kind: 'fixed', id: 'all' });
-    showToast(UI.check, `Groupe « ${name} » supprimé.`);
-    setConfirmDelete(null);
+  /* Segments enregistrés et groupes manuels se suppriment à l'identique :
+     premier clic pour armer, second pour supprimer, l'audience active
+     retombant sur « tous » si c'est elle qu'on vient d'effacer. */
+  const deleteRow = (kind: 'segment' | 'group', id: string, name: string) => {
+    if (!confirmRowDelete(`${kind}:${id}`)) return;
+    const activeKind = kind === 'segment' ? 'saved' : 'group';
+    if (kind === 'segment') deleteSegment(id);
+    else deleteGroup(id);
+    if (audience.kind === activeKind && audience.id === id) setAudience({ kind: 'fixed', id: 'all' });
+    showToast(UI.check, `${kind === 'segment' ? 'Segment' : 'Groupe'} « ${name} » supprimé.`);
   };
 
   const addCriterion = () => {
@@ -398,7 +426,7 @@ export function Contacts() {
                   })}
                   {savedSegments.map((s) => {
                     const isActive = audience.kind === 'saved' && audience.id === s.id;
-                    const isConfirming = confirmDelete?.kind === 'segment' && confirmDelete.id === s.id;
+                    const isConfirming = confirmDelete === `segment:${s.id}`;
                     return (
                       <div key={s.id} className="seg-row">
                         <button
@@ -411,27 +439,12 @@ export function Contacts() {
                           <div className="si-t"><div className="si-n">{s.name}</div><div className="si-d">Segment enregistré</div></div>
                           <div className="si-c">{fr(savedSegmentCounts.get(s.id) ?? 0)}</div>
                         </button>
-                        {isConfirming ? (
-                          <div className="si-confirm">
-                            <button
-                              type="button" className="si-del si-del-yes"
-                              aria-label={`Confirmer la suppression du segment ${s.name}`}
-                              onClick={() => confirmDeleteSegment(s.id, s.name)}
-                            >
-                              <Icon name="check" />
-                            </button>
-                            <button type="button" className="si-del" aria-label="Annuler la suppression" onClick={cancelDelete}>
-                              <Icon name="close" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button" className="si-del" aria-label={`Supprimer le segment ${s.name}`}
-                            onClick={() => setConfirmDelete({ kind: 'segment', id: s.id })}
-                          >
-                            <Icon name="trash" />
-                          </button>
-                        )}
+                        <RowDeleteControls
+                          confirming={isConfirming}
+                          what={`le segment ${s.name}`}
+                          onClick={() => deleteRow('segment', s.id, s.name)}
+                          onCancel={cancelDelete}
+                        />
                       </div>
                     );
                   })}
@@ -449,7 +462,7 @@ export function Contacts() {
                   )}
                   {groups.map((g) => {
                     const isActive = audience.kind === 'group' && audience.id === g.id;
-                    const isConfirming = confirmDelete?.kind === 'group' && confirmDelete.id === g.id;
+                    const isConfirming = confirmDelete === `group:${g.id}`;
                     return (
                       <div key={g.id} className="seg-row">
                         <button
@@ -462,27 +475,12 @@ export function Contacts() {
                           <div className="si-t"><div className="si-n">{g.name}</div><div className="si-d">Groupe manuel</div></div>
                           <div className="si-c">{fr(g.contactIds.length)}</div>
                         </button>
-                        {isConfirming ? (
-                          <div className="si-confirm">
-                            <button
-                              type="button" className="si-del si-del-yes"
-                              aria-label={`Confirmer la suppression du groupe ${g.name}`}
-                              onClick={() => confirmDeleteGroup(g.id, g.name)}
-                            >
-                              <Icon name="check" />
-                            </button>
-                            <button type="button" className="si-del" aria-label="Annuler la suppression" onClick={cancelDelete}>
-                              <Icon name="close" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button" className="si-del" aria-label={`Supprimer le groupe ${g.name}`}
-                            onClick={() => setConfirmDelete({ kind: 'group', id: g.id })}
-                          >
-                            <Icon name="trash" />
-                          </button>
-                        )}
+                        <RowDeleteControls
+                          confirming={isConfirming}
+                          what={`le groupe ${g.name}`}
+                          onClick={() => deleteRow('group', g.id, g.name)}
+                          onCancel={cancelDelete}
+                        />
                       </div>
                     );
                   })}

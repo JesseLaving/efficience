@@ -344,7 +344,9 @@ export function savePlan(state: PlanState): void {
   try { localStorage.setItem(PLAN_LS, JSON.stringify(state)); } catch { /* ignore */ }
 }
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** « 2026-08-06 » — le jour de `d` en heure locale. Passer par toISOString()
+ *  décalerait la date d'un jour entre minuit et l'offset UTC. */
+export const localDayIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /* Jours de publication préférés, par ordre de priorité (getDay : 0=dim). */
 const PREF_DAYS = [2, 4, 1, 3, 5, 6, 0];
@@ -378,8 +380,8 @@ export function planScaffold(opts: { weeks: number; perWeek: number }): PlanSlot
       slots.push({
         // Date + rang de création : stable tant que le plan n'est pas régénéré,
         // et unique même avec plusieurs publications le même jour.
-        id: `${iso(d)}-${slots.length}`,
-        date: iso(d),
+        id: `${localDayIso(d)}-${slots.length}`,
+        date: localDayIso(d),
         label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }),
         monthLabel: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
         weekIndex: w,
