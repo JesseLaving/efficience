@@ -7,7 +7,9 @@ export default defineConfig({
     // jsdom : les modules testés lisent localStorage (jetons, calendrier,
     // planning), qui est justement l'endroit où vivent les données de l'app.
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    // Les routes serveur (api/) sont du JavaScript simple : elles se testent
+    // au même endroit que le reste, sans chaîne de compilation séparée.
+    include: ['src/**/*.test.ts', 'api/**/*.test.js'],
     restoreMocks: true,
   },
 })

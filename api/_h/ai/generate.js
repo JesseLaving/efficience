@@ -87,7 +87,14 @@ async function callGemini(system, user, maxTokens) {
 async function callOpenAICompat(url, key, model, system, user, maxTokens, extraHeaders) {
   const r = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json', ...(extraHeaders || {}) },
+    /* En-tête d'autorisation seulement s'il y a une clé : une passerelle
+       auto-hébergée peut tourner sans authentification, et un « Bearer  » vide
+       est refusé par certaines implémentations. */
+    headers: {
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      'content-type': 'application/json',
+      ...(extraHeaders || {}),
+    },
     body: JSON.stringify({
       model, max_tokens: maxTokens, temperature: 0.8,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -100,16 +107,56 @@ async function callOpenAICompat(url, key, model, system, user, maxTokens, extraH
   return text;
 }
 
-function pickProvider() {
-  if (process.env.GEMINI_API_KEY) return 'gemini';
-  if (process.env.GROQ_API_KEY) return 'groq';
-  if (process.env.OPENROUTER_API_KEY) return 'openrouter';
-  if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
-  return null;
+/* Fournisseurs utilisables, dans l'ordre d'essai.
+
+   Une passerelle compatible OpenAI (OmniRoute et équivalents) passe en tête
+   quand elle est configurée : renseigner OMNIROUTE_BASE_URL est un choix
+   d'exploitation explicite, alors qu'une clé de fournisseur peut traîner dans
+   l'environnement sans intention particulière. Les fournisseurs directs
+   restent derrière et servent de repli si la passerelle ne répond pas. */
+export function availableProviders(env = process.env) {
+  const out = [];
+  if (env.OMNIROUTE_BASE_URL) out.push('omniroute');
+  if (env.GEMINI_API_KEY) out.push('gemini');
+  if (env.GROQ_API_KEY) out.push('groq');
+  if (env.OPENROUTER_API_KEY) out.push('openrouter');
+  if (env.ANTHROPIC_API_KEY) out.push('anthropic');
+  return out;
 }
 
-async function generateText(provider, system, user, maxTokens) {
+/* Essaie les fournisseurs dans l'ordre et renvoie le premier qui répond.
+
+   Une passerelle injoignable ou un quota atteint ne doit pas faire échouer la
+   génération quand une autre clé est configurée : c'est précisément ce qu'on
+   attend d'en avoir configuré plusieurs. `call` est injectable pour que la
+   chaîne de repli soit testable sans réseau.
+
+   @returns {{ text: string, provider: string, triedBefore: string[] }} */
+export async function generateWithFallback(providers, system, user, maxTokens, call = generateText) {
+  const failures = [];
+  for (const p of providers) {
+    try {
+      const text = await call(p, system, user, maxTokens);
+      return { text, provider: p, triedBefore: failures.map((f) => f.provider) };
+    } catch (e) {
+      failures.push({ provider: p, reason: String((e && e.message) || e) });
+    }
+  }
+  // Le motif de CHAQUE échec, pas seulement du dernier : sans ça, une
+  // passerelle mal configurée masquerait le vrai problème du fournisseur suivant.
+  throw new Error(failures.map((f) => `${f.provider} : ${f.reason}`).join(' · ') || 'Aucun fournisseur');
+}
+
+export async function generateText(provider, system, user, maxTokens) {
   if (provider === 'gemini') return callGemini(system, user, maxTokens);
+  if (provider === 'omniroute') {
+    /* Passerelle compatible OpenAI : OMNIROUTE_BASE_URL inclut déjà /v1
+       (ex. http://passerelle.example.com/v1). Le modèle par défaut « auto »
+       laisse la passerelle choisir le backend — c'est sa raison d'être. */
+    const base = String(process.env.OMNIROUTE_BASE_URL || '').replace(/\/+$/, '');
+    return callOpenAICompat(`${base}/chat/completions`, process.env.OMNIROUTE_API_KEY || '',
+      process.env.OMNIROUTE_MODEL || 'auto', system, user, maxTokens);
+  }
   if (provider === 'groq') {
     return callOpenAICompat('https://api.groq.com/openai/v1/chat/completions', process.env.GROQ_API_KEY,
       process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', system, user, maxTokens);
@@ -137,8 +184,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { cors(res); res.statusCode = 204; res.end(); return; }
   if (req.method !== 'POST') return json(res, 405, { error: 'POST requis' });
 
-  const provider = pickProvider();
-  if (!provider) return json(res, 200, { available: false, reason: 'Aucune clé IA configurée (GEMINI_API_KEY gratuit recommandé)' });
+  const providers = availableProviders();
+  if (!providers.length) return json(res, 200, { available: false, reason: 'Aucune clé IA configurée (GEMINI_API_KEY gratuit recommandé, ou OMNIROUTE_BASE_URL pour une passerelle)' });
 
   const body = req.body && typeof req.body === 'object' ? req.body : await readBody(req);
   const kind = body.kind || 'post';
@@ -149,7 +196,13 @@ export default async function handler(req, res) {
 
   try {
     const maxTokens = kind === 'email' ? 700 : kind === 'post' ? 1100 : 600;
-    const text = await generateText(provider, systemPrompt(ctx), userPrompt(kind, brief, ctx), maxTokens);
+    /* `provider` est celui qui a RÉELLEMENT répondu, pas celui tenté en
+       premier : annoncer la passerelle alors que c'est Gemini qui a servi la
+       réponse rendrait tout diagnostic impossible. */
+    const { text, provider, triedBefore } = await generateWithFallback(
+      providers, systemPrompt(ctx), userPrompt(kind, brief, ctx), maxTokens,
+    );
+    if (triedBefore.length) console.warn('[ai/generate] repli sur', provider, 'après échec de', triedBefore.join(', '));
 
     if (kind === 'email') {
       let parsed = null;
