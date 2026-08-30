@@ -4,15 +4,13 @@
    La carte est déduite de l'état réel de l'espace — plan du mois, brouillons,
    publications programmées — et disparaît quand la machine tourne : s'il y a
    déjà des publications à venir et rien en attente, il n'y a rien à dire. */
+import { useMemo } from "react";
 import { useEff } from "../state/EffContext";
-import { useConnections } from "../state/ConnectionsContext";
 import { useCalendar } from "../state/CalendarContext";
-import { useContacts } from "../state/ContactsContext";
 import { useDrafts } from "../state/DraftsContext";
 import { Icon } from "../lib/Icon";
 import type { UIName } from "../lib/icons";
-import { loadProfile } from "../lib/profile";
-import { buildSetup } from "../lib/setup";
+import { useSetup } from "../hooks/useSetup";
 import { loadPlan } from "../lib/editorial";
 import type { ScreenId } from "../state/EffContext";
 
@@ -26,21 +24,16 @@ interface Action {
 
 export function NextAction() {
   const { show } = useEff();
-  const { connectedCount } = useConnections();
   const { scheduled } = useCalendar();
-  const { contacts } = useContacts();
   const { drafts } = useDrafts();
 
   // Tant que la prise en main n'est pas bouclée, SetupGuide occupe ce rôle.
-  const setup = buildSetup({
-    hasProfile: !!loadProfile(),
-    connectedCount,
-    scheduledCount: scheduled.length,
-    contactsCount: contacts.length,
-  });
+  const setup = useSetup();
+  /* Le plan est relu une seule fois par montage : il ne peut changer que
+     depuis le Planning, écran dont le retour re-monte ce composant. */
+  const planCount = useMemo(() => loadPlan()?.items.length || 0, []);
   if (!setup.complete) return null;
 
-  const planCount = loadPlan()?.items.length || 0;
   const upcoming = scheduled.filter((p) => p.status === "scheduled").length;
 
   // Un seul conseil à la fois, dans l'ordre du flux de production.

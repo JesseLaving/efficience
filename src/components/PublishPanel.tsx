@@ -20,8 +20,12 @@ interface Props {
   onClose: () => void;
   /** Si fourni, remplace l'enregistrement par défaut dans l'historique du
    *  calendrier — le Calendrier s'en sert pour marquer le post programmé
-   *  d'origine comme publié plutôt que d'en créer un doublon. */
-  onPublished?: (okNetworks: string[]) => void;
+   *  d'origine comme publié plutôt que d'en créer un doublon.
+   *  `attemptedNetworks` liste les cibles réellement tentées : un réseau écarté
+   *  faute d'accès en écriture (Google Business en attente de validation) n'a
+   *  pas échoué, il n'a pas été essayé — l'appelant ne doit pas le compter
+   *  comme un échec à relancer. */
+  onPublished?: (okNetworks: string[], attemptedNetworks: string[]) => void;
 }
 
 interface Row { id: string; label: string; status: 'pending' | 'ok' | 'error'; reason?: string | null; url?: string | null; }
@@ -110,7 +114,7 @@ export function PublishPanel({ text, platforms, localMedia, defaultPhotoUrl, onC
     if (okNets.length) {
       // Trace la publication dans l'historique du calendrier — seuls les
       // réseaux ayant réellement accepté le post sont enregistrés.
-      if (onPublished) onPublished(okNets);
+      if (onPublished) onPublished(okNets, publishable);
       else recordPublished({ dateTime: nowLocalIso(), text: text.trim(), networks: okNets, photoUrl: photo || null, pillar: null, planKey: null });
       showToast(UI.check, `Publié sur ${okNets.length} réseau(x)`);
     }

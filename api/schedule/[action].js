@@ -66,8 +66,12 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, reason: 'Post invalide (id, whenMs, text, networks requis).' });
       }
       // Stocke / rafraîchit les tokens nécessaires (les réseaux non fournis sont ignorés).
-      if (tokens.meta) await kvSet(`tok:${spaceId}:meta`, { token: tokens.meta });
-      if (tokens.linkedin) await kvSet(`tok:${spaceId}:linkedin`, { token: tokens.linkedin });
+      /* L'échéance accompagne le jeton : Meta et LinkedIn ne se renouvellent
+         pas, et un jeton périmé produirait sinon une erreur d'API opaque au
+         moment de publier, des semaines plus tard. */
+      const exp = tokens.expiry || {};
+      if (tokens.meta) await kvSet(`tok:${spaceId}:meta`, { token: tokens.meta, expiresAt: exp.meta || null });
+      if (tokens.linkedin) await kvSet(`tok:${spaceId}:linkedin`, { token: tokens.linkedin, expiresAt: exp.linkedin || null });
       if (tokens.google && tokens.google.token) await kvSet(`tok:${spaceId}:google`, { token: tokens.google.token, refresh: tokens.google.refresh || null, paths: tokens.google.paths || [] });
       const stored = {
         id: post.id, whenMs: post.whenMs, dateTime: post.dateTime || null,

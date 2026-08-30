@@ -41,6 +41,8 @@ export default defineConfig(({ command }) => ({
   base: process.env.VITE_BASE || (command === 'build' ? '/efficience/' : '/'),
   // Aligné sur tsconfig (es2023) : sans cible explicite, Vite transpile vers
   // sa cible par défaut plus ancienne — poids et travail de build inutiles.
-  build: { target: 'esnext' },
+  // 'esnext' ne conviendrait pas ici : il désactive tout abaissement de syntaxe
+  // et n'offre donc aucun plancher de compatibilité navigateur.
+  build: { target: 'es2023' },
   plugins: [react(), apiDevServer()],
 }))

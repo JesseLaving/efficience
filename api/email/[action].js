@@ -3,8 +3,9 @@ import send from '../_h/email/send.js';
 import stats from '../_h/email/stats.js';
 import unsubscribe from '../_h/email/unsubscribe.js';
 import webhook from '../_h/email/webhook.js';
+import { schedule, unschedule, scheduled } from '../_h/email/schedule.js';
 
-const MAP = { send, stats, unsubscribe, webhook };
+const MAP = { send, stats, unsubscribe, webhook, schedule, unschedule, scheduled };
 
 export default function handler(req, res) {
   let action = req.query && req.query.action;

@@ -2,15 +2,14 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useEff, type ScreenId } from "./state/EffContext";
 import { useConnections } from "./state/ConnectionsContext";
 import { useContacts } from "./state/ContactsContext";
-import { useCalendar } from "./state/CalendarContext";
 import { Icon } from "./lib/Icon";
 import { fr } from "./lib/format";
-import { loadProfile } from "./lib/profile";
-import { buildSetup } from "./lib/setup";
+import { useSetup } from "./hooks/useSetup";
 import { Placeholder } from "./screens/Placeholder";
 import { NotificationBell } from "./components/NotificationBell";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { FlowNav } from "./components/FlowNav";
+import { isFlowScreen } from "./lib/flow";
 import type { UIName } from "./lib/icons";
 
 const Dashboard = lazy(() => import("./screens/Dashboard").then((m) => ({ default: m.Dashboard })));
@@ -106,19 +105,13 @@ export function App({
   const { screen, show } = useEff();
   const { connectedCount } = useConnections();
   const { contacts } = useContacts();
-  const { scheduled } = useCalendar();
   const [navOpen, setNavOpen] = useState(false);
 
   /* Numérotation des étapes de mise en route directement dans la navigation :
      tant que le parcours n'est pas bouclé, les écrans concernés portent leur
      rang (1, 2, 3) et le prochain est mis en avant. Une fois terminé, les
      numéros disparaissent — ils ne servent qu'à démarrer. */
-  const setup = buildSetup({
-    hasProfile: !!loadProfile(),
-    connectedCount,
-    scheduledCount: scheduled.length,
-    contactsCount: contacts.length,
-  });
+  const setup = useSetup();
   const stepByScreen = new Map<ScreenId, { n: number; done: boolean; next: boolean }>();
   if (!setup.complete) {
     setup.steps
@@ -286,10 +279,7 @@ export function App({
             dans le code mais pas à l'écran. Rendu HORS du .canvas (re-monté
             à chaque écran via key) pour que la pastille active puisse
             glisser d'une étape à l'autre au lieu de réapparaître. */}
-        {(screen === "planning" ||
-          screen === "studio" ||
-          screen === "calendar" ||
-          screen === "inbox") && <FlowNav current={screen} />}
+        {isFlowScreen(screen) && <FlowNav current={screen} />}
         <div className="canvas" key={screen}>
           <Suspense
             fallback={

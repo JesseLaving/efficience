@@ -17,6 +17,7 @@ import { PublishPanel } from "../components/PublishPanel";
 import { VisualGenerator } from "../components/VisualGenerator";
 import { AiLoader } from "../components/AiLoader";
 import { Skel, SkelText } from "../components/Skeleton";
+import { useArmedConfirm } from "../hooks/useArmedConfirm";
 import type { Draft } from "../lib/drafts";
 
 /* ig action glyphs */
@@ -401,10 +402,14 @@ export function Studio() {
   const [draftsOpen, setDraftsOpen] = useState(false);
   // Suppression d'un brouillon irréversible : confirmation en deux clics,
   // un seul brouillon à la fois peut être en attente de confirmation.
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const {
+    armed: confirmingDeleteId,
+    confirm: confirmDeleteDraft,
+    disarm: cancelDeleteDraft,
+  } = useArmedConfirm();
   const removeDraft = (id: string) => {
+    if (!confirmDeleteDraft(id)) return;
     deleteDraft(id);
-    setConfirmingDeleteId(null);
     showToast(UI.check, "Brouillon supprimé.");
   };
   const saveDraftNow = () => {
@@ -1067,7 +1072,7 @@ export function Studio() {
                                     className="unlink-btn"
                                     title="Annuler"
                                     aria-label="Annuler"
-                                    onClick={() => setConfirmingDeleteId(null)}
+                                    onClick={cancelDeleteDraft}
                                   >
                                     <Icon name="close" />
                                   </button>
@@ -1078,7 +1083,7 @@ export function Studio() {
                                   className="unlink-btn"
                                   title="Supprimer ce brouillon"
                                   aria-label="Supprimer ce brouillon"
-                                  onClick={() => setConfirmingDeleteId(d.id)}
+                                  onClick={() => removeDraft(d.id)}
                                 >
                                   <Icon name="trash" />
                                 </button>

@@ -11,9 +11,18 @@ import { getBusiness } from "../lib/business";
 import { syncPostsToCalendar } from "../lib/googleCalendar";
 import { armAutoPublish, disarmAutoPublish, listServerScheduled } from "../lib/schedule";
 import { PublishPanel } from "../components/PublishPanel";
-import { nowLocalIso, type ScheduledPost } from "../lib/calendar";
+import { useArmedConfirm } from "../hooks/useArmedConfirm";
+import { expiresBefore, getTokenExpiry } from "../lib/tokenExpiry";
+import { nowLocalIso, toLocalIso, type ScheduledPost } from "../lib/calendar";
 
 const NETS = ["instagram", "facebook", "linkedin", "google"];
+
+/* Minuteries et numéros de séquence du réarmement, par publication. Hors de
+   React : ces valeurs ne participent à aucun rendu, et l'écran n'est monté
+   qu'une fois à la fois (App remonte le conteneur à chaque navigation). Les
+   deux tables sont vidées au démontage. */
+const rearmTimers = new Map<string, number>();
+const rearmSeq = new Map<string, number>();
 
 const fmtDay = (iso: string) => {
   const d = new Date(iso);
@@ -86,6 +95,9 @@ export function Calendar() {
     createGcalCalendar,
   } = useConnections();
   const [publishing, setPublishing] = useState<ScheduledPost | null>(null);
+  /* Relance ciblée : les réseaux à réessayer, ou null pour une publication
+     manuelle ordinaire (tous les réseaux du post). */
+  const [retryOnly, setRetryOnly] = useState<string[] | null>(null);
   const [arming, setArming] = useState<string | null>(null);
   /* Édition du texte d'une publication programmée : l'heure et les réseaux
      étaient modifiables, mais pas le contenu — il fallait supprimer la
@@ -97,7 +109,16 @@ export function Calendar() {
   /* Suppression à deux clics : le bouton n'était qu'une icône sans
      confirmation — un clic malencontreux effaçait une publication déjà
      armée côté serveur sans aucun retour. */
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const { armed: confirmDeleteId, confirm: confirmDelete } = useArmedConfirm();
+
+  useEffect(
+    () => () => {
+      for (const t of rearmTimers.values()) window.clearTimeout(t);
+      rearmTimers.clear();
+      rearmSeq.clear();
+    },
+    [],
+  );
 
   const createCalendar = async () => {
     setCreatingCal(true);
@@ -185,13 +206,12 @@ export function Calendar() {
       });
     }
     const sigs = new Set(rows.map((r) => dayKey(r.dateTime) + "|" + r.text.trim().slice(0, 80)));
-    const pad = (n: number) => String(n).padStart(2, "0");
     for (const acc of metaStats || []) {
       for (const mp of acc.posts || []) {
         if (!mp.date) continue;
         const d = new Date(mp.date);
         if (isNaN(d.getTime())) continue;
-        const dt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const dt = toLocalIso(d);
         const sig = dayKey(dt) + "|" + (mp.caption || "").trim().slice(0, 80);
         if (sigs.has(sig)) continue;
         sigs.add(sig);
@@ -222,6 +242,7 @@ export function Calendar() {
           updateCalendar(local.id, {
             status: sp.status as ScheduledPost["status"],
             lastResult: sp.lastResult || null,
+            failedNetworks: sp.failedNetworks || null,
           });
         }
       }
@@ -232,11 +253,33 @@ export function Calendar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Réseaux à réessayer après un échec. Sans détail enregistré, un échec
+     total se relance en entier ; un succès partiel, lui, ne se relance pas à
+     l'aveugle — republier ce qui est déjà passé ferait un doublon public. */
+  const retryTargets = (p: ScheduledPost): string[] => {
+    if (p.failedNetworks && p.failedNetworks.length) return p.failedNetworks;
+    return p.status === "failed" ? p.networks : [];
+  };
+
+  /* Un jeton Meta ou LinkedIn qui expire AVANT l'heure prévue condamne la
+     publication : le cron partirait avec un accès périmé, et l'échec ne serait
+     visible qu'après coup. Mieux vaut le refuser tout de suite, en disant quoi
+     faire. */
+  const expiredNetworks = (p: ScheduledPost): string[] => {
+    const whenMs = Date.parse(p.dateTime);
+    if (!Number.isFinite(whenMs)) return [];
+    const out: string[] = [];
+    if (p.networks.some((n) => n === "instagram" || n === "facebook") && expiresBefore("meta", whenMs))
+      out.push("Instagram / Facebook");
+    if (p.networks.includes("linkedin") && expiresBefore("linkedin", whenMs)) out.push("LinkedIn");
+    return out;
+  };
+
   /* Réarme l'auto-publication côté serveur avec les valeurs à jour (date,
      heure ou réseaux) : armAutoPublish avait figé whenMs/dateTime/networks à
      l'armement initial, si bien qu'une modification locale ne changeait rien
      au cron, qui publiait l'ANCIEN horaire ou l'ANCIENNE liste de réseaux. */
-  const rearm = async (p: ScheduledPost) => {
+  const armServer = (p: ScheduledPost) => {
     const tokens: Parameters<typeof armAutoPublish>[1] = {};
     if (p.networks.some((n) => n === "instagram" || n === "facebook") && metaToken)
       tokens.meta = metaToken;
@@ -247,11 +290,11 @@ export function Calendar() {
         refresh: getStoredGoogleRefresh(),
         paths: googleAccounts.map((a) => a.path),
       };
-    const whenMs = Date.parse(p.dateTime);
-    const r = await armAutoPublish(
+    tokens.expiry = { meta: getTokenExpiry("meta"), linkedin: getTokenExpiry("linkedin") };
+    return armAutoPublish(
       {
         id: p.id,
-        whenMs,
+        whenMs: Date.parse(p.dateTime),
         dateTime: p.dateTime,
         text: p.text,
         networks: p.networks,
@@ -260,6 +303,30 @@ export function Calendar() {
       },
       tokens,
     );
+  };
+
+  const rearm = async (p: ScheduledPost) => {
+    /* Déplacer une publication armée au-delà de l'échéance du jeton la
+       condamnerait aussi sûrement que l'armer trop tard : on coupe
+       l'auto-publication plutôt que de laisser croire qu'elle partira. */
+    const stale = expiredNetworks(p);
+    if (stale.length) {
+      updateCalendar(p.id, { auto: false });
+      await disarmAutoPublish(p.id);
+      showToast(
+        UI.warning,
+        `Auto-publication désactivée : l'accès ${stale.join(" et ")} aura expiré à cette date. Reconnectez, puis réactivez-la.`,
+      );
+      return;
+    }
+    const seq = (rearmSeq.get(p.id) || 0) + 1;
+    rearmSeq.set(p.id, seq);
+    const r = await armServer(p);
+    /* Un réarmement plus récent est parti entre-temps : c'est lui qui fait
+       foi. Sans ce garde, une réponse arrivée dans le désordre — ou l'échec
+       d'une valeur intermédiaire — couperait l'auto-publication alors que la
+       valeur finale, elle, s'arme très bien. */
+    if (rearmSeq.get(p.id) !== seq) return;
     if (!r.ok) {
       await disarmAutoPublish(p.id);
       updateCalendar(p.id, { auto: false });
@@ -267,38 +334,46 @@ export function Calendar() {
     }
   };
 
+  /* Les champs date/heure émettent un change par frappe (y compris des valeurs
+     intermédiaires : taper « 2027 » passe par l'an 0002). Réarmer à chaque
+     événement inonderait le serveur et pourrait armer le cron sur une date
+     passée, donc publier immédiatement. On attend la fin de la saisie. */
+  const scheduleRearm = (p: ScheduledPost) => {
+    const pending = rearmTimers.get(p.id);
+    if (pending) window.clearTimeout(pending);
+    rearmTimers.set(
+      p.id,
+      window.setTimeout(() => {
+        rearmTimers.delete(p.id);
+        void rearm(p);
+      }, 600),
+    );
+  };
+
   const toggleNet = (p: ScheduledPost, net: string) => {
     const has = p.networks.includes(net);
     const networks = has ? p.networks.filter((n) => n !== net) : [...p.networks, net];
+    /* Une liste vide est refusée par le serveur, et sur un post armé le
+       réarmement échouerait donc en coupant l'auto-publication. */
+    if (networks.length === 0) {
+      showToast(UI.warning, "Gardez au moins un réseau pour cette publication.");
+      return;
+    }
     updateCalendar(p.id, { networks });
-    if (p.auto) rearm({ ...p, networks });
+    if (p.auto) scheduleRearm({ ...p, networks });
   };
 
   const arm = async (p: ScheduledPost) => {
+    const stale = expiredNetworks(p);
+    if (stale.length) {
+      showToast(
+        UI.warning,
+        `Accès ${stale.join(" et ")} expiré d'ici là — reconnectez ${stale.length > 1 ? "ces réseaux" : "ce réseau"} depuis l'écran Connexion avant d'activer l'auto-publication.`,
+      );
+      return;
+    }
     setArming(p.id);
-    const tokens: Parameters<typeof armAutoPublish>[1] = {};
-    if (p.networks.some((n) => n === "instagram" || n === "facebook") && metaToken)
-      tokens.meta = metaToken;
-    if (p.networks.includes("linkedin") && linkedinToken) tokens.linkedin = linkedinToken;
-    if (p.networks.includes("google") && googleToken)
-      tokens.google = {
-        token: googleToken,
-        refresh: getStoredGoogleRefresh(),
-        paths: googleAccounts.map((a) => a.path),
-      };
-    const whenMs = Date.parse(p.dateTime);
-    const r = await armAutoPublish(
-      {
-        id: p.id,
-        whenMs,
-        dateTime: p.dateTime,
-        text: p.text,
-        networks: p.networks,
-        photoUrl: p.photoUrl || null,
-        pillar: p.pillar || null,
-      },
-      tokens,
-    );
+    const r = await armServer(p);
     setArming(null);
     if (r.ok) {
       updateCalendar(p.id, { auto: true });
@@ -337,12 +412,7 @@ export function Calendar() {
   };
 
   const confirmDeleteScheduled = async (p: ScheduledPost) => {
-    if (confirmDeleteId !== p.id) {
-      setConfirmDeleteId(p.id);
-      window.setTimeout(() => setConfirmDeleteId((cur) => (cur === p.id ? null : cur)), 4000);
-      return;
-    }
-    setConfirmDeleteId(null);
+    if (!confirmDelete(p.id)) return;
     // Le post est armé côté serveur : sans désarmement préalable, le cron
     // publierait quand même un contenu que l'utilisateur croit supprimé.
     if (p.auto) {
@@ -543,7 +613,7 @@ export function Calendar() {
                             if (!e.target.value) return;
                             const dateTime = e.target.value + "T" + fmtTime(p.dateTime);
                             updateCalendar(p.id, { dateTime });
-                            if (p.auto) rearm({ ...p, dateTime });
+                            if (p.auto) scheduleRearm({ ...p, dateTime });
                           }}
                           className="inp"
                           style={{ width: 145, padding: "5px 8px", fontSize: 13 }}
@@ -555,7 +625,7 @@ export function Calendar() {
                           onChange={(e) => {
                             const dateTime = dayKey(p.dateTime) + "T" + (e.target.value || "09:00");
                             updateCalendar(p.id, { dateTime });
-                            if (p.auto) rearm({ ...p, dateTime });
+                            if (p.auto) scheduleRearm({ ...p, dateTime });
                           }}
                           className="inp"
                           style={{ width: 110, padding: "5px 8px", fontSize: 13 }}
@@ -676,6 +746,20 @@ export function Calendar() {
                         </button>
                       </>
                     )}
+                    {(p.status === "failed" || p.status === "partial") &&
+                      retryTargets(p).length > 0 && (
+                        <button
+                          className="btn ghost sm"
+                          onClick={() => {
+                            setRetryOnly(retryTargets(p));
+                            setPublishing(p);
+                          }}
+                          title={`Réessayer sur ${retryTargets(p).map(netName).join(", ")} — les réseaux déjà publiés ne sont pas retouchés`}
+                        >
+                          <Icon name="refresh" />
+                          Relancer
+                        </button>
+                      )}
                     <button
                       className="btn ghost sm"
                       style={
@@ -856,22 +940,39 @@ export function Calendar() {
       {publishing && (
         <PublishPanel
           text={publishing.text}
-          platforms={publishing.networks}
+          platforms={retryOnly ?? publishing.networks}
           localMedia={false}
           defaultPhotoUrl={publishing.photoUrl || null}
-          onPublished={() => {
+          onPublished={(okNetworks, attemptedNetworks) => {
             /* Le post programmé devient une publication effectuée : statut
                « publié », daté du moment réel de diffusion. Si l'auto-publication
                était armée côté serveur, on la coupe — sinon le même texte
-               repartirait tout seul à l'heure prévue. */
-            updateCalendar(publishing.id, {
-              status: "published",
-              dateTime: nowLocalIso(),
-              auto: false,
-            });
+               repartirait tout seul à l'heure prévue.
+               Une cible qui échoue encore reste en attente de relance, plutôt
+               que d'être comptée comme publiée. */
+            const stillFailing = attemptedNetworks.filter((n) => !okNetworks.includes(n));
+            if (stillFailing.length) {
+              updateCalendar(publishing.id, {
+                status: "partial",
+                auto: false,
+                failedNetworks: stillFailing,
+                lastResult: `Relance : toujours en échec sur ${stillFailing.map(netName).join(", ")}.`,
+              });
+            } else {
+              updateCalendar(publishing.id, {
+                status: "published",
+                dateTime: nowLocalIso(),
+                auto: false,
+                failedNetworks: null,
+                lastResult: null,
+              });
+            }
             if (publishing.auto) disarmAutoPublish(publishing.id);
           }}
-          onClose={() => setPublishing(null)}
+          onClose={() => {
+            setPublishing(null);
+            setRetryOnly(null);
+          }}
         />
       )}
     </section>

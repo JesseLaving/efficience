@@ -4,12 +4,8 @@
    étape est défaite, et disparaît définitivement une fois terminée. */
 import { useEffect, useState } from 'react';
 import { useEff } from '../state/EffContext';
-import { useConnections } from '../state/ConnectionsContext';
-import { useCalendar } from '../state/CalendarContext';
-import { useContacts } from '../state/ContactsContext';
 import { Icon } from '../lib/Icon';
-import { loadProfile } from '../lib/profile';
-import { buildSetup } from '../lib/setup';
+import { useSetup } from '../hooks/useSetup';
 import { Confetti } from './Confetti';
 
 /* Dernier palier de progression déjà célébré, par espace (le localStorage est
@@ -18,16 +14,8 @@ const CELEBRATED = 'eff_setup_celebrated';
 
 export function SetupGuide() {
   const { show } = useEff();
-  const { connectedCount } = useConnections();
-  const { scheduled } = useCalendar();
-  const { contacts } = useContacts();
 
-  const setup = buildSetup({
-    hasProfile: !!loadProfile(),
-    connectedCount,
-    scheduledCount: scheduled.length,
-    contactsCount: contacts.length,
-  });
+  const setup = useSetup();
 
   /* Célébration sur la TRANSITION, pas sur l'état. Le palier déjà fêté est
      persisté et non gardé dans un ref : les étapes se valident sur D'AUTRES

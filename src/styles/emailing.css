@@ -113,8 +113,10 @@ textarea.inp { resize: none; line-height: 1.55; }
 .si-del .ic { width: 13px; height: 13px; }
 /* The confirm pair stays visible regardless of hover — it only appears
    once armed, and hiding it again on mouse-out would strand the user
-   mid-confirmation. */
+   mid-confirmation. Arming unmounts the focused trash button, so neither
+   :hover nor :focus-within can be relied on to keep the pair on screen. */
 .si-confirm { display: flex; gap: 2px; }
+.si-confirm .si-del { display: grid; }
 .si-del-yes { color: var(--danger); border-color: rgba(179,69,59,.35); }
 .si-del-yes:hover { background: rgba(179,69,59,.1); }
 .seg-empty { font-size: 12px; color: var(--tx-3); padding: 10px 11px; line-height: 1.5; }

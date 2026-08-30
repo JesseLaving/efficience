@@ -1,0 +1,41 @@
+# Contrôles exécutés sur chaque proposition de fusion. Sans eux, une régression
+# n'était découverte qu'en production : le dépôt n'avait qu'une action de
+# déploiement, et aucun test.
+name: Contrôles
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifications:
+    name: Types, tests et lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # Bloquants : les deux passent aujourd'hui, toute rupture vient donc de
+      # la modification proposée.
+      - name: Vérification des types
+        run: npx tsc -b --noEmit
+      - name: Tests unitaires
+        run: npm test
+
+      # Non bloquant tant que les 40+ signalements hérités ne sont pas traités
+      # (essentiellement set-state-in-effect et only-export-components, sans
+      # rapport avec les changements en cours). À rendre bloquant une fois le
+      # compteur ramené à zéro — sinon la barrière reste rouge en permanence et
+      # plus personne ne la regarde.
+      - name: Lint (informatif)
+        run: npm run lint
+        continue-on-error: true

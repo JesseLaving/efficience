@@ -15,6 +15,7 @@ import {
   planToCsv,
   loadPlan,
   savePlan,
+  localDayIso,
   type PlanItem,
 } from "../lib/editorial";
 import { generateAiPlanIdeas, generatePost, sampleRecentCaptions, type AiContext } from "../lib/ai";
@@ -242,8 +243,7 @@ export function EditorialPlanning() {
     const start = new Date(y, m - 1, 1 - lead);
     // Date locale (et non UTC) : sinon le surlignage « aujourd'hui » se
     // trompe de jour entre minuit et 2h heure de Paris.
-    const nowLocal = new Date();
-    const todayIso = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
+    const todayIso = localDayIso(new Date());
 
     const byDate = new Map<string, { p: PlanItem; i: number }[]>();
     plan.forEach((p, i) => {

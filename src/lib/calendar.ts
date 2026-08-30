@@ -22,6 +22,9 @@ export interface ScheduledPost {
   status: SchedStatus;
   createdAt: string;
   lastResult?: string | null;
+  /** Réseaux en échec au dernier essai — cibles d'une relance, pour ne pas
+   *  republier sur ceux qui étaient déjà passés. */
+  failedNetworks?: string[] | null;
   auto?: boolean;        // auto-publication serveur activée
   googleEventId?: string | null; // synchronisé vers l'agenda Google dédié — présent une fois poussé
 }
@@ -67,11 +70,16 @@ export function updateScheduled(list: ScheduledPost[], id: string, patch: Partia
   return next;
 }
 
-/** « 2026-08-06T14:32 » — l'instant présent au format local du calendrier. */
-export function nowLocalIso(): string {
-  const d = new Date();
+/** « 2026-08-06T14:32 » — `d` au format local du calendrier. Format unique :
+ *  le dédoublonnage de l'historique compare des signatures bâties dessus. */
+export function toLocalIso(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** L'instant présent, au même format. */
+export function nowLocalIso(): string {
+  return toLocalIso(new Date());
 }
 
 export function removeScheduled(list: ScheduledPost[], id: string): ScheduledPost[] {
